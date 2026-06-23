@@ -1,49 +1,17 @@
-# Multimodal TS + Text Dataset Curation
+# CPT World-Knowledge Datasets
 
-This repo holds **per-dataset CPT packages** for the lab's world-knowledge corpus. Each subfolder corresponds to one row from Defu's 30-dataset registry.
+Per-dataset packages for instruction-free continued pre-training: natural text with `<ts></ts>` + aligned time series.
 
-**Demo outputs** live in each package's `output/` folder (typically 50 records, `max_records` capped locally). Full-scale runs pending shared storage access.
+**Demo outputs** are in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage.
 
-## Target JSON format
+| # | Dataset | Status | ~Full scale |
+|---|---------|--------|-------------|
+| 01 | [NOAA Storm Events](./01_noaa_storm_events/) | Complete | ~10k/year (2010+) |
+| 02 | [NHC HURDAT2](./02_nhc_hurdat2/) | Complete | ~320 storms (2000–23, w/ text) |
+| 04 | [TelecomTS](./04_telecom_ts/) | In progress | ~1.3k samples (small) |
+| 05 | [FNSPID](./05_fnspid/) | In progress | ~2–4M (after dedup) |
+| 07 | [CDC FluView](./07_cdc_fluview/) | In progress | ~500 weeks (2015+) |
 
-Conversion scripts produce **CPT-format JSONL** — natural text with a `<ts></ts>` placeholder and aligned `timeseries` arrays (not Alpaca instruction/input/output):
+Each README follows the same layout: what it is → scale → record shape → key issues → how to run.
 
-```json
-{
-  "text": "Natural prose describing the phenomenon... <ts></ts>",
-  "timeseries": [
-    {"values": [1.2, 3.4, 5.6], "unit": "metric_name", "freq": "daily"}
-  ],
-  "task_type": "world_knowledge",
-  "text_source": "dataset_description",
-  "text_quality": "real"
-}
-```
-
-## Folder convention
-
-```
-datasets/
-  NN_<slug>/
-    README.md              # Team-lead-facing summary (dataset, verdict, caveats, usage)
-    assessment.json        # Structured probe / triage metadata
-    config.example.yaml    # Default config — copy to config.yaml and edit
-    requirements.txt       # Script dependencies (if any beyond repo venv)
-    scripts/
-      build_cpt_jsonl.py   # Configurable CPT export script (small-sample demo by default)
-    output/                # Script-generated JSONL + run reports (committed for demos)
-```
-
-## Datasets
-
-| Rank | Folder | CPT status | Notes |
-|------|--------|------------|-------|
-| 1 | [01_noaa_storm_events](./01_noaa_storm_events/) | **Complete** | Demo output in `output/` |
-| 2 | [02_nhc_hurdat2](./02_nhc_hurdat2/) | **Complete** | Demo output in `output/` |
-| 4 | [04_telecom_ts](./04_telecom_ts/) | **In progress** | Awaiting team review before scale-up |
-| 5 | [05_fnspid](./05_fnspid/) | **In progress** | Local 2-ticker demo only |
-| 7 | [07_cdc_fluview](./07_cdc_fluview/) | **In progress** | Single season demo only |
-
-## For agents / contributors
-
-See [AGENT_BRIEF.md](./AGENT_BRIEF.md) when adding a new dataset folder.
+See [AGENT_BRIEF.md](./AGENT_BRIEF.md) for adding new datasets.
