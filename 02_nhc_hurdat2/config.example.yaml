@@ -1,0 +1,60 @@
+# NHC HURDAT2 → CPT world-knowledge JSONL
+#
+# One record per tropical cyclone: real NHC public advisory text plus five
+# 6-hourly time series over the storm's qualifying tropical/subtropical life.
+# Storms without retrievable advisory text are dropped — no synthetic fallback.
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --config config.example.yaml
+#
+# Use cached HURDAT2 (avoid re-download):
+#   python scripts/build_cpt_jsonl.py \
+#     --set data.source=local \
+#     --set data.local_path=.cache/hurdat2/hurdat2-1851-2023-051124.txt
+
+data:
+  # download — fetch from NHC (cached under .cache/hurdat2/)
+  # local    — read from data.local_path
+  source: download
+
+  # atlantic | east_pacific | both
+  basin: atlantic
+
+  atlantic_url: "https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2023-051124.txt"
+  east_pacific_url: "https://www.nhc.noaa.gov/data/hurdat/hurdat2-nepac-1949-2023-042624.txt"
+
+  # Local HURDAT2 .txt when source=local
+  local_path: null
+
+  season_start: 2000
+  season_end: 2023
+
+  # Minimum TD/TS/HU/SS/SD observations per storm
+  min_qualifying_obs: 8
+
+  # Storm IDs (AL092021) or names (IDA); empty = all
+  storm_filter: []
+
+advisories:
+  # When false, no advisory fetch is attempted and all storms are dropped.
+  enabled: true
+
+  # Max advisory files concatenated per storm (first, last, peak-adjacent).
+  max_per_storm: 3
+
+  # Character limit per individual advisory before concatenation.
+  char_limit_per_advisory: 1500
+
+  # HTTP timeout per advisory/index request (seconds).
+  timeout_seconds: 10
+
+text:
+  # Closing sentence appended after advisory text. Must contain exactly one <ts></ts>.
+  ts_intro_sentence: "Six-hourly observations across the storm's lifetime — maximum sustained wind (kt), minimum central pressure (mb), track latitude, track longitude, and maximum 34-kt wind radius (nm): <ts></ts>."
+
+output:
+  output_path: output/nhc_hurdat2_cpt.jsonl
+  report_path: output/run_report.json
+  max_records: 50
+  indent: null

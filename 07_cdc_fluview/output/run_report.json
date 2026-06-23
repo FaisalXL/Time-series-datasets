@@ -1,0 +1,36 @@
+{
+  "run_date": "2026-06-20T02:09:25Z",
+  "seasons_processed": [
+    "2025-2026"
+  ],
+  "weeks_attempted": 36,
+  "weeks_with_html": 36,
+  "weeks_with_csv": 36,
+  "weeks_with_both": 36,
+  "records_emitted": 36,
+  "records_skipped_no_html": 0,
+  "records_skipped_no_csv": 0,
+  "records_skipped_short_text": 0,
+  "config_snapshot": {
+    "data": {
+      "csv_dir": "/Users/faisal./dev/TS dataset (DC)/CDC FluView latest",
+      "seasons": [
+        "2025-2026"
+      ],
+      "html_cache_dir": ".cache/html",
+      "request_delay_s": 1.0,
+      "timeout_s": 15
+    },
+    "text": {
+      "min_text_chars": 200,
+      "ts_intro_sentence": "Weekly ILI, virologic, hospitalization, and mortality indicators for this surveillance week: <ts></ts>."
+    },
+    "output": {
+      "output_path": "output/cdc_fluview_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  }
+}

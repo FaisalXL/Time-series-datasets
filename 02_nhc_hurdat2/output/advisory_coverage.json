@@ -1,0 +1,384 @@
+{
+  "generated_at": "2026-06-19T04:58:45Z",
+  "config": {
+    "season_start": 2000,
+    "season_end": 2023,
+    "min_qualifying_obs": 8
+  },
+  "summary": {
+    "storms_seen_in_hurdat2": 1973,
+    "storms_qualifying": 368,
+    "storms_with_advisory_archive": 319,
+    "storms_without_advisory_archive": 49,
+    "coverage_pct": 86.7
+  },
+  "by_year": {
+    "2000": {
+      "qualifying": 17,
+      "with_advisory": 0,
+      "without_advisory": 17
+    },
+    "2001": {
+      "qualifying": 15,
+      "with_advisory": 0,
+      "without_advisory": 15
+    },
+    "2002": {
+      "qualifying": 13,
+      "with_advisory": 0,
+      "without_advisory": 13
+    },
+    "2003": {
+      "qualifying": 18,
+      "with_advisory": 18,
+      "without_advisory": 0
+    },
+    "2004": {
+      "qualifying": 15,
+      "with_advisory": 15,
+      "without_advisory": 0
+    },
+    "2005": {
+      "qualifying": 27,
+      "with_advisory": 26,
+      "without_advisory": 1
+    },
+    "2006": {
+      "qualifying": 9,
+      "with_advisory": 8,
+      "without_advisory": 1
+    },
+    "2007": {
+      "qualifying": 13,
+      "with_advisory": 13,
+      "without_advisory": 0
+    },
+    "2008": {
+      "qualifying": 16,
+      "with_advisory": 16,
+      "without_advisory": 0
+    },
+    "2009": {
+      "qualifying": 9,
+      "with_advisory": 9,
+      "without_advisory": 0
+    },
+    "2010": {
+      "qualifying": 17,
+      "with_advisory": 17,
+      "without_advisory": 0
+    },
+    "2011": {
+      "qualifying": 18,
+      "with_advisory": 17,
+      "without_advisory": 1
+    },
+    "2012": {
+      "qualifying": 19,
+      "with_advisory": 19,
+      "without_advisory": 0
+    },
+    "2013": {
+      "qualifying": 13,
+      "with_advisory": 12,
+      "without_advisory": 1
+    },
+    "2014": {
+      "qualifying": 9,
+      "with_advisory": 9,
+      "without_advisory": 0
+    },
+    "2015": {
+      "qualifying": 11,
+      "with_advisory": 11,
+      "without_advisory": 0
+    },
+    "2016": {
+      "qualifying": 16,
+      "with_advisory": 16,
+      "without_advisory": 0
+    },
+    "2017": {
+      "qualifying": 15,
+      "with_advisory": 15,
+      "without_advisory": 0
+    },
+    "2018": {
+      "qualifying": 15,
+      "with_advisory": 15,
+      "without_advisory": 0
+    },
+    "2019": {
+      "qualifying": 14,
+      "with_advisory": 14,
+      "without_advisory": 0
+    },
+    "2020": {
+      "qualifying": 26,
+      "with_advisory": 26,
+      "without_advisory": 0
+    },
+    "2021": {
+      "qualifying": 14,
+      "with_advisory": 14,
+      "without_advisory": 0
+    },
+    "2022": {
+      "qualifying": 12,
+      "with_advisory": 12,
+      "without_advisory": 0
+    },
+    "2023": {
+      "qualifying": 17,
+      "with_advisory": 17,
+      "without_advisory": 0
+    }
+  },
+  "storms_without_advisory": [
+    {
+      "storm_id": "AL022000",
+      "name": "Unnamed",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL032000",
+      "name": "Alberto",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL042000",
+      "name": "Unnamed",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL052000",
+      "name": "Beryl",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL062000",
+      "name": "Chris",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL072000",
+      "name": "Debby",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL082000",
+      "name": "Ernesto",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL102000",
+      "name": "Florence",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL112000",
+      "name": "Gordon",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL122000",
+      "name": "Helene",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL132000",
+      "name": "Isaac",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL142000",
+      "name": "Joyce",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL152000",
+      "name": "Keith",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL162000",
+      "name": "Leslie",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL172000",
+      "name": "Michael",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL182000",
+      "name": "Nadine",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL192000",
+      "name": "Unnamed",
+      "year": 2000
+    },
+    {
+      "storm_id": "AL012001",
+      "name": "Allison",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL032001",
+      "name": "Barry",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL042001",
+      "name": "Chantal",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL052001",
+      "name": "Dean",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL062001",
+      "name": "Erin",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL072001",
+      "name": "Felix",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL082001",
+      "name": "Gabrielle",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL102001",
+      "name": "Humberto",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL112001",
+      "name": "Iris",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL122001",
+      "name": "Jerry",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL132001",
+      "name": "Karen",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL142001",
+      "name": "Lorenzo",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL152001",
+      "name": "Michelle",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL162001",
+      "name": "Noel",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL172001",
+      "name": "Olga",
+      "year": 2001
+    },
+    {
+      "storm_id": "AL012002",
+      "name": "Arthur",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL022002",
+      "name": "Bertha",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL032002",
+      "name": "Cristobal",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL042002",
+      "name": "Dolly",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL052002",
+      "name": "Edouard",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL062002",
+      "name": "Fay",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL082002",
+      "name": "Gustav",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL092002",
+      "name": "Hanna",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL102002",
+      "name": "Isidore",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL112002",
+      "name": "Josephine",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL122002",
+      "name": "Kyle",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL132002",
+      "name": "Lili",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL142002",
+      "name": "Unnamed",
+      "year": 2002
+    },
+    {
+      "storm_id": "AL312005",
+      "name": "Zeta",
+      "year": 2005
+    },
+    {
+      "storm_id": "AL102006",
+      "name": "Isaac",
+      "year": 2006
+    },
+    {
+      "storm_id": "AL202011",
+      "name": "Unnamed",
+      "year": 2011
+    },
+    {
+      "storm_id": "AL152013",
+      "name": "Unnamed",
+      "year": 2013
+    }
+  ]
+}

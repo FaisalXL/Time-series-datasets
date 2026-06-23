@@ -1,0 +1,15 @@
+# Cached raw downloads (re-fetch via scripts)
+**/.cache/
+
+# Python
+**/__pycache__/
+*.pyc
+.venv/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Hand-authored example records — use output/ from script runs instead
+**/samples/

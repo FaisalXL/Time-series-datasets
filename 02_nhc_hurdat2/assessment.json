@@ -1,0 +1,30 @@
+{
+  "id": 2,
+  "dataset": "NHC HURDAT2 + Advisories",
+  "rank": 2,
+  "priority": "P0",
+  "domain": "Weather/Climate",
+  "registry_row_zh": {
+    "进入CPT建议": "立即进入",
+    "获取/处理成本": "低-中：官方 archive，格式需规范化",
+    "理想任务类型": "热带气旋路径/强度 forecasting",
+    "理由": "storm track/intensity/pressure/wind radii 与官方 advisory/discussion 对齐强，语义密度高，泄漏可控。"
+  },
+  "ts_source": "NHC HURDAT2 best-track database (Atlantic 1851–2023; East Pacific 1949–2023)",
+  "ts_url": "https://www.nhc.noaa.gov/data/hurdat/",
+  "text_source": "NHC public advisories and discussions per storm (nhc.noaa.gov/archive/YYYY/)",
+  "acquisition_type": "txt",
+  "pairing_method": "Parse HURDAT2 fixed-format file → per-storm 6-hourly time series (max wind kt, min pressure mb, lat/lon, status); slide windows along each storm's life cycle; attach NHC advisory/discussion text from history window only (no leakage); fallback to auto-generated track-description context when advisory files are not present",
+  "verdict": "needs_pairing",
+  "confidence": "high",
+  "effort_estimate": "4–8 h for MVP script with track-description context; 1 day for advisory text acquisition, timestamp alignment, and multi-year export",
+  "probe_status": "ok",
+  "probe_notes": "HURDAT2 Atlantic file (hurdat2-1851-2023-051124.txt) is a single ~5 MB public text file, no auth required. Format is well-documented: header line per storm + one comma-delimited data row per 6-h synoptic time. Each data row has date/time, status code (TD/TS/HU/EX/…), latitude, longitude, max sustained wind (kt), min central pressure (mb), and 12 wind-radii fields (34/50/64 kt in 4 quadrants). Per-storm advisory/discussion archive at nhc.noaa.gov/archive/YYYY/{BASIN}{NUMBER}/ contains numbered plain-text files (e.g. al092021.public.001.shtml). No API key required for either source.",
+  "caveats": [
+    "HURDAT2 is post-analysis best-track — final positions/intensities are refined after dissipation and may differ from real-time advisories; production use should align advisory timestamps carefully",
+    "Advisory text acquisition requires per-storm web scraping (~10–50 files per storm); not included in automated demo — script falls back to auto-generated track-description context",
+    "Wind-radii fields are -999 (missing) for many pre-1990 records and some records in weaker storms",
+    "6-hourly sampling is fixed; observations during rapid intensification or landfall can still have large jumps",
+    "Basin coverage is split: Atlantic (hurdat2-1851-…) and East Pacific (hurdat2-nepac-1949-…) are separate files"
+  ]
+}

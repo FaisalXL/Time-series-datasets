@@ -1,0 +1,39 @@
+{
+  "records_seen": 400,
+  "records_written": 50,
+  "records_skipped": {
+    "min_news_chars": 2,
+    "no_news": 6
+  },
+  "tickers_seen": [
+    "AAL"
+  ],
+  "date_range": {
+    "min": "2019-01-11",
+    "max": "2019-04-04"
+  },
+  "avg_history_days": 7.0,
+  "avg_news_count": 3.56,
+  "validation_errors": [],
+  "config_snapshot": {
+    "data": {
+      "train_path": "../../FNSPID/FNSPID_train.json",
+      "val_path": "../../FNSPID/FNSPID_val.json",
+      "split": "both",
+      "tickers_filter": [],
+      "min_history_days": 5,
+      "min_news_chars": 50
+    },
+    "text": {
+      "max_chars": 2000
+    },
+    "output": {
+      "output_path": "output/fnspid_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "generated_at": "2026-06-19T06:12:31Z",
+  "dry_run": false
+}

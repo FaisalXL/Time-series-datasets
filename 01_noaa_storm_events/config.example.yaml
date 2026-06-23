@@ -1,0 +1,72 @@
+# NOAA Storm Events → CPT world-knowledge JSONL
+#
+# This package produces natural-text records with embedded <ts></ts> placeholders
+# (not Alpaca instruction/input/output triplets). Each record is one meteorological
+# episode: official NOAA narratives plus three aligned daily time series.
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --config config.example.yaml
+#
+# Override any key on the CLI:
+#   python scripts/build_cpt_jsonl.py --set data.years=[2022,2023] --set output.max_records=100
+#   python scripts/build_cpt_jsonl.py --set data.state_filter=[OKLAHOMA,TEXAS] --dry-run
+
+data:
+  # How to load raw CSV rows:
+  #   download — fetch annual .csv.gz files from NOAA (cached under .cache/)
+  #   local    — read a single file from data.local_path
+  source: download
+
+  # URL template for annual Storm Events detail files. {year} is substituted.
+  # If download fails (compile-date suffix changed), check:
+  #   https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/
+  download_url_template: "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/StormEvents_details-ftp_v1.0_d{year}_c20260323.csv.gz"
+
+  # Path to a local .csv or .csv.gz file when source=local. null otherwise.
+  local_path: null
+
+  # Calendar years to download/read. Each year is one NOAA detail file.
+  years: [2023]
+
+  # Keep only episodes in these states (uppercase names). Empty list = all states.
+  state_filter: []
+
+  # Keep only event rows matching these types. Empty list = all event types.
+  # Example: ["Tornado", "Hail", "Thunderstorm Wind"]
+  event_type_filter: []
+
+  # Skip episodes with no EPISODE_NARRATIVE text (recommended for CPT quality).
+  require_episode_narrative: true
+
+  # Minimum inclusive calendar span (days) from first to last event in the episode.
+  min_episode_days: 1
+
+  # Minimum number of event rows in the episode after filters.
+  min_episode_events: 1
+
+text:
+  # Maximum distinct EVENT_NARRATIVE snippets appended after the episode narrative.
+  max_event_narratives: 3
+
+  # Character limit per appended EVENT_NARRATIVE (truncated at word boundary).
+  event_narrative_char_limit: 400
+
+  # Character limit for the combined EPISODE_NARRATIVE block.
+  episode_narrative_char_limit: 1200
+
+  # Closing sentence introducing the time series. Must contain exactly one <ts></ts>.
+  ts_intro_sentence: "Daily impact metrics for this episode: <ts></ts>."
+
+output:
+  # JSONL output path (one JSON object per line when indent is null).
+  output_path: output/noaa_storm_events_cpt.jsonl
+
+  # Run statistics and config snapshot written after each run.
+  report_path: output/run_report.json
+
+  # Cap records written (useful for demos). null = write all qualifying episodes.
+  max_records: 50
+
+  # null = compact JSONL; integer (e.g. 2) = pretty-printed JSON array file.
+  indent: null

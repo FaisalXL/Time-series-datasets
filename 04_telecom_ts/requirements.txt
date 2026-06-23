@@ -1,0 +1,4 @@
+pyyaml>=6.0
+datasets>=2.19.0
+huggingface_hub>=0.23.0
+pyarrow>=14.0.0

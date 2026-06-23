@@ -1,0 +1,48 @@
+{
+  "rows_seen": 1260,
+  "records_written": 50,
+  "records_normal": 25,
+  "records_anomaly": 25,
+  "anomaly_type_breakdown": {
+    "Jamming": 25
+  },
+  "channel_list": [
+    "RX_Bytes",
+    "TX_Bytes",
+    "DL_BLER",
+    "UL_BLER",
+    "RSRP"
+  ],
+  "skipped": {},
+  "validation_errors": [],
+  "config_snapshot": {
+    "data": {
+      "hf_dataset_id": "AliMaatouk/TelecomTS",
+      "cache_dir": ".cache/telecom_ts",
+      "split": "train",
+      "record_types": [
+        "normal",
+        "anomaly"
+      ],
+      "channels": [
+        "RX_Bytes",
+        "TX_Bytes",
+        "DL_BLER",
+        "UL_BLER",
+        "RSRP"
+      ],
+      "anomaly_types_filter": [],
+      "window_length": 128,
+      "freq": "100ms"
+    },
+    "output": {
+      "output_path": "output/telecom_ts_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "max_records": 50,
+      "balance_types": true,
+      "indent": null
+    }
+  },
+  "generated_at": "2026-06-19T05:39:27Z",
+  "dry_run": false
+}

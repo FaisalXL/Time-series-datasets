@@ -1,0 +1,30 @@
+{
+  "id": 5,
+  "dataset": "FNSPID",
+  "rank": 5,
+  "priority": "P0",
+  "domain": "Finance",
+  "registry_row_zh": {
+    "进入CPT建议": "立即进入，需采样/去重",
+    "获取/处理成本": "低：HF parquet 直接可取",
+    "理想任务类型": "金融新闻到价格/市场 forecasting",
+    "理由": "大规模金融新闻 + stock/market rows，适合快速扩充金融文本-时序 CPT；需要 dedup 和时间切分控制。"
+  },
+  "ts_source": "Zihan1004/FNSPID on Hugging Face — daily stock close prices for 4,775 S&P500 tickers, 1999–2023",
+  "ts_url": "https://huggingface.co/datasets/Zihan1004/FNSPID",
+  "text_source": "Same-day financial news wire articles paired with stock prices (real first-party news text)",
+  "acquisition_type": "huggingface",
+  "pairing_method": "One CPT record per (ticker, news_date): unique news articles concatenated + historical close-price series ending day before news date; Alpaca forecast output discarded",
+  "verdict": "needs_pairing",
+  "confidence": "medium",
+  "effort_estimate": "4–8 h for CPT export script; full-scale requires dedup/sampling pipeline",
+  "probe_status": "ok",
+  "probe_notes": "Local demo files: FNSPID_train.json (360 rows) + FNSPID_val.json (40 rows), 2 tickers (AAL, A), 2019 only. 231/400 rows have news; many articles are broad market commentary attributed to multiple tickers. History window fixed at 7 days in demo slice.",
+  "caveats": [
+    "News articles often cover the full market, not just the tagged ticker — text–ticker link is noisy",
+    "Local demo files are a tiny slice (2 tickers, 2019); full scale requires HuggingFace download",
+    "Future prices from Alpaca output field are discarded — CPT uses history only, no lookahead",
+    "At 15.7M news records, full dataset needs dedup and sampling before CPT training",
+    "Research use license; commercial restrictions apply per original FNSPID terms"
+  ]
+}

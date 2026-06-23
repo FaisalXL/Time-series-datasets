@@ -1,0 +1,43 @@
+# FNSPID → CPT world-knowledge JSONL
+#
+# Converts local Alpaca-format JSON (pre-downloaded demo slice) to CPT records.
+# For full-scale use (15.7M news records), download from HuggingFace — see README.
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --config config.example.yaml
+#
+# Dry-run (print one example record, no files written):
+#   python scripts/build_cpt_jsonl.py --dry-run
+
+data:
+  # Paths relative to this dataset folder (datasets/05_fnspid/)
+  train_path: "../../FNSPID/FNSPID_train.json"
+  val_path: "../../FNSPID/FNSPID_val.json"
+
+  # Which split(s) to load: both | train | val
+  split: "both"
+
+  # Empty list = all tickers; otherwise restrict to these symbols
+  # e.g. ["AAL", "AAPL"]
+  tickers_filter: []
+
+  # Skip records with fewer than N historical price points
+  min_history_days: 5
+
+  # Skip records where combined unique news text is shorter than N chars
+  min_news_chars: 50
+
+text:
+  # Truncate concatenated news text to this character limit
+  max_chars: 2000
+
+output:
+  output_path: output/fnspid_cpt.jsonl
+  report_path: output/run_report.json
+
+  # Cap total records (demo). null = no cap.
+  max_records: 50
+
+  # null = compact JSONL; integer = pretty-print each record
+  indent: null

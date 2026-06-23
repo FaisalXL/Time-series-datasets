@@ -1,0 +1,31 @@
+{
+  "id": 1,
+  "dataset": "NOAA Storm Events",
+  "rank": 1,
+  "priority": "P0",
+  "domain": "Weather/Climate",
+  "registry_row_zh": {
+    "进入CPT建议": "立即进入",
+    "获取/处理成本": "低：官方 CSV/FTP，文本和事件字段直接可取",
+    "理想任务类型": "极端天气事件时间序列、storm impact modeling",
+    "理由": "官方 event/episode narratives + event time/location/damage/injury fields，文本和事件时序天然对齐，是最适合马上开工的高质量数据。"
+  },
+  "ts_source": "NOAA NCEI Storm Events Database (CSV/FTP)",
+  "ts_url": "https://www.ncei.noaa.gov/stormevents/ftp.jsp",
+  "text_source": "Same CSV: EPISODE_NARRATIVE + EVENT_NARRATIVE fields per event/episode",
+  "acquisition_type": "csv",
+  "pairing_method": "Aggregate events into rolling windows (state/county × event_type × day/week); attach episode/event narratives from history window only as input context; predict future window counts or impact metrics",
+  "verdict": "needs_pairing",
+  "confidence": "high",
+  "effort_estimate": "4-8 hours for MVP script; 1-2 days for clean multi-year Alpaca export with geography normalization",
+  "probe_status": "ok",
+  "probe_notes": "FTP reachable (HTTP 200). 2023 sample: 75,594 detail rows. Columns include BEGIN_DATE_TIME, EVENT_TYPE, DAMAGE_*, INJURIES_*, MAGNITUDE, EPISODE_NARRATIVE, EVENT_NARRATIVE. Text is official NOAA narrative.",
+  "sheet1_cross_ref": "Sheet1 also lists 'NOAA Storm Events + ISD station join' for richer continuous weather TS",
+  "caveats": [
+    "Each CSV row is one event, not a pre-windowed training sample — aggregation script required",
+    "Damage fields are categorical strings (e.g. '50K') not always numeric",
+    "Narratives may describe ongoing episodes; clip text to pre-prediction dates to avoid leakage",
+    "Reporting is heterogeneous by source (NWS, law enforcement, public); sparse in some regions/years",
+    "Event counts are report counts, not unique physical events (multiple reports per storm possible)"
+  ]
+}

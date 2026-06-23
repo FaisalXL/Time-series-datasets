@@ -1,0 +1,30 @@
+{
+  "id": 4,
+  "dataset": "TelecomTS",
+  "rank": 4,
+  "priority": "P1",
+  "domain": "Observability",
+  "registry_row_zh": {
+    "进入CPT建议": "立即进入",
+    "获取/处理成本": "低：Hugging Face 直接下载",
+    "理想任务类型": "通信网络异常检测、root-cause QA",
+    "理由": "少见的公开 observability KPI + anomaly/root-cause/description/Q&A 数据，文本和时序已经整理好。"
+  },
+  "ts_source": "AliMaatouk/TelecomTS on Hugging Face — 18 KPI channels at 10 Hz (100 ms), 128-step windows",
+  "ts_url": "https://huggingface.co/datasets/AliMaatouk/TelecomTS",
+  "text_source": "description field (dataset authors, real) + anomalies.troubleshooting_tickets (GPT-4.1 generated per paper)",
+  "acquisition_type": "huggingface",
+  "pairing_method": "One record per sample window: description (+ troubleshooting ticket for anomalies) paired with 5 selected KPI time series; normal and anomaly record types separated",
+  "verdict": "needs_pairing",
+  "confidence": "medium",
+  "effort_estimate": "4–8 h for CPT export script; flagged for team-lead review due to GPT-generated anomaly text",
+  "probe_status": "ok",
+  "probe_notes": "HF dataset loads via streaming. 128 timesteps × 18 KPIs per sample. labels: zone, application, mobility, congestion. anomalies.troubleshooting_tickets holds GPT-style root-cause prose. ~25% anomaly / ~75% normal in sampled rows.",
+  "caveats": [
+    "Controlled 5G lab testbed — not live production telemetry",
+    "Anomaly events are mathematically injected into real measurements",
+    "Anomaly troubleshooting tickets are GPT-4.1 generated — must tag text_quality: generated",
+    "Description text is real but scenario-level statistical summary, not operator prose",
+    "Several KPI channels are zero-inflated or sparse (protocol fields, packet counts)"
+  ]
+}

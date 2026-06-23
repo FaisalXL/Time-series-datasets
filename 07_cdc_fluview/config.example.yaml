@@ -1,0 +1,46 @@
+# CDC FluView → CPT world-knowledge JSONL
+#
+# Pairs weekly CDC FluView HTML reports with national surveillance CSVs.
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py
+#
+# Override config:
+#   python scripts/build_cpt_jsonl.py --config config.example.yaml
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null
+
+data:
+  # Directory containing ILINet.csv and NREVSS CSVs (drop historical files here)
+  csv_dir: "/Users/faisal./dev/TS dataset (DC)/CDC FluView latest"
+
+  # Flu seasons to process (e.g. "2025-2026")
+  seasons:
+    - "2025-2026"
+
+  # Cache downloaded weekly HTML reports here
+  html_cache_dir: ".cache/html"
+
+  # Polite delay between CDC HTTP requests (seconds)
+  request_delay_s: 1.0
+
+  # HTTP timeout per request (seconds)
+  timeout_s: 15
+
+text:
+  # Skip records with less than this many characters of extracted narrative
+  min_text_chars: 200
+
+  # Closing sentence appended before timeseries placeholder (exactly one <ts></ts>)
+  ts_intro_sentence: "Weekly ILI, virologic, hospitalization, and mortality indicators for this surveillance week: <ts></ts>."
+
+output:
+  output_path: output/cdc_fluview_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+
+  # Cap total records (demo). null = emit all weeks with HTML + CSV.
+  max_records: 50
+
+  # null = compact JSONL; integer = pretty-print array
+  indent: null

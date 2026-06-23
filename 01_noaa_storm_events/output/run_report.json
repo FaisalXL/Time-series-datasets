@@ -1,0 +1,36 @@
+{
+  "episodes_seen": 10359,
+  "episodes_skipped": {},
+  "records_written": 50,
+  "rows_loaded": 75593,
+  "validation_errors": [],
+  "config_snapshot": {
+    "data": {
+      "source": "download",
+      "download_url_template": "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/StormEvents_details-ftp_v1.0_d{year}_c20260323.csv.gz",
+      "local_path": null,
+      "years": [
+        2023
+      ],
+      "state_filter": [],
+      "event_type_filter": [],
+      "require_episode_narrative": true,
+      "min_episode_days": 1,
+      "min_episode_events": 1
+    },
+    "text": {
+      "max_event_narratives": 3,
+      "event_narrative_char_limit": 400,
+      "episode_narrative_char_limit": 1200,
+      "ts_intro_sentence": "Daily impact metrics for this episode: <ts></ts>."
+    },
+    "output": {
+      "output_path": "output/noaa_storm_events_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "generated_at": "2026-06-19T00:32:59Z",
+  "dry_run": false
+}

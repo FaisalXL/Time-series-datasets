@@ -1,0 +1,22 @@
+{
+  "dataset_id": "07_cdc_fluview",
+  "name": "CDC FluView Weekly Surveillance Reports",
+  "format": "CPT",
+  "text_source": "cdc_fluview_weekly_report",
+  "text_quality": "real",
+  "timeseries_sources": [
+    "ILINet",
+    "NREVSS_Clinical_Labs",
+    "NREVSS_Public_Health_Labs"
+  ],
+  "episode_unit": "week",
+  "seasons_available": "2015-2016 to 2025-2026",
+  "estimated_records_full": "~500",
+  "caveats": [
+    "Pre-2015-16 season HTML archives are not available via the documented URL patterns",
+    "Some weeks may lack HTML pages (404) even when CSV data exists",
+    "Each record is a single-week snapshot — all timeseries arrays have length 1",
+    "News-style ILI visits capture syndromic illness, not lab-confirmed flu only",
+    "Hospitalization paragraph may combine FluSurv-NET cumulative and weekly rates"
+  ]
+}

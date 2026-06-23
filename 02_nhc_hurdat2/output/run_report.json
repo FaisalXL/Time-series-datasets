@@ -1,0 +1,42 @@
+{
+  "storms_seen": 1973,
+  "storms_qualifying": 368,
+  "storms_with_advisory": 50,
+  "storms_skipped": {
+    "min_qualifying_obs": 23,
+    "no_advisory_text": 106,
+    "season_filter": 1545
+  },
+  "records_written": 50,
+  "validation_errors": [],
+  "config_snapshot": {
+    "data": {
+      "source": "local",
+      "basin": "atlantic",
+      "atlantic_url": "https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2023-051124.txt",
+      "east_pacific_url": "https://www.nhc.noaa.gov/data/hurdat/hurdat2-nepac-1949-2023-042624.txt",
+      "local_path": ".cache/hurdat2/hurdat2-1851-2023-051124.txt",
+      "season_start": 2000,
+      "season_end": 2023,
+      "min_qualifying_obs": 8,
+      "storm_filter": []
+    },
+    "advisories": {
+      "enabled": true,
+      "max_per_storm": 3,
+      "char_limit_per_advisory": 1500,
+      "timeout_seconds": 10
+    },
+    "text": {
+      "ts_intro_sentence": "Six-hourly observations across the storm's lifetime — maximum sustained wind (kt), minimum central pressure (mb), track latitude, track longitude, and maximum 34-kt wind radius (nm): <ts></ts>."
+    },
+    "output": {
+      "output_path": "output/nhc_hurdat2_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "generated_at": "2026-06-19T04:11:03Z",
+  "dry_run": false
+}

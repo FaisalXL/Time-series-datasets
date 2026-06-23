@@ -1,0 +1,53 @@
+# TelecomTS → CPT world-knowledge JSONL
+#
+# Loads AliMaatouk/TelecomTS from Hugging Face. Produces two record types:
+#   normal  — description + KPI series (text_source: dataset_description)
+#   anomaly — description + GPT troubleshooting ticket + KPI series
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --config config.example.yaml
+#
+# Dry-run (print one example record, no files written):
+#   python scripts/build_cpt_jsonl.py --dry-run
+
+data:
+  # Hugging Face dataset identifier
+  hf_dataset_id: "AliMaatouk/TelecomTS"
+
+  # Local cache directory for HF downloads
+  cache_dir: ".cache/telecom_ts"
+
+  # HF split to stream (full dataset loaded via streaming iterator)
+  split: "train"
+
+  # Which record types to emit: normal, anomaly, or both
+  record_types: ["normal", "anomaly"]
+
+  # Five KPI columns to include as time series (must exist in KPIs dict).
+  # RX_Bytes / TX_Bytes are converted to Mbps for output units.
+  channels: ["RX_Bytes", "TX_Bytes", "DL_BLER", "UL_BLER", "RSRP"]
+
+  # Empty list = all anomaly types; otherwise filter to these exact type strings
+  # e.g. ["Jamming", "Antenna Failure"]
+  anomaly_types_filter: []
+
+  # Expected timesteps per series (dataset default is 128 at 10 Hz = 12.8 s)
+  window_length: 128
+
+  # Sampling interval label for timeseries freq field
+  freq: "100ms"
+
+output:
+  output_path: output/telecom_ts_cpt.jsonl
+  report_path: output/run_report.json
+
+  # Cap total records (demo). null = no cap.
+  max_records: 50
+
+  # When true, split max_records evenly between normal and anomaly
+  # (e.g. 50 → 25 normal + 25 anomaly)
+  balance_types: true
+
+  # null = compact JSONL; integer = pretty-print each record
+  indent: null
