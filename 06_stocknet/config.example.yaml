@@ -1,0 +1,47 @@
+# StockNet → CPT world-knowledge JSONL
+#
+# Pairs weekly investor tweets with daily OHLCV for the same week.
+# One record = one (ticker, ISO-week) pair.
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --set output.max_records=50   # demo
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null  # full build
+
+data:
+  # Git repo cloned here on first run (depth=1, ~50 MB)
+  cache_dir: ".cache"
+  repo_url: "https://github.com/yumoxu/stocknet-dataset.git"
+
+  # Tweet date range (price CSV extends beyond this; tweets only 2014-01-01–2016-01-01)
+  tweet_start: "2014-01-01"
+  tweet_end:   "2016-01-01"
+
+filters:
+  # Minimum unique tweets in a week to emit a record (removes nearly-empty weeks)
+  min_tweets: 3
+
+  # Minimum trading days in a week (skips holiday-truncated weeks)
+  min_trading_days: 3
+
+  # Minimum characters in the final text field
+  min_text_chars: 100
+
+  # Max tweets to include inline per record (null = include all unique tweets).
+  # Extra tweets are counted but not shown; keeps very active tickers manageable.
+  max_tweets_per_record: null
+
+text:
+  # Closing sentence that contains the <ts></ts> placeholder.
+  ts_intro_sentence: "Daily open, high, low, close prices (USD) and share volume for this week's trading sessions: <ts></ts>"
+
+output:
+  output_path:  "output/stocknet_cpt.jsonl"
+  report_path:  "output/run_report.json"
+  samples_path: "samples/example_output.jsonl"
+
+  # Cap total records (demo mode). null = emit all passing records.
+  max_records: 50
+
+  # null = compact JSONL; integer = pretty-print JSON array
+  indent: null

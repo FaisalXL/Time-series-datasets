@@ -1,0 +1,39 @@
+{
+  "run_date": "2026-06-24T05:53:04Z",
+  "date_range": {
+    "start": "2014-01-01",
+    "end": "2016-01-01"
+  },
+  "tickers_found": 87,
+  "tickers_processed": 1,
+  "records_emitted": 50,
+  "skipped_no_prices": 0,
+  "skipped_few_tweets": 0,
+  "skipped_few_trading_days": 0,
+  "skipped_short_text": 0,
+  "skipped_validation": 0,
+  "config_snapshot": {
+    "data": {
+      "cache_dir": ".cache",
+      "repo_url": "https://github.com/yumoxu/stocknet-dataset.git",
+      "tweet_start": "2014-01-01",
+      "tweet_end": "2016-01-01"
+    },
+    "filters": {
+      "min_tweets": 3,
+      "min_trading_days": 3,
+      "min_text_chars": 100,
+      "max_tweets_per_record": null
+    },
+    "text": {
+      "ts_intro_sentence": "Daily open, high, low, close prices (USD) and share volume for this week's trading sessions: <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/stocknet_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  }
+}
