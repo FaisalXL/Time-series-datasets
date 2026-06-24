@@ -46,6 +46,9 @@ PATTERN_A_SEASONS = {
     "2016-2017",
     "2017-2018",
     "2018-2019",
+    "2019-2020",
+    "2021-2022",
+    "2023-2024",
 }
 
 CSV_FILES = {
@@ -180,13 +183,19 @@ def weeks_for_season(season: str, available: set[Tuple[int, int]]) -> List[Tuple
     return weeks
 
 
-def report_url(season: str, year: int, week: int) -> str:
+def report_urls(season: str, year: int, week: int) -> List[str]:
     week_str = f"{week:02d}"
+    archive = (
+        f"https://www.cdc.gov/flu/weekly/weeklyarchives{season}/week{week_str}.htm"
+    )
+    modern = f"https://www.cdc.gov/fluview/surveillance/{year}-week-{week_str}.html"
     if season in PATTERN_A_SEASONS:
-        return (
-            f"https://www.cdc.gov/flu/weekly/weeklyarchives{season}/week{week_str}.htm"
-        )
-    return f"https://www.cdc.gov/fluview/surveillance/{year}-week-{week_str}.html"
+        return [archive, modern]
+    return [modern, archive]
+
+
+def report_url(season: str, year: int, week: int) -> str:
+    return report_urls(season, year, week)[0]
 
 
 def cache_path(cache_dir: Path, season: str, week: int) -> Path:
@@ -467,6 +476,9 @@ def fetch_html(
         except requests.RequestException as exc:
             print(f"  warning: request failed for {url}: {exc}", file=sys.stderr)
             return None, False
+    except requests.RequestException as exc:
+        print(f"  warning: request failed for {url}: {exc}", file=sys.stderr)
+        return None, False
 
     if response.status_code != 200:
         print(
@@ -596,14 +608,24 @@ def run_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 print(f"Week {label}: skipped (no CSV join)")
                 continue
 
-            url = report_url(season, year, week)
+            urls = report_urls(season, year, week)
             cache_file = cache_path(cache_dir, season, week)
-            html, from_cache = fetch_html(session, url, cache_file, timeout_s)
+            html = None
+            from_cache = False
+            winning_url = urls[0]
+            network_activity = False
+            for url in urls:
+                html, from_cache = fetch_html(session, url, cache_file, timeout_s)
+                if html is not None:
+                    winning_url = url
+                    break
+                if not from_cache:
+                    network_activity = True
 
             if html is None:
                 stats["records_skipped_no_html"] += 1
                 print(f"Week {label}: skipped (no HTML)")
-                if not from_cache:
+                if network_activity:
                     time.sleep(delay_s)
                 continue
 
@@ -628,7 +650,7 @@ def run_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 narrative=narrative,
                 ts_intro=ts_intro,
                 html=html,
-                url=url,
+                url=winning_url,
                 tables=tables,
             )
             errors = validate_record(record)

@@ -1,20 +1,40 @@
 {
-  "run_date": "2026-06-20T02:09:25Z",
+  "run_date": "2026-06-24T02:43:51Z",
   "seasons_processed": [
+    "2015-2016",
+    "2016-2017",
+    "2017-2018",
+    "2018-2019",
+    "2019-2020",
+    "2020-2021",
+    "2021-2022",
+    "2022-2023",
+    "2023-2024",
+    "2024-2025",
     "2025-2026"
   ],
-  "weeks_attempted": 36,
-  "weeks_with_html": 36,
-  "weeks_with_csv": 36,
-  "weeks_with_both": 36,
-  "records_emitted": 36,
-  "records_skipped_no_html": 0,
+  "weeks_attempted": 558,
+  "weeks_with_html": 383,
+  "weeks_with_csv": 558,
+  "weeks_with_both": 313,
+  "records_emitted": 313,
+  "records_skipped_no_html": 175,
   "records_skipped_no_csv": 0,
-  "records_skipped_short_text": 0,
+  "records_skipped_short_text": 70,
   "config_snapshot": {
     "data": {
-      "csv_dir": "/Users/faisal./dev/TS dataset (DC)/CDC FluView latest",
+      "csv_dir": "data/raw_csv",
       "seasons": [
+        "2015-2016",
+        "2016-2017",
+        "2017-2018",
+        "2018-2019",
+        "2019-2020",
+        "2020-2021",
+        "2021-2022",
+        "2022-2023",
+        "2023-2024",
+        "2024-2025",
         "2025-2026"
       ],
       "html_cache_dir": ".cache/html",
@@ -29,7 +49,7 @@
       "output_path": "output/cdc_fluview_cpt.jsonl",
       "report_path": "output/run_report.json",
       "samples_path": "samples/example_output.jsonl",
-      "max_records": 50,
+      "max_records": null,
       "indent": null
     }
   }

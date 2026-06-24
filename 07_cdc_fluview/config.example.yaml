@@ -11,11 +11,21 @@
 #   python scripts/build_cpt_jsonl.py --set output.max_records=null
 
 data:
-  # Directory containing ILINet.csv and NREVSS CSVs (drop historical files here)
-  csv_dir: "/Users/faisal./dev/TS dataset (DC)/CDC FluView latest"
+  # Directory containing ILINet.csv and NREVSS CSVs
+  csv_dir: "data/raw_csv"
 
-  # Flu seasons to process (e.g. "2025-2026")
+  # Flu seasons to process (must match CSV + available HTML archive)
   seasons:
+    - "2015-2016"
+    - "2016-2017"
+    - "2017-2018"
+    - "2018-2019"
+    - "2019-2020"
+    - "2020-2021"
+    - "2021-2022"
+    - "2022-2023"
+    - "2023-2024"
+    - "2024-2025"
     - "2025-2026"
 
   # Cache downloaded weekly HTML reports here
@@ -40,7 +50,7 @@ output:
   samples_path: samples/example_output.jsonl
 
   # Cap total records (demo). null = emit all weeks with HTML + CSV.
-  max_records: 50
+  max_records: null
 
   # null = compact JSONL; integer = pretty-print array
   indent: null

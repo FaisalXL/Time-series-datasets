@@ -1,10 +1,10 @@
 # CDC FluView → CPT
 
-> **Status: In progress** — demo: 36 records (2025–26 season only). Historical scrape 2015+ still TODO.
+> **Status: Partial full build** — **313 records** from 558 CSV weeks (2015–16 through 2025–26). Historical CSVs in `data/raw_csv/`; HTML cached under `.cache/html/`.
 
 **What it is:** CDC weekly flu surveillance report (HTML) paired with national ILI + lab indicators (CSV). One record = **one epidemiological week**.
 
-**Scale:** ~**500 records** at full build (10 seasons × ~52 weeks, 2015–2026). Text HTML available from **2015–16 onward** (older archive URLs 404). Demo: **36 weeks** current season.
+**Scale:** 558 national weeks in CSV (11 seasons). **313 emitted** where live CDC HTML + extractable narrative exist (~56%). Largest gaps: **2020–21** (0 records — pages removed from live CDC), **2021–22** and **2022–23** (sparse/broken archive).
 
 **Record shape:**
 ```json
@@ -22,8 +22,8 @@
 
 **Key issues:**
 - **Single timestep per record** — rich weekly text but each series has length 1 (natural unit is one week; not a multi-week window).
-- **Old HTML not on the public archive index** — 2015–2018 pages exist at legacy URLs but may disappear; scrape/cache urgently.
-- CSV historical download needed (current local CSVs = one season only).
+- **COVID-era HTML gap** — 2020–21 through 2022–23 mostly unavailable at live `cdc.gov` URLs; listed on [past reports](https://www.cdc.gov/fluview/surveillance/past-reports.html) but often only via CDC web archive (not wired into this pipeline).
+- **Legacy extractor** — 2015–19 pages sometimes bleed regional table text into Key Points; 70 weeks skipped for short extracted text.
 
 **Run:** `pip install -r requirements.txt && python scripts/build_cpt_jsonl.py`
 
