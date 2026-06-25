@@ -1,0 +1,42 @@
+{
+  "stats": {
+    "attempted": 366,
+    "emitted": 364,
+    "skip_no_sgas": 2,
+    "skip_text_short": 0,
+    "skip_no_dgd": 0,
+    "skip_no_dsd": 0,
+    "skip_few_ts": 0
+  },
+  "config": {
+    "data": {
+      "cache_dir": ".cache",
+      "start_date": "2000-01-01",
+      "end_date": "2001-01-01",
+      "request_timeout": 30,
+      "retry_delay": 1.0
+    },
+    "filters": {
+      "require_dgd": true,
+      "require_dsd": true,
+      "min_text_chars": 80,
+      "min_ts_channels": 3
+    },
+    "text": {
+      "ts_intro_sentence": "Geomagnetic K-indices (3-hourly intervals), daily A-indices, and solar measurements for this observation day: <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/noaa_swpc_daily_cpt.jsonl",
+      "report_path": "output/run_report_daily.json",
+      "samples_path": "samples/example_daily.jsonl",
+      "max_records": null,
+      "indent": null
+    }
+  },
+  "dgd_rows_loaded": 1096,
+  "dsd_rows_loaded": 1096,
+  "date_range": {
+    "start": "2000-01-01",
+    "end": "2001-01-01"
+  }
+}

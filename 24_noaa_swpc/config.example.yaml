@@ -1,0 +1,51 @@
+# NOAA SWPC → CPT world-knowledge JSONL (daily records)
+#
+# One record = one observation day, where all three sources align:
+#   Text   : SGAS (Joint USAF/NOAA Solar and Geophysical Activity Summary)
+#   TS     : DGD (K-indices + A-indices, 3 stations) + DSD (solar flux, sunspots, flares)
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_daily_cpt.py                              # 50-record demo (year 2000)
+#   python scripts/build_daily_cpt.py --set output.max_records=null  # full build
+
+data:
+  # Local cache — downloaded files are stored here to avoid re-fetching.
+  # SGAS: ~1 KB/file. DGD/DSD: ~28 KB/year.
+  cache_dir: ".cache"
+
+  # Date range for SGAS issue dates (end is exclusive).
+  # obs_date = issue_date - 1 day, so DGD/DSD for (start_date - 1 year) are also fetched.
+  start_date: "2000-01-01"
+  end_date:   "2001-01-01"
+
+  request_timeout: 30   # seconds per HTTP request
+  retry_delay: 1.0      # seconds between retries (backs off × attempt)
+
+filters:
+  # Skip record if SGAS file is missing for that issue date.
+  require_dgd: true
+
+  # Skip record if DSD row is missing for that observation date.
+  require_dsd: true
+
+  # Minimum characters in final text field (catches blank/corrupt SGAS files).
+  min_text_chars: 80
+
+  # Minimum number of TS channels in the record. A fully populated day has up to 18.
+  min_ts_channels: 3
+
+text:
+  ts_intro_sentence: >-
+    Geomagnetic K-indices (3-hourly intervals), daily A-indices,
+    and solar measurements for this observation day: <ts></ts>
+
+output:
+  output_path:  "output/noaa_swpc_daily_cpt.jsonl"
+  report_path:  "output/run_report_daily.json"
+
+  # Cap total records (demo mode). null = emit all records in the date range.
+  max_records: 50
+
+  # null = compact JSONL; integer = pretty-print JSON array (useful for inspection)
+  indent: null

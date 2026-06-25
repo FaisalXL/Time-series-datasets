@@ -1,0 +1,38 @@
+{
+  "stats": {
+    "attempted": 52,
+    "emitted": 47,
+    "skip_download": 0,
+    "skip_no_dates": 1,
+    "skip_no_highlights": 0,
+    "skip_text_short": 0,
+    "skip_few_solar": 4,
+    "skip_few_geo": 0,
+    "skip_few_ts": 0
+  },
+  "config": {
+    "data": {
+      "cache_dir": ".cache",
+      "year_start": 2000,
+      "year_end": 2001,
+      "request_timeout": 30,
+      "retry_delay": 1.0
+    },
+    "filters": {
+      "min_text_chars": 200,
+      "min_ts_channels": 5,
+      "min_solar_rows": 5,
+      "min_geo_rows": 5
+    },
+    "text": {
+      "ts_intro_sentence": "Daily solar flux, sunspot activity, X-ray flux, flare counts, and geomagnetic indices for each day of this observation week: <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/noaa_swpc_weekly_cpt.jsonl",
+      "report_path": "output/run_report_weekly.json",
+      "samples_path": "samples/example_weekly.jsonl",
+      "max_records": null,
+      "indent": null
+    }
+  }
+}
