@@ -1,0 +1,71 @@
+# BLS CPI → CPT world-knowledge JSONL
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py
+#
+# Override config:
+#   python scripts/build_cpt_jsonl.py --config config.example.yaml
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null
+#   python scripts/build_cpt_jsonl.py --set data.start_year=2010
+
+data:
+  # Data month range for HTML releases (Wayback Machine CDX, coverage ~2009+).
+  # bls.gov blocks automated access for HTML; use Wayback Machine for 2009–2026.
+  start_year: 2009
+  end_year: 2026
+
+  # Set include_txt: true to also fetch plain-text press releases from bls.gov
+  # for 1994–2007 (direct bls.gov access required; works on most machines).
+  # txt_start_year sets the lower bound for TXT discovery.
+  include_txt: false   # set true to extend coverage to 1994
+  txt_start_year: 1994
+
+  html_cache_dir: .cache/html
+  api_cache_dir: .cache/api
+
+  # BLS public API v1 — no key required; 25 queries/day, 10 years per query
+  # API responses are cached after first fetch so reruns are free
+  api_url: "https://api.bls.gov/publicAPI/v1/timeseries/data/"
+
+  # CPI series to include in each record's timeseries.
+  # Each series contributes one channel of `window_months` values.
+  # Verify series IDs at https://data.bls.gov/timeseries/ if results look wrong.
+  series:
+    - id: CUSR0000SA0
+      unit: cpi_u_all_items_sa
+    - id: CUUR0000SA0
+      unit: cpi_u_all_items_nsa
+    - id: CUSR0000SA0L1E
+      unit: cpi_u_core_sa
+    - id: CUSR0000SAF
+      unit: cpi_u_food_sa
+    - id: CUSR0000SA0E
+      unit: cpi_u_energy_sa
+
+  # Rolling window length in months. Records dropped if any month is missing.
+  window_months: 12
+
+  # Polite delay between live HTTP requests (seconds)
+  request_delay_s: 1.0
+
+  # HTTP timeout per request (seconds)
+  timeout_s: 15
+
+text:
+  # Drop records with less than this many narrative characters
+  min_text_chars: 200
+
+  # Closing sentence containing exactly one <ts></ts>; {data_month} = "YYYY-MM"
+  ts_intro_sentence: "Monthly CPI indicators for the 12 months ending {data_month}: <ts></ts>"
+
+output:
+  output_path: output/bls_cpi_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+
+  # Demo cap — set null for full build (~385 records, 1994–2026)
+  max_records: 50
+
+  # null = compact JSONL (one record per line); integer = pretty-print JSON array
+  indent: null

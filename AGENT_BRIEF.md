@@ -1,6 +1,6 @@
 # Agent brief: CPT world-knowledge datasets
 
-*Read this when switching chats or onboarding a new agent on this repo.*
+*Last updated: Jun 26 2026. Re-read this when switching chats or onboarding a new agent.*
 
 ---
 
@@ -52,9 +52,11 @@ Git repo root: `datasets/` (not the parent workspace). Demo/full outputs live in
 |---|--------|--------|--------|--------|
 | 01 | `01_noaa_storm_events/` | **Complete** | ~10k/year (2010+) | `build_cpt_jsonl.py` |
 | 02 | `02_nhc_hurdat2/` | **Complete** | ~320 storms (2000–23 w/ text) | `build_cpt_jsonl.py` |
-| 04 | `04_telecom_ts/` | In progress | ~1.3k samples | `build_cpt_jsonl.py` — **blocked**: GPT-generated anomaly text pending team approval |
+| 04 | `04_telecom_ts/` | **Demo done** | ~1.3k full records | `build_cpt_jsonl.py` — **do not scale**: GPT-generated anomaly text pending team approval |
 | 05 | `05_fnspid/` | In progress | ~2–4M after dedup | `build_cpt_jsonl.py` — demo only; full HF pipeline not built |
-| 07 | `07_cdc_fluview/` | **Partial** | 313 / 558 weeks emitted | `build_cpt_jsonl.py` |
+| 06 | `06_stocknet/` | **Demo done** | ~29k (87 tickers × ~2 yrs) | `build_cpt_jsonl.py` — full run pending server |
+| 07 | `07_cdc_fluview/` | **Complete** | 313 / 558 weeks (real ceiling) | `build_cpt_jsonl.py` — 2020–21 gap: CDC removed archive pages |
+| 24 | `24_noaa_swpc/` | **Demo done** | ~10,800 daily + ~1,500 weekly | `build_daily_cpt.py` + `build_weekly_cpt.py` — full run pending server |
 
 Index: [`datasets/README.md`](./README.md). Broader project notes: [`../PROJECT_CONTEXT.md`](../PROJECT_CONTEXT.md) (may lag — trust per-dataset READMEs for status).
 
@@ -73,12 +75,10 @@ datasets/NN_<slug>/
 ├── output/
 │   ├── *_cpt.jsonl           # Main deliverable
 │   └── run_report.json       # Counts, skips, config snapshot
-├── samples/
-│   └── example_output.jsonl  # 1–3 pretty-printed records (optional)
 └── .cache/                   # gitignored — downloads, HTML cache, etc.
 ```
 
-**`.gitignore`** (repo level): `**/.cache/`, `**/__pycache__/`, `**/samples/` (optional — samples may or may not be committed).
+**`.gitignore`** (repo level): `**/.cache/`, `**/__pycache__/`.
 
 ---
 
@@ -121,13 +121,12 @@ Every dataset README should start with a **status banner**, then:
 
 ## Active work & known blockers
 
-### CDC FluView (`07_cdc_fluview/`) — most recent focus
+### NOAA SWPC (`24_noaa_swpc/`) — most recently completed
 
-- **CSV:** historical national weeks in `data/raw_csv/` (ILINet + two NREVSS files, 2015–16 → 2025–26).
-- **Text:** scraped from live CDC weekly HTML (legacy `weeklyarchives{season}/weekXX.htm` vs modern `fluview/surveillance/{year}-week-XX.html`).
-- **Output:** 313 records; 175 weeks skipped (no HTML on live CDC); 70 skipped (extractor found <200 chars).
-- **Gaps:** 2020–21 (0 records — pages off live CDC), 2021–22 / 2022–23 mostly missing. `archive.cdc.gov` was tried and **not** wired in (bot blocking / incomplete); left as documented gap.
-- **Open for Charon:** single timestep per week (natural unit) vs multi-week windows.
+- **Daily build** (`build_daily_cpt.py`): SGAS text + DGD (K/A-indices) + DSD (solar flux, sunspots, flares). 18 TS channels. Demo: 50 records (year 2000). Full: ~10,800 records (1996–2026).
+- **Weekly build** (`build_weekly_cpt.py`): PRF PDF Highlights section + 15-channel TS from embedded tables. Uses `pymupdf` (fitz). Demo: 5 records. Full: ~1,500 records (1997–2026).
+- **Quiet-day records kept intentionally** — contrast between quiet (Kp 0–3) and active days is the learning signal.
+- Full runs pending server allocation.
 
 ### FNSPID (`05_fnspid/`)
 

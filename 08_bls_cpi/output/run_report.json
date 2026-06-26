@@ -1,0 +1,80 @@
+{
+  "run_date": "2026-06-26T17:24:35Z",
+  "start_year": 2009,
+  "end_year": 2026,
+  "window_months": 12,
+  "series": [
+    {
+      "id": "CUSR0000SA0",
+      "unit": "cpi_u_all_items_sa"
+    },
+    {
+      "id": "CUUR0000SA0",
+      "unit": "cpi_u_all_items_nsa"
+    },
+    {
+      "id": "CUSR0000SA0L1E",
+      "unit": "cpi_u_core_sa"
+    },
+    {
+      "id": "CUSR0000SAF",
+      "unit": "cpi_u_food_sa"
+    },
+    {
+      "id": "CUSR0000SA0E",
+      "unit": "cpi_u_energy_sa"
+    }
+  ],
+  "releases_in_cdx": 123,
+  "releases_attempted": 102,
+  "records_emitted": 50,
+  "skipped_incomplete_ts": 0,
+  "skipped_no_html": 52,
+  "skipped_short_text": 0,
+  "skipped_validation": 0,
+  "config_snapshot": {
+    "data": {
+      "start_year": 2009,
+      "end_year": 2026,
+      "html_cache_dir": ".cache/html",
+      "api_cache_dir": ".cache/api",
+      "api_url": "https://api.bls.gov/publicAPI/v1/timeseries/data/",
+      "series": [
+        {
+          "id": "CUSR0000SA0",
+          "unit": "cpi_u_all_items_sa"
+        },
+        {
+          "id": "CUUR0000SA0",
+          "unit": "cpi_u_all_items_nsa"
+        },
+        {
+          "id": "CUSR0000SA0L1E",
+          "unit": "cpi_u_core_sa"
+        },
+        {
+          "id": "CUSR0000SAF",
+          "unit": "cpi_u_food_sa"
+        },
+        {
+          "id": "CUSR0000SA0E",
+          "unit": "cpi_u_energy_sa"
+        }
+      ],
+      "window_months": 12,
+      "request_delay_s": 1.0,
+      "timeout_s": 15
+    },
+    "text": {
+      "min_text_chars": 200,
+      "ts_intro_sentence": "Monthly CPI indicators for the 12 months ending {data_month}: <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/bls_cpi_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  }
+}
