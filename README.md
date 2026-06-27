@@ -1,8 +1,35 @@
 # CPT World-Knowledge Datasets
 
-Per-dataset packages for instruction-free continued pre-training: natural text with `<ts></ts>` + aligned time series.
+Per-dataset packages for instruction-free continued pre-training: natural text with a single `<ts></ts>` placeholder + aligned time series.
 
-**Demo outputs** are in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage.
+**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage.
+
+## Dev Set (for review)
+
+Small-scale samples for format inspection and freeze. The five datasets below are the current dev set — open each folder for its README and `output/*.jsonl`:
+
+| # | Dataset | Dev samples | Channels | `freq` | Notes |
+|---|---------|------------:|---------:|--------|-------|
+| 01 | [NOAA Storm Events](./01_noaa_storm_events/) | 50 | 3 | `1d` | — |
+| 02 | [NHC HURDAT2](./02_nhc_hurdat2/) | 50 | 5 | `6h` | — |
+| 04 | [TelecomTS](./04_telecom_ts/) | 50 | 5 | `100ms` | ⚠️ anomaly text is GPT-generated (`text_quality: "generated"`) — pending team sign-off |
+| 06 | [StockNet](./06_stocknet/) | 50 | 5 | `1d` | tweets are third-party text (`"real"`) — confirm tag |
+| 07 | [CDC FluView](./07_cdc_fluview/) | 313 | 15 | `1w` | full real ceiling (CDC removed 2020–21 archive) |
+
+## Record format (frozen for dev set)
+
+Every line of `output/*_cpt.jsonl` is one JSON object with these required fields:
+
+| Field | Rule |
+|-------|------|
+| `text` | Natural prose; contains **exactly one** `<ts></ts>`. |
+| `timeseries` | List of channels, each `{values, unit, freq}`. |
+| `task_type` | Always `"world_knowledge"`. |
+| `text_quality` | `"real"` for first-party/official text; `"generated"` for tagged synthetic text. |
+
+**`freq` convention — compact lowercase:** `100ms`, `6h`, `1d`, `1w` (not `daily`/`weekly`). Dataset-specific extras (`geography`, `season`, `report_url`, …) are allowed after the required fields.
+
+## All packages
 
 | # | Dataset | Status | ~Full scale |
 |---|---------|--------|-------------|

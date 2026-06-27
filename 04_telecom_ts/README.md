@@ -6,6 +6,29 @@
 
 **Scale:** HF dataset has **~1,260 train samples** in current split. Full corpus is small — not a large-scale source.
 
+#### 📄 Text — scenario description
+| | |
+|---|---|
+| **What** | A short description of the 128-step window — normal-traffic summary, or a troubleshooting narrative for an injected anomaly |
+| **Source** | [`AliMaatouk/TelecomTS`](https://huggingface.co/datasets/AliMaatouk/TelecomTS) (HF dataset) |
+| **Format** | Text field per sample in the HF parquet/JSON split |
+| **`text_quality`** | `"real"` for normal-window descriptions · **`"generated"` for anomaly text (GPT-4) ⚠️ pending team sign-off** · `text_source` tags origin |
+
+#### 📈 Time series — 5G KPI window
+| | |
+|---|---|
+| **What** | 5 radio/throughput KPIs from a 5G lab testbed (one base station) |
+| **Source** | Same HF dataset — sensor logs sampled at 100 ms |
+| **Cadence** | `100ms`, **fixed 128-step window** (source-imposed, not arbitrary sliding) |
+
+| Channel (`unit`) | Meaning |
+|---|---|
+| `DL_Throughput_Mbps` | Downlink throughput (Mbps) |
+| `UL_Throughput_Mbps` | Uplink throughput (Mbps) |
+| `DL_BLER_pct` | Downlink block error rate (%) |
+| `UL_BLER_pct` | Uplink block error rate (%) |
+| `RSRP_dBm` | Reference signal received power (dBm) |
+
 **Record shape:**
 ```json
 {

@@ -6,6 +6,31 @@
 
 **Scale:** 88 S&P-selected stocks across 9 sectors. Tweet window: Jan 2014 – Jan 2016 (~104 ISO weeks per ticker). Unique tweet deduplication and minimum-tweet filter reduce this by ~15–25%.
 
+#### 📄 Text — investor/trader tweets
+| | |
+|---|---|
+| **What** | All unique tweets about the ticker during that ISO week (deduplicated) |
+| **Source** | [`yumoxu/stocknet-dataset`](https://github.com/yumoxu/stocknet-dataset) — `tweet/preprocessed/<ticker>/` |
+| **Format** | Per-day JSON token arrays (lowercase); script rejoins + detokenises. `@mentions`→`AT_USER`, links→`URL` |
+| **`text_quality`** | `"real"` (third-party social media, **not** official first-party text — Charon rule #5; confirm tag) |
+
+#### 📈 Time series — daily OHLCV
+| | |
+|---|---|
+| **What** | The 5 daily price/volume bars for the same ISO week |
+| **Source** | Same repo — `price/raw/<ticker>.csv` |
+| **Cadence** | `1d`, ~5 steps/week (weeks with < 3 trading days skipped) |
+
+| Channel (`unit`) | Meaning |
+|---|---|
+| `open_usd` | Daily open price (USD) |
+| `high_usd` | Daily high price (USD) |
+| `low_usd` | Daily low price (USD) |
+| `close_usd` | Daily close price (USD) |
+| `volume_shares` | Shares traded that day |
+
+> **Note:** tweets and prices are independent sources keyed to the same `(ticker, ISO-week)` — genuine alignment.
+
 **Record shape:**
 ```json
 {

@@ -6,18 +6,43 @@
 
 **Scale:** ~**10k records/year** with narrative (2023 US total). **2010+** recommended (~100% episode narrative). Narrative text essentially **absent before ~1996**.
 
+#### 📄 Text — NCEI episode narrative
+| | |
+|---|---|
+| **What** | Forecaster-written episode/event narrative describing the storm and its impacts |
+| **Source** | NCEI Storm Events Database — the `EPISODE_NARRATIVE` / `EVENT_NARRATIVE` free-text fields |
+| **Where** | Bulk CSV files at [ncei.noaa.gov/stormevents](https://www.ncei.noaa.gov/stormevents/) (`StormEvents_details-*.csv.gz`) |
+| **Format** | Plain-text fields inside the details CSV; concatenated per `(episode, state)` |
+| **`text_quality`** | `"real"` (official NWS/forecaster text) |
+
+#### 📈 Time series — daily impact metrics
+| | |
+|---|---|
+| **What** | 3 channels aggregated per day from the event rows of the same episode |
+| **Source** | Same NCEI details CSV — numeric fields (`INJURIES_*`, `DAMAGE_*`), counted/summed by date |
+| **Cadence** | `1d`, variable length (one episode = 1 to N days; 86% are single-day) |
+
+| Channel (`unit`) | Meaning |
+|---|---|
+| `injuries/day` | Direct + indirect injuries reported that day |
+| `USD/day` | Property + crop damage (USD) that day |
+| `events/day` | Count of event rows logged that day |
+
+> **Note:** text and TS are drawn from the *same* NCEI database — the human narrative field vs. the structured numeric fields of the same episode. Natural source-native alignment, not a cross-source join.
+
 **Record shape:**
 ```json
 {
   "text": "North Dakota winter storm, Oct 2023. Heavy snow and blowing snow... Daily impact metrics: <ts></ts>.",
   "timeseries": [
-    {"values": [0], "unit": "injuries/day", "freq": "daily"},
-    {"values": [0], "unit": "USD/day", "freq": "daily"},
-    {"values": [19], "unit": "events/day", "freq": "daily"}
+    {"values": [0], "unit": "injuries/day", "freq": "1d"},
+    {"values": [0], "unit": "USD/day", "freq": "1d"},
+    {"values": [19], "unit": "events/day", "freq": "1d"}
   ],
   "episode_date_range": ["2023-10-25", "2023-10-25"],
   "geography": "NORTH DAKOTA",
-  "task_type": "world_knowledge"
+  "task_type": "world_knowledge",
+  "text_quality": "real"
 }
 ```
 

@@ -520,6 +520,7 @@ def storm_to_record(storm: Storm, advisory_text: str, cfg: Dict[str, Any]) -> Di
         "source": "nhc_hurdat2_best_track",
         "series_id": storm.storm_id,
         "task_type": "world_knowledge",
+        "text_quality": "real",
         "text_source": "nhc_advisory",
     }
 
@@ -541,6 +542,7 @@ def validate_record(record: Dict[str, Any]) -> List[str]:
         "source",
         "series_id",
         "task_type",
+        "text_quality",
         "text_source",
     ]
     for key in required:

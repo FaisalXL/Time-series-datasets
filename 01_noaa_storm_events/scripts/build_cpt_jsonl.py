@@ -387,9 +387,9 @@ def episode_to_record(group: EpisodeGroup, cfg: Dict[str, Any]) -> Dict[str, Any
     return {
         "text": text,
         "timeseries": [
-            {"values": injuries, "unit": "injuries/day", "freq": "daily"},
-            {"values": damage, "unit": "USD/day", "freq": "daily"},
-            {"values": events, "unit": "events/day", "freq": "daily"},
+            {"values": injuries, "unit": "injuries/day", "freq": "1d"},
+            {"values": damage, "unit": "USD/day", "freq": "1d"},
+            {"values": events, "unit": "events/day", "freq": "1d"},
         ],
         "episode_date_range": [first_date.isoformat(), last_date.isoformat()],
         "geography": group.state,
@@ -398,6 +398,7 @@ def episode_to_record(group: EpisodeGroup, cfg: Dict[str, Any]) -> Dict[str, Any
         "source": "ncei_storm_events_db",
         "series_id": make_series_id(group.episode_id, group.state, rows),
         "task_type": "world_knowledge",
+        "text_quality": "real",
     }
 
 
@@ -449,6 +450,7 @@ def validate_record(record: Dict[str, Any]) -> List[str]:
         "source",
         "series_id",
         "task_type",
+        "text_quality",
     ]
     for key in required:
         if key not in record:

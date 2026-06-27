@@ -6,6 +6,41 @@
 
 **Scale:** 558 national weeks in CSV (11 seasons). **313 emitted** where live CDC HTML + extractable narrative exist (~56%). Largest gaps: **2020–21** (0 records — pages removed from live CDC), **2021–22** and **2022–23** (sparse/broken archive).
 
+#### 📄 Text — weekly FluView surveillance report
+| | |
+|---|---|
+| **What** | The "Key Points" / national summary narrative from CDC's weekly influenza surveillance report |
+| **Source** | [cdc.gov/fluview](https://www.cdc.gov/fluview/) weekly report HTML (per-record `report_url`) |
+| **Format** | Extracted from the live HTML page; `text_source` tags the extractor used |
+| **`text_quality`** | `"real"` (official CDC text) |
+
+#### 📈 Time series — national flu indicators (15 channels)
+| | |
+|---|---|
+| **What** | 15 channels from **three** FluView Interactive datasets for the same epi-week |
+| **Source** | [FluView Interactive](https://gis.cdc.gov/grasp/fluview/fluportaldashboard.html) CSVs: ILINet, Clinical Labs, Public Health Labs |
+| **Cadence** | `1w`, **single timestep per record** (natural unit is one week, not a window) |
+
+| Channel (`unit`) | Source table | Meaning |
+|---|---|---|
+| `ili_pct_weighted` | ILINet | Weighted % of outpatient visits for ILI |
+| `ili_total_visits` | ILINet | Total patient visits reported |
+| `age_0_4` | ILINet | ILI visits, ages 0–4 |
+| `age_5_24` | ILINet | ILI visits, ages 5–24 |
+| `age_25_49` | ILINet | ILI visits, ages 25–49 |
+| `age_50_64` | ILINet | ILI visits, ages 50–64 |
+| `age_65_plus` | ILINet | ILI visits, ages 65+ |
+| `clinical_pct_positive` | Clinical Labs | % specimens positive for flu |
+| `clinical_pct_A` | Clinical Labs | % positive for influenza A |
+| `clinical_pct_B` | Clinical Labs | % positive for influenza B |
+| `ph_H1N1` | Public Health Labs | Specimens typed A(2009 H1N1) |
+| `ph_H3` | Public Health Labs | Specimens typed A(H3) |
+| `ph_B` | Public Health Labs | Specimens typed B (lineage not determined) |
+| `ph_BVic` | Public Health Labs | Specimens typed B/Victoria |
+| `ph_BYam` | Public Health Labs | Specimens typed B/Yamagata |
+
+> **Note:** text (CDC report HTML) and TS (FluView Interactive CSVs) are independent CDC products for the same week — genuine cross-source alignment.
+
 **Record shape:**
 ```json
 {
