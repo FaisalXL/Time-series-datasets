@@ -1,11 +1,13 @@
 {
-  "episodes_seen": 10359,
-  "episodes_skipped": {},
+  "grouping": "state_month",
+  "groups_seen": 695,
+  "groups_skipped": {},
   "records_written": 50,
   "rows_loaded": 75593,
   "validation_errors": [],
   "config_snapshot": {
     "data": {
+      "grouping": "state_month",
       "source": "download",
       "download_url_template": "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/StormEvents_details-ftp_v1.0_d{year}_c20260323.csv.gz",
       "local_path": null,
@@ -16,13 +18,16 @@
       "event_type_filter": [],
       "require_episode_narrative": true,
       "min_episode_days": 1,
-      "min_episode_events": 1
+      "min_episode_events": 1,
+      "min_month_events": 1
     },
     "text": {
       "max_event_narratives": 3,
       "event_narrative_char_limit": 400,
       "episode_narrative_char_limit": 1200,
-      "ts_intro_sentence": "Daily impact metrics for this episode: <ts></ts>."
+      "month_narrative_char_limit": 2500,
+      "ts_intro_sentence": "Daily impact metrics for this {geography} episode: <ts></ts>.",
+      "ts_intro_sentence_month": "Daily storm injuries, property damage (USD), and event counts across {geography} during {month}: <ts></ts>."
     },
     "output": {
       "output_path": "output/noaa_storm_events_cpt.jsonl",
@@ -31,6 +36,6 @@
       "indent": null
     }
   },
-  "generated_at": "2026-06-19T00:32:59Z",
+  "generated_at": "2026-06-28T01:42:44Z",
   "dry_run": false
 }

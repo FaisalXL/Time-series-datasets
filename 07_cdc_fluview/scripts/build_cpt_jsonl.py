@@ -249,15 +249,29 @@ def joined_week_keys(tables: Mapping[str, Dict[Tuple[int, int], Dict[str, str]]]
     return keys
 
 
+def season_to_date_window(
+    season: str,
+    key: Tuple[int, int],
+    available: set[Tuple[int, int]],
+) -> List[Tuple[int, int]]:
+    """All weeks in `season` from week 40 up to and including `key`.
+
+    Returns chronologically-ordered (year, week) keys that are present in the
+    joined CSV tables — so every channel shares the same length and alignment.
+    """
+    return [wk for wk in weeks_for_season(season, available) if wk <= key]
+
+
 def build_timeseries(
     tables: Mapping[str, Dict[Tuple[int, int], Dict[str, str]]],
-    key: Tuple[int, int],
+    window: Sequence[Tuple[int, int]],
 ) -> List[Dict[str, Any]]:
+    """One channel per indicator; `values` is the season-to-date trailing window."""
     series: List[Dict[str, Any]] = []
     for table_name, column, unit in TIMESERIES_SPEC:
-        row = tables[table_name][key]
-        value = parse_csv_value(row.get(column, ""))
-        series.append({"values": [value], "unit": unit, "freq": "1w"})
+        table = tables[table_name]
+        values = [parse_csv_value(table[key].get(column, "")) for key in window]
+        series.append({"values": values, "unit": unit, "freq": "1w"})
     return series
 
 
@@ -501,11 +515,14 @@ def validate_record(record: Dict[str, Any]) -> List[str]:
     errors: List[str] = []
     if record["text"].count("<ts></ts>") != 1:
         errors.append("text must contain exactly one <ts></ts>")
-    if len(record.get("timeseries", [])) != 15:
+    ts = record.get("timeseries", [])
+    if len(ts) != 15:
         errors.append("timeseries must contain 15 channels")
-    for series in record.get("timeseries", []):
-        if len(series.get("values", [])) != 1:
-            errors.append(f"timeseries {series.get('unit')} must have length 1")
+    lengths = {len(s.get("values", [])) for s in ts}
+    if len(lengths) > 1:
+        errors.append(f"all channels must share one length; got {sorted(lengths)}")
+    if lengths and min(lengths) < 1:
+        errors.append("timeseries channels must be non-empty")
     return errors
 
 
@@ -518,18 +535,24 @@ def build_record(
     html: str,
     url: str,
     tables: Mapping[str, Dict[Tuple[int, int], Dict[str, str]]],
+    available: set[Tuple[int, int]],
 ) -> Dict[str, Any]:
     key = (year, week)
-    text = f"{narrative}\n\n{ts_intro}" if narrative else ts_intro
+    window = season_to_date_window(season, key, available)
+    n_weeks = len(window)
+    intro = ts_intro.format(season=season, week=week, n_weeks=n_weeks)
+    text = f"{narrative}\n\n{intro}" if narrative else intro
     week_ending = parse_week_ending_date(html, year, week)
 
     return {
         "text": text,
-        "timeseries": build_timeseries(tables, key),
+        "timeseries": build_timeseries(tables, window),
         "season": season,
         "year": year,
         "week": week,
         "week_ending_date": week_ending,
+        "window_n_weeks": n_weeks,
+        "window_start_week": window[0][1] if window else week,
         "report_url": url,
         "dataset": "cdc_fluview",
         "source": "cdc.gov/fluview",
@@ -567,6 +590,7 @@ def run_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
     delay_s = float(data_cfg.get("request_delay_s", 1.0))
     timeout_s = float(data_cfg.get("timeout_s", 15))
     min_text_chars = int(text_cfg.get("min_text_chars", 200))
+    min_window_weeks = int(data_cfg.get("min_window_weeks", 1))
     ts_intro = text_cfg["ts_intro_sentence"]
     max_records = out_cfg.get("max_records")
 
@@ -582,6 +606,7 @@ def run_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "records_skipped_no_html": 0,
         "records_skipped_no_csv": 0,
         "records_skipped_short_text": 0,
+        "records_skipped_short_window": 0,
     }
 
     records: List[Dict[str, Any]] = []
@@ -652,7 +677,17 @@ def run_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 html=html,
                 url=winning_url,
                 tables=tables,
+                available=available_weeks,
             )
+            if record["window_n_weeks"] < min_window_weeks:
+                stats["records_skipped_short_window"] += 1
+                print(
+                    f"Week {label}: skipped (window {record['window_n_weeks']} "
+                    f"< min_window_weeks {min_window_weeks})"
+                )
+                if not from_cache:
+                    time.sleep(delay_s)
+                continue
             errors = validate_record(record)
             if errors:
                 print(f"Week {label}: validation failed: {errors}", file=sys.stderr)

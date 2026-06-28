@@ -15,6 +15,7 @@ Example:
 from __future__ import annotations
 
 import argparse
+import calendar
 import csv
 import gzip
 import json
@@ -209,6 +210,14 @@ class EpisodeGroup:
     rows: List[EventRow] = field(default_factory=list)
 
 
+@dataclass
+class StateMonthGroup:
+    state: str
+    year: int
+    month: int
+    rows: List[EventRow] = field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
@@ -325,14 +334,18 @@ def build_daily_arrays(
     return injuries, damage, events
 
 
-def assemble_text(rows: List[EventRow], cfg: Dict[str, Any]) -> str:
+def assemble_text(
+    rows: List[EventRow],
+    cfg: Dict[str, Any],
+    intro: str,
+    episode_limit: Optional[int] = None,
+) -> str:
     text_cfg = cfg["text"]
     max_event_narratives = int(text_cfg.get("max_event_narratives", 3))
     event_limit = int(text_cfg.get("event_narrative_char_limit", 400))
-    episode_limit = int(text_cfg.get("episode_narrative_char_limit", 1200))
-    ts_intro = text_cfg.get(
-        "ts_intro_sentence", "Daily impact metrics for this episode: <ts></ts>."
-    )
+    if episode_limit is None:
+        episode_limit = int(text_cfg.get("episode_narrative_char_limit", 1200))
+    ts_intro = intro
 
     # Episode narrative is usually identical across rows — keep unique non-empty texts.
     episode_parts: List[str] = []
@@ -382,7 +395,10 @@ def episode_to_record(group: EpisodeGroup, cfg: Dict[str, Any]) -> Dict[str, Any
     injuries, damage, events = build_daily_arrays(rows, first_date, last_date)
 
     event_types = sorted({r.event_type for r in rows if r.event_type})
-    text = assemble_text(rows, cfg)
+    intro = cfg["text"].get(
+        "ts_intro_sentence", "Daily impact metrics for this episode: <ts></ts>."
+    ).format(geography=group.state)
+    text = assemble_text(rows, cfg, intro)
 
     return {
         "text": text,
@@ -391,7 +407,7 @@ def episode_to_record(group: EpisodeGroup, cfg: Dict[str, Any]) -> Dict[str, Any
             {"values": damage, "unit": "USD/day", "freq": "1d"},
             {"values": events, "unit": "events/day", "freq": "1d"},
         ],
-        "episode_date_range": [first_date.isoformat(), last_date.isoformat()],
+        "date_range": [first_date.isoformat(), last_date.isoformat()],
         "geography": group.state,
         "event_types": event_types,
         "dataset": "noaa_storm_events",
@@ -400,6 +416,85 @@ def episode_to_record(group: EpisodeGroup, cfg: Dict[str, Any]) -> Dict[str, Any
         "task_type": "world_knowledge",
         "text_quality": "real",
     }
+
+
+def month_bounds(year: int, month: int) -> Tuple[date, date]:
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, 1), date(year, month, last_day)
+
+
+def group_state_months(rows: Iterable[EventRow]) -> List[StateMonthGroup]:
+    buckets: DefaultDict[Tuple[str, int, int], List[EventRow]] = defaultdict(list)
+    for row in rows:
+        key = (row.state, row.event_date.year, row.event_date.month)
+        buckets[key].append(row)
+    return [
+        StateMonthGroup(state=s, year=y, month=m, rows=group_rows)
+        for (s, y, m), group_rows in buckets.items()
+    ]
+
+
+def state_month_to_record(group: StateMonthGroup, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    rows = filter_episode_rows(group.rows, cfg)
+    first_date, last_date = month_bounds(group.year, group.month)
+    injuries, damage, events = build_daily_arrays(rows, first_date, last_date)
+
+    event_types = sorted({r.event_type for r in rows if r.event_type})
+    n_episodes = len({r.episode_id for r in rows if r.episode_id})
+    month_label = f"{group.year}-{group.month:02d}"
+    month_name = f"{calendar.month_name[group.month]} {group.year}"
+
+    text_cfg = cfg["text"]
+    intro = text_cfg.get(
+        "ts_intro_sentence_month",
+        "Daily storm injuries, property damage (USD), and event counts across "
+        "{geography} during {month}: <ts></ts>.",
+    ).format(geography=group.state.title(), month=month_name)
+    month_limit = int(text_cfg.get("month_narrative_char_limit", 2500))
+    text = assemble_text(rows, cfg, intro, episode_limit=month_limit)
+
+    return {
+        "text": text,
+        "timeseries": [
+            {"values": injuries, "unit": "injuries/day", "freq": "1d"},
+            {"values": damage, "unit": "USD/day", "freq": "1d"},
+            {"values": events, "unit": "events/day", "freq": "1d"},
+        ],
+        "date_range": [first_date.isoformat(), last_date.isoformat()],
+        "month": month_label,
+        "geography": group.state,
+        "event_types": event_types,
+        "n_episodes": n_episodes,
+        "n_events": len(rows),
+        "dataset": "noaa_storm_events",
+        "source": "ncei_storm_events_db",
+        "series_id": f"{group.state.replace(' ', '_')}_{month_label}",
+        "task_type": "world_knowledge",
+        "text_quality": "real",
+    }
+
+
+def should_skip_state_month(
+    group: StateMonthGroup, cfg: Dict[str, Any]
+) -> Optional[str]:
+    data_cfg = cfg["data"]
+    state_filter = [s.strip().upper() for s in data_cfg.get("state_filter", []) if s]
+    if state_filter and group.state not in state_filter:
+        return "state_filter"
+
+    rows = filter_episode_rows(group.rows, cfg)
+    if not rows:
+        return "event_type_filter"
+
+    min_events = int(data_cfg.get("min_month_events", 1))
+    if len(rows) < min_events:
+        return "min_month_events"
+
+    if data_cfg.get("require_episode_narrative", True):
+        if not any(r.episode_narrative for r in rows):
+            return "missing_episode_narrative"
+
+    return None
 
 
 def should_skip_episode(
@@ -443,7 +538,7 @@ def validate_record(record: Dict[str, Any]) -> List[str]:
     required = [
         "text",
         "timeseries",
-        "episode_date_range",
+        "date_range",
         "geography",
         "event_types",
         "dataset",
@@ -468,13 +563,13 @@ def validate_record(record: Dict[str, Any]) -> List[str]:
         if len(lengths) != 1:
             errors.append("timeseries value arrays have mismatched lengths")
 
-        start, end = record.get("episode_date_range", ["", ""])
+        start, end = record.get("date_range", ["", ""])
         try:
             expected_days = (date.fromisoformat(end) - date.fromisoformat(start)).days + 1
             if lengths and next(iter(lengths)) != expected_days:
-                errors.append("timeseries length does not match episode_date_range")
+                errors.append("timeseries length does not match date_range")
         except ValueError:
-            errors.append("invalid episode_date_range")
+            errors.append("invalid date_range")
 
     return errors
 
@@ -517,25 +612,38 @@ def write_report(report: Dict[str, Any], cfg: Dict[str, Any], dry_run: bool) -> 
 
 def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
     rows = load_rows(cfg)
-    groups = group_episodes(rows)
+    grouping = cfg["data"].get("grouping", "state_month")
 
     skipped: DefaultDict[str, int] = defaultdict(int)
     records: List[Dict[str, Any]] = []
     max_records = cfg["output"].get("max_records")
     validation_errors: List[str] = []
 
+    if grouping == "state_month":
+        groups = group_state_months(rows)
+        skip_fn = should_skip_state_month
+        record_fn = state_month_to_record
+        label_fn = lambda g: f"{g.state}/{g.year}-{g.month:02d}"
+    elif grouping == "episode":
+        groups = group_episodes(rows)
+        skip_fn = should_skip_episode
+        record_fn = episode_to_record
+        label_fn = lambda g: f"{g.episode_id}/{g.state}"
+    else:
+        raise SystemExit(f"Unknown data.grouping: {grouping}")
+
     for group in groups:
-        reason = should_skip_episode(group, cfg)
+        reason = skip_fn(group, cfg)
         if reason:
             skipped[reason] += 1
             continue
 
-        record = episode_to_record(group, cfg)
+        record = record_fn(group, cfg)
         errors = validate_record(record)
         if errors:
             skipped["validation_error"] += 1
             validation_errors.extend(
-                f"{group.episode_id}/{group.state}: {err}" for err in errors
+                f"{label_fn(group)}: {err}" for err in errors
             )
             continue
 
@@ -544,8 +652,9 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
             break
 
     report = {
-        "episodes_seen": len(groups),
-        "episodes_skipped": dict(sorted(skipped.items())),
+        "grouping": grouping,
+        "groups_seen": len(groups),
+        "groups_skipped": dict(sorted(skipped.items())),
         "records_written": len(records),
         "rows_loaded": len(rows),
         "validation_errors": validation_errors[:20],
@@ -603,8 +712,8 @@ def main() -> None:
     if not args.dry_run:
         print(
             f"Wrote {report['records_written']} records "
-            f"({report['episodes_seen']} episodes seen, "
-            f"{sum(report['episodes_skipped'].values())} skipped).",
+            f"({report['groups_seen']} {report['grouping']} groups seen, "
+            f"{sum(report['groups_skipped'].values())} skipped).",
             file=sys.stderr,
         )
 

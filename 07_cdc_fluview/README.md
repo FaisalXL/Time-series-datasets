@@ -1,10 +1,10 @@
 # CDC FluView → CPT
 
-> **Status: Partial full build** — **313 records** from 558 CSV weeks (2015–16 through 2025–26). Historical CSVs in `data/raw_csv/`; HTML cached under `.cache/html/`.
+> **Status: Partial full build** — **358 records** from 558 CSV weeks (2015–16 through 2025–26). Historical CSVs in `data/raw_csv/`; HTML cached under `.cache/html/`.
 
-**What it is:** CDC weekly flu surveillance report (HTML) paired with national ILI + lab indicators (CSV). One record = **one epidemiological week**.
+**What it is:** CDC weekly flu surveillance report (HTML) paired with national ILI + lab indicators (CSV). One record = **one epidemiological week's report**, with the TS holding that **season's trajectory to date** (not a single value).
 
-**Scale:** 558 national weeks in CSV (11 seasons). **313 emitted** where live CDC HTML + extractable narrative exist (~56%). Largest gaps: **2020–21** (0 records — pages removed from live CDC), **2021–22** and **2022–23** (sparse/broken archive).
+**Scale:** 558 national weeks in CSV (11 seasons). **358 emitted** where live CDC HTML + extractable narrative exist. Largest gaps: **2020–21** (pages removed from live CDC), **2021–22** and **2022–23** (sparse/broken archive).
 
 #### 📄 Text — weekly FluView surveillance report
 | | |
@@ -17,9 +17,9 @@
 #### 📈 Time series — national flu indicators (15 channels)
 | | |
 |---|---|
-| **What** | 15 channels from **three** FluView Interactive datasets for the same epi-week |
+| **What** | 15 channels from **three** FluView Interactive datasets |
 | **Source** | [FluView Interactive](https://gis.cdc.gov/grasp/fluview/fluportaldashboard.html) CSVs: ILINet, Clinical Labs, Public Health Labs |
-| **Cadence** | `1w`, **single timestep per record** (natural unit is one week, not a window) |
+| **Cadence / window** | `1w`, **season-to-date window** — MMWR week 40 → the report week (1–52 values; median ~22). The weekly report text discusses the season's trajectory, so the multi-week window is what the prose describes. |
 
 | Channel (`unit`) | Source table | Meaning |
 |---|---|---|
@@ -41,24 +41,24 @@
 
 > **Note:** text (CDC report HTML) and TS (FluView Interactive CSVs) are independent CDC products for the same week — genuine cross-source alignment.
 
-**Record shape:**
+**Record shape:** (real record — 2015–16 season, week 47, 8 weeks to date; arrays abbreviated)
 ```json
 {
-  "text": "Key Points: Seasonal influenza activity is low nationally... During Week 40, 1.6% of ILINet visits were due to ILI... Weekly indicators: <ts></ts>.",
+  "text": "Key Points: During week 47 (November 22-28, 2015), influenza activity increased slightly in the United States but remained low overall... National influenza surveillance indicators for the 2015-2016 season, weekly from the season start (MMWR week 40) through week 47 (8 weeks to date): <ts></ts>.",
   "timeseries": [
-    {"values": [1.61], "unit": "ili_pct_weighted", "freq": "1w"},
-    {"values": [41531], "unit": "ili_total_visits", "freq": "1w"},
-    {"values": [0.52], "unit": "clinical_pct_positive", "freq": "1w"},
-    {"values": [62], "unit": "ph_H1N1", "freq": "1w"}
+    {"values": [1.23, 1.31, 1.37, 1.39, 1.44, 1.50, 1.60, 1.90], "unit": "ili_pct_weighted", "freq": "1w"},
+    {"values": [10049, 10715, 11584, 11164, 12423, 12676, 13484, 12158], "unit": "ili_total_visits", "freq": "1w"}
   ],
-  "season": "2025-2026", "week": 40, "task_type": "world_knowledge", "text_quality": "real"
+  "season": "2015-2016", "week": 47, "window_n_weeks": 8, "window_start_week": 40,
+  "task_type": "world_knowledge", "text_quality": "real"
 }
 ```
+*(15 channels total; all share the same window length. Window = season start → report week.)*
 
 **Key issues:**
-- **Single timestep per record** — rich weekly text but each series has length 1 (natural unit is one week; not a multi-week window).
+- **Season-to-date window** — each record's TS runs from MMWR week 40 to the report week (median ~22 weeks), matching the season trajectory the report text discusses. Season-opening (week-40) records are length-1 by nature (~2.5% of records); raise `min_window_weeks` to drop them if a multi-step floor is wanted.
 - **COVID-era HTML gap** — 2020–21 through 2022–23 mostly unavailable at live `cdc.gov` URLs; listed on [past reports](https://www.cdc.gov/fluview/surveillance/past-reports.html) but often only via CDC web archive (not wired into this pipeline).
-- **Legacy extractor** — 2015–19 pages sometimes bleed regional table text into Key Points; 70 weeks skipped for short extracted text.
+- **Legacy extractor** — 2015–19 pages sometimes bleed regional table text into Key Points; weeks with short extracted text are skipped.
 
 **Run:** `pip install -r requirements.txt && python scripts/build_cpt_jsonl.py`
 

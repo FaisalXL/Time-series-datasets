@@ -13,6 +13,14 @@
 #   python scripts/build_cpt_jsonl.py --set data.state_filter=[OKLAHOMA,TEXAS] --dry-run
 
 data:
+  # Record unit:
+  #   state_month — one record per (state, calendar month); TS = daily metrics across
+  #                 the whole month (~28-31 steps), text = that month's narratives.
+  #                 Recommended: gives genuine multi-step series.
+  #   episode     — one record per (episode, state); TS = daily metrics over the
+  #                 episode span (often 1-3 days). Legacy single-/few-step unit.
+  grouping: state_month
+
   # How to load raw CSV rows:
   #   download — fetch annual .csv.gz files from NOAA (cached under .cache/)
   #   local    — read a single file from data.local_path
@@ -40,10 +48,14 @@ data:
   require_episode_narrative: true
 
   # Minimum inclusive calendar span (days) from first to last event in the episode.
+  # (episode grouping only)
   min_episode_days: 1
 
-  # Minimum number of event rows in the episode after filters.
+  # Minimum number of event rows in the episode after filters. (episode grouping only)
   min_episode_events: 1
+
+  # Minimum number of event rows in a state-month after filters. (state_month only)
+  min_month_events: 1
 
 text:
   # Maximum distinct EVENT_NARRATIVE snippets appended after the episode narrative.
@@ -52,11 +64,19 @@ text:
   # Character limit per appended EVENT_NARRATIVE (truncated at word boundary).
   event_narrative_char_limit: 400
 
-  # Character limit for the combined EPISODE_NARRATIVE block.
+  # Character limit for the combined EPISODE_NARRATIVE block. (episode grouping)
   episode_narrative_char_limit: 1200
 
-  # Closing sentence introducing the time series. Must contain exactly one <ts></ts>.
-  ts_intro_sentence: "Daily impact metrics for this episode: <ts></ts>."
+  # Character limit for the combined narrative block in state_month grouping
+  # (a month can span many episodes, so this is larger).
+  month_narrative_char_limit: 2500
+
+  # Closing sentence introducing the time series. Exactly one <ts></ts>.
+  # {geography} is substituted. Used by episode grouping.
+  ts_intro_sentence: "Daily impact metrics for this {geography} episode: <ts></ts>."
+
+  # Closing sentence for state_month grouping. {geography} and {month} substituted.
+  ts_intro_sentence_month: "Daily storm injuries, property damage (USD), and event counts across {geography} during {month}: <ts></ts>."
 
 output:
   # JSONL output path (one JSON object per line when indent is null).

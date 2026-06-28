@@ -1,5 +1,5 @@
 {
-  "run_date": "2026-06-24T02:43:51Z",
+  "run_date": "2026-06-27T22:59:18Z",
   "seasons_processed": [
     "2015-2016",
     "2016-2017",
@@ -14,13 +14,13 @@
     "2025-2026"
   ],
   "weeks_attempted": 558,
-  "weeks_with_html": 383,
+  "weeks_with_html": 441,
   "weeks_with_csv": 558,
-  "weeks_with_both": 313,
-  "records_emitted": 313,
-  "records_skipped_no_html": 175,
+  "weeks_with_both": 358,
+  "records_emitted": 358,
+  "records_skipped_no_html": 117,
   "records_skipped_no_csv": 0,
-  "records_skipped_short_text": 70,
+  "records_skipped_short_text": 83,
   "config_snapshot": {
     "data": {
       "csv_dir": "data/raw_csv",
@@ -43,7 +43,7 @@
     },
     "text": {
       "min_text_chars": 200,
-      "ts_intro_sentence": "Weekly ILI, virologic, hospitalization, and mortality indicators for this surveillance week: <ts></ts>."
+      "ts_intro_sentence": "National influenza surveillance indicators for the {season} season, weekly from the season start (MMWR week 40) through week {week} ({n_weeks} weeks to date): <ts></ts>."
     },
     "output": {
       "output_path": "output/cdc_fluview_cpt.jsonl",

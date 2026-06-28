@@ -28,6 +28,11 @@ data:
     - "2024-2025"
     - "2025-2026"
 
+  # Drop records whose season-to-date window is shorter than this many weeks.
+  # 1 = keep everything (incl. week-40 season openers, which are length-1).
+  # Raise to e.g. 4 to enforce a multi-step floor.
+  min_window_weeks: 1
+
   # Cache downloaded weekly HTML reports here
   html_cache_dir: ".cache/html"
 
@@ -41,8 +46,11 @@ text:
   # Skip records with less than this many characters of extracted narrative
   min_text_chars: 200
 
-  # Closing sentence appended before timeseries placeholder (exactly one <ts></ts>)
-  ts_intro_sentence: "Weekly ILI, virologic, hospitalization, and mortality indicators for this surveillance week: <ts></ts>."
+  # Closing sentence appended before timeseries placeholder (exactly one <ts></ts>).
+  # Placeholders: {season}, {week}, {n_weeks}. The timeseries is a season-to-date
+  # trailing window (MMWR week 40 -> the report week), so every channel carries the
+  # full trajectory the report text discusses, not a single value.
+  ts_intro_sentence: "National influenza surveillance indicators for the {season} season, weekly from the season start (MMWR week 40) through week {week} ({n_weeks} weeks to date): <ts></ts>."
 
 output:
   output_path: output/cdc_fluview_cpt.jsonl
