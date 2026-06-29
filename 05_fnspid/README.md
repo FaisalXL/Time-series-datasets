@@ -7,6 +7,9 @@
 > **Optional relevance filter run:** Gemma4-31b judge kept **2,723 / 5,000 (54.5%)**,
 > dropping ~46% as broad-market noise → `output/fnspid_cpt_filtered.jsonl` (avg
 > judge confidence 0.99). Real text preserved; per-record decision in `relevance`.
+>
+> **Note:** the `output/*.jsonl` committed in this repo are trimmed **75-record viewable
+> samples** (so they render on GitHub). The full build lives on the server — see **Output** below.
 
 **What it is:** Daily stock **OHLCV** prices + same-day financial news. One record =
 **one `(ticker, news_date)`** where a real news article exists.
@@ -90,9 +93,11 @@ about the paired ticker — fixing the attribution noise (see `CHALLENGES.md` §
 keeping the text fully real. It is shown only the article + ticker (never the price), so
 there is no lookahead. Configure under `relevance:` in the config.
 
-**Output:** `output/fnspid_cpt.jsonl` (default build ≈ 25 MB) + `output/run_report.json`.
-A 50-record sample is written to `samples/example_output.jsonl` (gitignored).
-For larger builds, keep the multi-GB JSONL out of git.
+**Output (committed here):** `output/fnspid_cpt.jsonl` and `output/fnspid_cpt_filtered.jsonl`
+are trimmed **75-record viewable samples** so they render on GitHub. The **full build**
+(5,000 raw / 2,723 filtered — see `output/run_report.json` and `output/relevance_report.json`)
+lives on the server at `/data/defu/Time-series-datasets/05_fnspid/output/` and is regenerated
+by `build_cpt_from_hf.py` (raise `output.max_records`). `samples/example_output.jsonl` is gitignored.
 
 **Source:** [Zihan1004/FNSPID](https://huggingface.co/datasets/Zihan1004/FNSPID) ·
 **License:** CC BY-NC 4.0 (research use only).
