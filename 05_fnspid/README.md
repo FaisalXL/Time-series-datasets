@@ -80,6 +80,14 @@ drop reason is recorded in `output/run_report.json`.
 
 These are intentionally **not** decided — to confirm before scaling (details in `CHALLENGES.md`):
 
+> ⚠️ **Biggest open question — text/series span mismatch (core alignment).** The text is a
+> **single day's** news (day *D*), but the series spans **30 days** (*D−30…D−1*) — so the text
+> does **not describe** the window, it's only *co-located* with its endpoint. This is the
+> FNSPID-native **forecasting** layout (news at the prediction point, history as input), and it's
+> a *looser* alignment than our report-style datasets where the narrative actually describes the
+> whole window (FluView, USDM). **Decide with Charon:** keep day-*D* news *(a, current)*, or
+> aggregate **all** news across the window for tight same-span alignment *(b)*? *(§A4)*
+
 - **Default the relevance filter on?** And at what confidence threshold? *(§B1)*
 - **Window length:** 30 trading days, or longer (60/120)? *(§B2)*
 - `close` **vs** `adj_close`**:** keep both channels, or drop one near-duplicate? *(§A2)*

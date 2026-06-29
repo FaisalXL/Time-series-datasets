@@ -115,6 +115,38 @@ at once (relevant because ~? of FNSPID articles are broad-market commentary, see
 recommend **#2, union + mask**) and we'd need to extend the record contract to carry
 a per-channel missingness mask.
 
+### A4. ⚠️ Text span vs. series span — the core alignment question (UNRESOLVED)
+
+**This is the most important open question for FNSPID.** Each record pairs a **single
+day's** news (day *D*) with a **30-trading-day** price window (*D−30 … D−1*). So the two
+modalities cover **different spans**: the text is a point-in-time event, the series is the
+run-up *into* that event. The day-*D* article does **not describe** the 30-day trajectory —
+it is merely **co-located** with the window's endpoint.
+
+**Why this matters.** Charon's core rule is that the text must *describe the same phenomenon
+the numbers represent*. Our report-style datasets satisfy this tightly — e.g. the FluView
+weekly report narrates the season trajectory, the USDM narrative describes the drought over
+the period. FNSPID's pairing is a **looser, different kind of alignment**: "the series is the
+recent market *context* for the news," not "the text narrates the series." It is the
+FNSPID-native **forecasting layout** (news anchored at the prediction point, history as input,
+future discarded for no-lookahead) — common and legitimate in multimodal finance, but a
+stretch against the strict "text-describes-series" standard the other datasets meet.
+
+**Options.**
+- *(a) Keep day-*D* news + run-up window (current).* Clean single news event, maximum record
+  count, but the *loosest* alignment — text and series spans don't match.
+- *(b) Aggregate all news across the window.* Pair the 30-day series with **every** article
+  for that ticker over the same 30 days → text and series cover the **same span** (the tight,
+  FluView-style alignment). Cost: concatenates many heterogeneous articles (dilutes the
+  single-event signal) and yields **fewer** records (one per ticker-window, not per ticker-day).
+- *(c) Shrink the window toward the news cadence.* Tighter, but reintroduces the thin-TS
+  problem (§B2) the team explicitly wanted to avoid.
+
+**Recommendation / confirm with lead.** This is effectively a **go/no-go on FNSPID's record
+design.** Decide (a) vs (b) with Charon: **(b)** is the more defensible *world-knowledge*
+alignment (text and numbers describe the same span); **(a)** is the stronger *forecasting-style*
+pairing and what's currently built. We can produce both and compare.
+
 ---
 
 ## Part B — Data-quality & scale decisions (build brief §6)
@@ -207,6 +239,7 @@ Emitting everything is neither feasible nor desirable.
 | A1 | Irregular cadence | real trading days + `trading_dates`, no imputation | adopt repo-wide; decide `freq` token / contract `timestamps` |
 | A2 | Channels | 6-ch OHLCV+adj_close | keep multivariate; decide close vs adj_close |
 | A3 | Cross-stock panel | one ticker/record (problem avoided) | add market-panel records only if needed → union+mask |
+| **A4** | **⚠️ Text span vs series span** | **day-D news + 30-day run-up (spans don't match)** | **core go/no-go — keep (a) forecasting layout vs (b) window-aggregated news; recommend deciding with Charon** |
 | B1 | Attribution filter | off (keep all), gate available | turn **on** for quality; consider name lookup |
 | B2 | Window | 30 trading days | confirm 30 vs 60/120 |
 | B3 | No-lookahead | window ends day before news | confirm |
