@@ -6,13 +6,14 @@ Per-dataset packages for instruction-free continued pre-training: natural text w
 
 ## Dev Set (for review)
 
-Small-scale samples for format inspection and freeze. The five datasets below are the current dev set — open each folder for its README and `output/*.jsonl`:
+Small-scale samples for format inspection and freeze. The datasets below are the current dev set — open each folder for its README and `output/*.jsonl`:
 
 | # | Dataset | Dev samples | Channels | `freq` | Notes |
 |---|---------|------------:|---------:|--------|-------|
 | 01 | [NOAA Storm Events](./01_noaa_storm_events/) | 50 | 3 | `1d` | state-month unit → 28–31 daily steps |
 | 02 | [NHC HURDAT2](./02_nhc_hurdat2/) | 50 | 5 | `6h` | per-storm track, 8–70 steps |
 | 04 | [TelecomTS](./04_telecom_ts/) | 50 | 5 | `100ms` | 128-step window · ⚠️ anomaly text GPT-generated, pending sign-off |
+| 05 | [FNSPID](./05_fnspid/) | 75 | 6 | `1d` | 30-day OHLCV window · raw + relevance-filtered files (see folder README) |
 | 06 | [StockNet](./06_stocknet/) | 50 | 5 | `1d` | weekly OHLCV (~5 steps) · tweets are third-party text (`"real"`) — confirm tag |
 | 07 | [CDC FluView](./07_cdc_fluview/) | 358 | 15 | `1w` | season-to-date window (1–52 wks, median ~22) |
 
