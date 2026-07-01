@@ -1,0 +1,50 @@
+# Copernicus C3S Monthly Climate Bulletin → CPT world-knowledge JSONL
+#
+# Two record types (one per theme), one record per month per theme:
+#   - temperature: surface-air-temperature narrative + 3 channels (global/European/
+#     pre-industrial anomaly), 12-month trailing window (freq 1m).
+#   - sea_ice: sea-ice-cover narrative + 2 channels (Arctic/Antarctic extent anomaly),
+#     this-calendar-month-across-years (freq 1y) — matches the ranking prose.
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=4
+#   python scripts/build_cpt_jsonl.py
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null   # full build
+
+data:
+  # Bulletins exist from ~2017, but the consistent 1991-2020-baseline CSVs span
+  # ~2019 (sea ice) / ~2021 (temperature) → present, across two file-naming eras
+  # (current C3S_Bulletin_* and mid-era ts_1month/ts_{Month}_anomaly_*). CSV hrefs
+  # are discovered from each page's HTML, so both eras are handled automatically.
+  start_month: "2019-01"
+  end_month: null            # null = current month
+
+  base_url: "https://climate.copernicus.eu"
+
+  # Which themes to emit. Each is its own record type.
+  themes: ["temperature", "sea_ice"]
+
+  # temperature: trailing monthly window length
+  window_months: 12
+  # sea_ice: number of trailing years for the this-month-across-years series
+  # (null = all available years, 1979 → report year)
+  sea_ice_window_years: null
+
+  html_cache_dir: ".cache/html"
+  csv_cache_dir: ".cache/csv"
+  request_delay_s: 1.0
+  timeout_s: 30
+
+text:
+  # Drop records with fewer than this many narrative characters.
+  min_text_chars: 200
+  # Closing sentence holding exactly one <ts></ts>. {intro} filled per theme/date.
+  ts_intro_sentence: "{intro}: <ts></ts>"
+
+output:
+  output_path: output/copernicus_climate_bulletin_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 24            # demo (~12 months × 2 themes). null = full build.
+  indent: null
