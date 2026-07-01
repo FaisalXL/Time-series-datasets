@@ -17,6 +17,7 @@ Small-scale samples for format inspection and freeze. The datasets below are the
 | 06 | [StockNet](./06_stocknet/) | 50 | 5 | `1d` | weekly OHLCV (~5 steps) · tweets are third-party text (`"real"`) — confirm tag |
 | 07 | [CDC FluView](./07_cdc_fluview/) | 358 | 15 | `1w` | season-to-date window (1–52 wks, median ~22) |
 | 31 | [US Drought Monitor](./31_usdm_drought/) | 50 | 5 | `1w` | 12-week window · D0–D4 % CONUS area · narrative PDF + stats API |
+| 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | 117 | 2 / 2 | `1m` / `1y` | 2 record types: temperature (global+Europe, 12-mo) + sea ice (Arctic+Antarctic, this-month-across-years) |
 
 ## Record format (frozen for dev set)
 
@@ -43,6 +44,7 @@ Every line of `output/*_cpt.jsonl` is one JSON object with these required fields
 | 07 | [CDC FluView](./07_cdc_fluview/) | Complete (358/558 wks) | season-to-date TS window; CDC removed 2020–21 archive pages |
 | 24 | [NOAA SWPC Space Weather](./24_noaa_swpc/) | Demo done | ~10,800 daily (1996–2026) + ~1,500 weekly (1997–2026) |
 | 31 | [US Drought Monitor](./31_usdm_drought/) | Built (demo 50) | ~269 weekly releases (2021-05 → present); 5 channels, 12-week window |
+| 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | Built (117) | 2021–May 2026 (2 file-naming eras, 1991-2020 baseline); ERA5 anomalies |
 
 Each README follows the same layout: what it is → scale → record shape → key issues → how to run.
 
