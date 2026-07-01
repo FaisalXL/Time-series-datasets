@@ -1,0 +1,4 @@
+duckdb>=1.0
+pyyaml>=6.0
+# SEC API access uses the standard library (urllib) — no extra HTTP dep needed.
+# Note: reads the transcript parquet with duckdb (no pandas/pyarrow required).

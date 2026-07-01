@@ -1,0 +1,63 @@
+{
+  "start_utc": "n/a",
+  "min_transcript_date": "2012-01-01",
+  "window_quarters": 12,
+  "channels": [
+    "revenue_usd",
+    "net_income_usd",
+    "eps_diluted_usd_per_share"
+  ],
+  "stats": {
+    "scanned": 64,
+    "emitted": 50,
+    "no_cik": 2,
+    "no_facts": 0,
+    "short_window": 12,
+    "short_text": 0,
+    "invalid": 0
+  },
+  "config_snapshot": {
+    "data": {
+      "transcript_parquet_url": "https://huggingface.co/datasets/Bose345/sp500_earnings_transcripts/resolve/main/parquet_files/part-0.parquet",
+      "sec_user_agent": "CPT-dataset-research faisal@usc.edu",
+      "ticker_map_url": "https://www.sec.gov/files/company_tickers.json",
+      "companyfacts_url": "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json",
+      "channels": [
+        {
+          "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+          "unit": "USD",
+          "name": "revenue_usd",
+          "fallback": "Revenues"
+        },
+        {
+          "concept": "NetIncomeLoss",
+          "unit": "USD",
+          "name": "net_income_usd"
+        },
+        {
+          "concept": "EarningsPerShareDiluted",
+          "unit": "USD/shares",
+          "name": "eps_diluted_usd_per_share"
+        }
+      ],
+      "window_quarters": 12,
+      "min_transcript_date": "2012-01-01",
+      "cache_dir": ".cache",
+      "request_delay_s": 0.15,
+      "timeout_s": 45
+    },
+    "text": {
+      "min_text_chars": 200,
+      "max_text_chars": 12000,
+      "ts_intro_sentence": "Trailing {n}-quarter fundamentals (revenue, net income USD; diluted EPS) through fiscal {quarter}: <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/earnings_calls_xbrl_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "dry_run": false
+}

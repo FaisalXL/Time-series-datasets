@@ -1,0 +1,48 @@
+# Earnings-Call Transcripts + SEC XBRL Fundamentals → CPT world-knowledge JSONL
+#
+# One record = one (company, fiscal quarter): the earnings-call transcript text
+# paired with that company's trailing 12-quarter fundamentals (revenue, net income,
+# diluted EPS) from SEC EDGAR XBRL. The exec recites these numbers → "describes".
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=5
+#   python scripts/build_cpt_jsonl.py
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null   # full build
+
+data:
+  # Transcript corpus (HF, MIT). Single parquet; read with duckdb (no pandas needed).
+  transcript_parquet_url: "https://huggingface.co/datasets/Bose345/sp500_earnings_transcripts/resolve/main/parquet_files/part-0.parquet"
+
+  # SEC EDGAR (free, no key). A DESCRIPTIVE User-Agent with contact is REQUIRED by SEC.
+  sec_user_agent: "CPT-dataset-research faisal@usc.edu"
+  ticker_map_url: "https://www.sec.gov/files/company_tickers.json"
+  companyfacts_url: "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+
+  # XBRL fundamentals to extract (us-gaap concept -> channel). Quarterly-duration
+  # facts (80-100 day period) keyed by period-end give a clean contiguous series.
+  channels:
+    - {concept: "RevenueFromContractWithCustomerExcludingAssessedTax", unit: "USD", name: "revenue_usd", fallback: "Revenues"}
+    - {concept: "NetIncomeLoss", unit: "USD", name: "net_income_usd"}
+    - {concept: "EarningsPerShareDiluted", unit: "USD/shares", name: "eps_diluted_usd_per_share"}
+
+  window_quarters: 12          # trailing quarters per record; dropped if fewer available
+  min_transcript_date: "2012-01-01"   # XBRL needs ~12 quarters of history (starts ~2009)
+
+  cache_dir: ".cache"
+  request_delay_s: 0.15        # SEC allows ~10 req/s; companyfacts cached per CIK
+  timeout_s: 45
+
+text:
+  min_text_chars: 200
+  # Transcripts are long (~40k chars); keep the leading portion (operator + prepared
+  # remarks, where the figures are recited). null = keep full text.
+  max_text_chars: 12000
+  ts_intro_sentence: "Trailing {n}-quarter fundamentals (revenue, net income USD; diluted EPS) through fiscal {quarter}: <ts></ts>"
+
+output:
+  output_path: output/earnings_calls_xbrl_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 50              # demo cap. null = full build (~25k+ after 2012 + window filter)
+  indent: null
