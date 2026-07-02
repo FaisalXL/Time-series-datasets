@@ -2,11 +2,11 @@
 
 Per-dataset packages for instruction-free continued pre-training: natural text with a single `<ts></ts>` placeholder + aligned time series.
 
-**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage.
+**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage. **13 packages built.**
 
 ## Dev Set (for review)
 
-Small-scale samples for format inspection and freeze. The datasets below are the current dev set — open each folder for its README and `output/*.jsonl`:
+Small-scale samples for format inspection and freeze. Open each folder for its README and `output/*.jsonl`:
 
 | # | Dataset | Dev samples | Channels | `freq` | Notes |
 |---|---------|------------:|---------:|--------|-------|
@@ -16,9 +16,13 @@ Small-scale samples for format inspection and freeze. The datasets below are the
 | 05 | [FNSPID](./05_fnspid/) | 75 | 6 | `1d` | 30-day OHLCV window · raw + relevance-filtered files (see folder README) |
 | 06 | [StockNet](./06_stocknet/) | 50 | 5 | `1d` | weekly OHLCV (~5 steps) · tweets are third-party text (`"real"`) — confirm tag |
 | 07 | [CDC FluView](./07_cdc_fluview/) | 358 | 15 | `1w` | season-to-date window (1–52 wks, median ~22) |
+| 08 | [BLS CPI Releases](./08_bls_cpi/) | 50 | 5 | `1M` | CPI release recites the index = the series (all-items SA/NSA, core, food, energy) |
+| 11 | [EIA Weekly Petroleum](./11_eia_petroleum_weekly/) | 50 | 6 | `1W` | WPSR "Highlights" recite crude/gasoline/distillate stocks, refinery inputs/util, imports = the series · 52-wk window · **public domain** |
+| 24 | [NOAA SWPC Space Weather](./24_noaa_swpc/) | 364 | 18 | `1d`/`3h` | geomagnetic alert/forecast text + Kp / A-index / particle-flux channels |
 | 31 | [US Drought Monitor](./31_usdm_drought/) | 50 | 5 | `1w` | 12-week window · D0–D4 % CONUS area · narrative PDF + stats API |
 | 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | 117 | 2 / 2 | `1m` / `1y` | 2 record types: temperature (global+Europe, 12-mo) + sea ice (Arctic+Antarctic, this-month-across-years) |
 | 42 | [Earnings Calls + SEC XBRL](./42_earnings_calls_xbrl/) | 50 | 3 | `1q` | transcript recites revenue/net-income/EPS = the XBRL series (12-quarter window) |
+| 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | 50 | 4 | `1over` | ESPNcricinfo match report + per-over runs/wickets/cumulative/run-rate · ⚠️ report text copyrighted, redistribution pending sign-off |
 
 ## Record format (frozen for dev set)
 
@@ -31,23 +35,30 @@ Every line of `output/*_cpt.jsonl` is one JSON object with these required fields
 | `task_type` | Always `"world_knowledge"`. |
 | `text_quality` | `"real"` for first-party/official text; `"generated"` for tagged synthetic text. |
 
-**`freq` convention — compact lowercase:** `100ms`, `6h`, `1d`, `1w` (not `daily`/`weekly`). Dataset-specific extras (`geography`, `season`, `report_url`, …) are allowed after the required fields.
+**`freq` convention — compact:** interval + unit, e.g. `100ms`, `3h`, `6h`, `1d`, `1w`/`1W`, `1M`, `1q`, `1y`, `1over`. (Case varies by package where it disambiguates, e.g. `1M` month vs `100ms`.) Dataset-specific extras (`geography`, `season`, `report_url`, …) are allowed after the required fields.
 
 ## All packages
 
-| # | Dataset | Status | ~Full scale |
-|---|---------|--------|-------------|
-| 01 | [NOAA Storm Events](./01_noaa_storm_events/) | Complete | ~10k/year (2010+) |
-| 02 | [NHC HURDAT2](./02_nhc_hurdat2/) | Complete | ~320 storms (2000–23, w/ text) |
-| 04 | [TelecomTS](./04_telecom_ts/) | Demo done | ~1.3k records (small dataset) |
-| 05 | [FNSPID](./05_fnspid/) | Built (full HF pipeline) | 5,000 raw / 2,723 relevance-filtered (sampled); ~146k candidates, scales to millions via `output.max_records` |
-| 06 | [StockNet](./06_stocknet/) | Demo done | ~29k records (87 tickers × ~2 yrs) |
-| 07 | [CDC FluView](./07_cdc_fluview/) | Complete (358/558 wks) | season-to-date TS window; CDC removed 2020–21 archive pages |
-| 24 | [NOAA SWPC Space Weather](./24_noaa_swpc/) | Demo done | ~10,800 daily (1996–2026) + ~1,500 weekly (1997–2026) |
-| 31 | [US Drought Monitor](./31_usdm_drought/) | Built (demo 50) | ~269 weekly releases (2021-05 → present); 5 channels, 12-week window |
-| 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | Built (117) | 2021–May 2026 (2 file-naming eras, 1991-2020 baseline); ERA5 anomalies |
-| 42 | [Earnings Calls + SEC XBRL](./42_earnings_calls_xbrl/) | Built (demo 50) | ~25k+ (transcript × 12-quarter fundamentals); ⚠️ confirm SEC EDGAR overlap before scaling |
+Estimated **full-scale datapoints** = CPT records at `output.max_records=null` (demos are capped at the counts above). Figures are estimates; the two big drivers are NOAA Storm Events and FNSPID.
 
-Each README follows the same layout: what it is → scale → record shape → key issues → how to run.
+| # | Dataset | Status | Est. datapoints (full) |
+|---|---------|--------|-----------------------:|
+| 01 | [NOAA Storm Events](./01_noaa_storm_events/) | Complete | **~150k** (~10k/yr, 2010+) |
+| 02 | [NHC HURDAT2](./02_nhc_hurdat2/) | Complete | **~320** storms (2000–23, w/ text) |
+| 04 | [TelecomTS](./04_telecom_ts/) | Demo done | **~1.3k** (small dataset) |
+| 05 | [FNSPID](./05_fnspid/) | Built (full HF pipeline) | **~146k** candidates (5k raw / 2.7k filtered sampled; scales to millions) |
+| 06 | [StockNet](./06_stocknet/) | Demo done | **~29k** (87 tickers × ~2 yrs) |
+| 07 | [CDC FluView](./07_cdc_fluview/) | Complete (358/558 wks) | **~558** weekly reports |
+| 08 | [BLS CPI Releases](./08_bls_cpi/) | Built (demo 50) | **~389** monthly releases (1994+, PDF+HTML) |
+| 11 | [EIA Weekly Petroleum](./11_eia_petroleum_weekly/) | Built (demo 50) | **~779** weekly reports (2011→); series to 1982; **public domain** |
+| 24 | [NOAA SWPC Space Weather](./24_noaa_swpc/) | Demo done | **~12.3k** (~10.8k daily 1996+ / ~1.5k weekly 1997+) |
+| 31 | [US Drought Monitor](./31_usdm_drought/) | Built (demo 50) | **~269** weekly releases (2021-05→) |
+| 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | Built (117) | **~120** (monthly, 2021→; grows) |
+| 42 | [Earnings Calls + SEC XBRL](./42_earnings_calls_xbrl/) | Built (demo 50) | **~25k+** (transcript × 12-q fundamentals); ⚠️ confirm SEC EDGAR overlap before scaling |
+| 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | Built (demo 50) | **~1.9k** IPL innings w/ report (~30k+ all formats); ⚠️ ESPN text redistribution pending sign-off |
+
+**Rough total ≈ 365k+ datapoints** across the built set (excluding license-gated Cricket), dominated by NOAA Storm Events (~150k) and FNSPID (~146k); the remaining ~11 packages contribute ~70k combined.
+
+Each README follows the same layout: what it is → scale → record shape → key issues → how to run. Packages with a `NOTION_PAGE.md` (e.g. 11, 45) carry the review write-up.
 
 See [AGENT_BRIEF.md](./AGENT_BRIEF.md) for adding new datasets.
