@@ -1,0 +1,4 @@
+pyyaml>=6.0
+# PyYAML is the only pip dependency (reads config.example.yaml).
+# Everything else — download, unzip, CSV parsing — uses the standard library
+# (urllib / zipfile / csv). Works on stock Python 3.9+.
