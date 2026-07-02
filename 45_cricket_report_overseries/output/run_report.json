@@ -1,0 +1,51 @@
+{
+  "cricsheet_zip_url": "https://cricsheet.org/downloads/ipl_male_csv2.zip",
+  "report_source": "site.api.espn.com",
+  "min_overs": 12,
+  "channels": [
+    "runs_per_over",
+    "wickets_per_over",
+    "cumulative_runs",
+    "run_rate"
+  ],
+  "stats": {
+    "matches_scanned": 32,
+    "innings_seen": 64,
+    "emitted": 50,
+    "short_innings": 1,
+    "no_report": 12,
+    "invalid": 0,
+    "no_info": 0
+  },
+  "config_snapshot": {
+    "data": {
+      "cricsheet_zip_url": "https://cricsheet.org/downloads/ipl_male_csv2.zip",
+      "espn_report_url_template": "https://www.espncricinfo.com/ci/engine/match/{match_id}.html",
+      "espn_summary_url": "https://site.api.espn.com/apis/site/v2/sports/cricket/{league}/summary?event={match_id}",
+      "espn_carrier_league": "1410320",
+      "request_delay_s": 0.4,
+      "channels": [
+        "runs_per_over",
+        "wickets_per_over",
+        "cumulative_runs",
+        "run_rate"
+      ],
+      "min_overs": 12,
+      "cache_dir": ".cache",
+      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "timeout_s": 90
+    },
+    "text": {
+      "ts_intro_sentence": "Per-over progression of the {team} innings: <ts></ts>",
+      "min_report_chars": 400
+    },
+    "output": {
+      "output_path": "output/cricket_report_overseries_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "dry_run": false
+}

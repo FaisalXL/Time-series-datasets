@@ -1,0 +1,8 @@
+.cache/
+__pycache__/
+scratch_*
+
+# NOTE: output/ + samples/ hold real ESPNcricinfo report prose (© ESPNcricinfo).
+# They ARE committed here as a capped 50-record DEMO for the lead to inspect — this is
+# internal review, NOT distribution. Do NOT scale/publish until the license is cleared
+# (NOTION_PAGE.md). Keep output.max_records small; never commit a full build.

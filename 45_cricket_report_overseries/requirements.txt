@@ -1,0 +1,4 @@
+pyyaml>=6.0
+# Cricsheet parsing (download, unzip, per-over aggregation) uses ONLY the standard
+# library (zipfile / csv / urllib) — no pandas, no duckdb. PyYAML is used only to
+# read config.example.yaml. Works on stock Python 3.9+.

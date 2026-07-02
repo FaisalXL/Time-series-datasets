@@ -1,0 +1,59 @@
+# Cricket Match Reports + Per-Over Ball-by-Ball Series → CPT world-knowledge JSONL
+#
+# One record = one INNINGS: a cricket innings' per-over time series (runs, wickets,
+# cumulative, run-rate) paired with the real ESPNcricinfo match report that narrates
+# the match. The report *describes* the over-by-over progression the series quantifies
+# → "describes". text_quality is always "real"; innings with no recap are dropped.
+#
+# ⚠️ LICENSE: ESPNcricinfo report prose is copyrighted / ToS-restricted. The committed
+#    output/ + samples/ are a capped 50-record demo for the lead to inspect (internal
+#    review, not distribution) — see NOTION_PAGE.md. Keep output.max_records small; do
+#    not run/commit a full build or publish until redistribution is cleared.
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=5
+#   python scripts/build_cpt_jsonl.py
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null   # full build
+
+data:
+  # Cricsheet bulk per-delivery CSV archive (ODC-BY 1.0). Each match => one
+  # {match_id}.csv (one row per delivery) + one {match_id}_info.csv (metadata).
+  # Parsed with the stdlib (zipfile/csv). The IPL male archive is a good demo slice;
+  # swap for tests_male_csv2.zip / odis_male_csv2.zip / t20s_male_csv2.zip etc. for
+  # the full ~22k-match universe.
+  cricsheet_zip_url: "https://cricsheet.org/downloads/ipl_male_csv2.zip"
+
+  # Cricsheet match_id == ESPNcricinfo match ID (the join key). Human-facing URL,
+  # stored on every record as `report_url` (browser-redirects to the full report slug).
+  espn_report_url_template: "https://www.espncricinfo.com/ci/engine/match/{match_id}.html"
+
+  # Report FETCH endpoint. www.espncricinfo.com and hs-consumer-api 403 bots; the ESPN
+  # *parent* host site.api.espn.com does not, and resolves purely by {match_id} (the
+  # {league} segment is just a required carrier — any valid cricket league id works for
+  # any match, across formats). Report prose = JSON `article.story`.
+  espn_summary_url: "https://site.api.espn.com/apis/site/v2/sports/cricket/{league}/summary?event={match_id}"
+  espn_carrier_league: "1410320"   # IPL 2024 series id; carrier only, not per-match
+  request_delay_s: 0.4             # be polite: ~2-3 req/s, cached per match_id
+
+  # Per-over channels. Aggregated per innings: bucket deliveries by over index
+  # int(float(ball)); runs = sum(runs_off_bat + extras); wickets = count(wicket_type).
+  channels: ["runs_per_over", "wickets_per_over", "cumulative_runs", "run_rate"]
+
+  min_overs: 12          # drop short/rain-truncated innings (< this many overs bowled)
+  cache_dir: ".cache"
+  user_agent: "CPT-dataset-research faisal@usc.edu"
+  timeout_s: 90
+
+text:
+  # Closing sentence that carries the single <ts></ts> placeholder. {team} = batting side.
+  ts_intro_sentence: "Per-over progression of the {team} innings: <ts></ts>"
+
+  min_report_chars: 400   # drop innings whose match report is missing or too short
+
+output:
+  output_path: output/cricket_report_overseries_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 50         # demo cap. null = full build (all innings in the archive)
+  indent: null
