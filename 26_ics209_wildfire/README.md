@@ -1,6 +1,18 @@
 # ICS-209-PLUS Wildfire Situation Reports + Daily Incident Series → CPT
 
-> **Status: Built** (demo: 50 records). Full build ≈ **7–10k incidents** (run with `output.max_records=null`). Wildfires 1999–2020.
+> **Status: Built** (demo: 50 records). Full build ≈ **7.4k incidents** at the default `min_reports=3` (run with `output.max_records=null`). Wildfires 1999–2020.
+>
+> ⚠️ **Time-series length — flagged (we expect longer series).** At the default the daily series is **short: median ~4 reporting days** (mean 5, p90 10), because most wildfires are brief — the length only lives in the tail (large fires). This is the main open question for review. Raising `data.min_reports` trades volume for length (it also acts as a significance filter). Trade-off across the full dataset:
+>
+> | `min_reports` | records | median window | mean | p90 |
+> |---|---|---|---|---|
+> | 3 (default) | 7,367 | 4 | 5 | 10 |
+> | 7 | 3,477 | 8 | 10 | 17 |
+> | 10 | 2,250 | 11 | 13 | 21 |
+> | 14 | 1,500 | 15 | 18 | 27 |
+> | 20 | 948 | 22 | 24 | 34 |
+>
+> Sweet spot for a real multi-week trajectory is `min_reports=7–10`.
 
 **What it is:** One record = **one wildfire incident** — the richest situation-report narrative for that fire (the "anchor" report: significant events, current threat, projected activity, weather, planned actions) paired with the incident's **daily time series** — acres burned, percent contained, total personnel — from its first report through the anchor. The narrative *describes* the fire's progression the series quantifies → the "describes" alignment class.
 
@@ -49,7 +61,7 @@
 **Key points (and open questions for review):**
 - **Alignment = describes.** The narrative recounts the fire's run/threats/containment; the series is that same incident's acreage/containment/personnel arc. Verified on real fires (Donnelly Flats' "major run to the north" ↔ acres 150→6000).
 - **⚠️ Record framing is a design choice — flagged for discussion.** We use **one record per incident** (anchor narrative + arc-to-anchor). The alternative is **one record per sitrep** (each report's narrative + arc-to-date), which is ~10× the volume (~80k) but nests overlapping series. Chosen the cleaner per-incident unit for a first pass.
-- **Short series are common.** Median window ≈ 4 days (most wildfires are brief); large fires run 25+ days. Raise `min_reports` to bias toward longer, more dynamic incidents.
+- **⚠️ Short series (the headline caveat)** — median ~4 reporting days at `min_reports=3`; see the trade-off table at the top. We expect longer series, so `min_reports=7–10` (median 8–11) is the likely setting after review.
 - **Terminal-value leakage is inherent and intended** (as with BLS CPI / EIA): the anchor report's own metrics = the series' terminal point. The window ends at the anchor — no future values.
 - **Complexes / sub-fire merges** (e.g. three fires merging into a "complex") can make early `ACRES` non-monotonic. This v1 doesn't special-case them; `ics209-plus-wf_complex_associations_1999to2020.csv` (in the bundle) can resolve them if needed.
 - **Volume:** demo yields ~19% of incidents (dropped: too-few-points, short-narrative); full build ≈ 7–10k records across 1999–2020. Demo (capped 50) covers only 1999 due to file ordering; full build spans all years.
