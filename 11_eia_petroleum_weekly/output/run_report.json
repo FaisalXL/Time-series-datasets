@@ -1,0 +1,78 @@
+{
+  "archive_index_url": "https://www.eia.gov/petroleum/supply/weekly/archive/",
+  "bulk_pet_url": "https://www.eia.gov/opendata/bulk/PET.zip",
+  "window_weeks": 52,
+  "channels": [
+    "crude_stocks_exspr",
+    "gasoline_stocks_total",
+    "distillate_stocks",
+    "refinery_crude_inputs",
+    "refinery_utilization",
+    "crude_imports_exspr"
+  ],
+  "stats": {
+    "dates": 779,
+    "scanned": 50,
+    "emitted": 50,
+    "no_pdf": 0,
+    "short_text": 0,
+    "short_window": 0,
+    "invalid": 0
+  },
+  "config_snapshot": {
+    "data": {
+      "archive_index_url": "https://www.eia.gov/petroleum/supply/weekly/archive/",
+      "highlights_url_template": "https://www.eia.gov/petroleum/supply/weekly/archive/{year}/{date}/pdf/highlights.pdf",
+      "bulk_pet_url": "https://www.eia.gov/opendata/bulk/PET.zip",
+      "channels": [
+        {
+          "series_id": "PET.WCESTUS1.W",
+          "name": "crude_stocks_exspr",
+          "unit": "thousand_barrels"
+        },
+        {
+          "series_id": "PET.WGTSTUS1.W",
+          "name": "gasoline_stocks_total",
+          "unit": "thousand_barrels"
+        },
+        {
+          "series_id": "PET.WDISTUS1.W",
+          "name": "distillate_stocks",
+          "unit": "thousand_barrels"
+        },
+        {
+          "series_id": "PET.WCRRIUS2.W",
+          "name": "refinery_crude_inputs",
+          "unit": "thousand_barrels_per_day"
+        },
+        {
+          "series_id": "PET.WPULEUS3.W",
+          "name": "refinery_utilization",
+          "unit": "percent"
+        },
+        {
+          "series_id": "PET.WCEIMUS2.W",
+          "name": "crude_imports_exspr",
+          "unit": "thousand_barrels_per_day"
+        }
+      ],
+      "window_weeks": 52,
+      "cache_dir": ".cache",
+      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "request_delay_s": 0.3,
+      "timeout_s": 90
+    },
+    "text": {
+      "min_text_chars": 300,
+      "ts_intro_sentence": "Weekly U.S. petroleum supply and inventories (crude / gasoline / distillate stocks, refinery inputs and utilization, crude imports), trailing {n} weeks through the week ending {week}: <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/eia_petroleum_weekly_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "dry_run": false
+}
