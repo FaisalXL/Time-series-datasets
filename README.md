@@ -2,7 +2,7 @@
 
 Per-dataset packages for instruction-free continued pre-training: natural text with a single `<ts></ts>` placeholder + aligned time series.
 
-**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage. **14 packages built.**
+**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage. **15 packages built.**
 
 ## Dev Set (for review)
 
@@ -24,6 +24,7 @@ Small-scale samples for format inspection and freeze. Open each folder for its R
 | 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | 117 | 2 / 2 | `1m` / `1y` | 2 record types: temperature (global+Europe, 12-mo) + sea ice (Arctic+Antarctic, this-month-across-years) |
 | 42 | [Earnings Calls + SEC XBRL](./42_earnings_calls_xbrl/) | 50 | 3 | `1q` | transcript recites revenue/net-income/EPS = the XBRL series (12-quarter window) |
 | 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | 50 | 4 | `1over` | ESPNcricinfo match report + per-over runs/wickets/cumulative/run-rate · ⚠️ report text copyrighted, redistribution pending sign-off |
+| 47 | [Fed Regional Business Surveys](./47_fed_regional_surveys/) | 50 | 7 | `1M` | Philly MBOS release narrative recites the diffusion indices (24-mo window) · public domain · federated (more surveys to add) |
 
 ## Record format (frozen for dev set)
 
@@ -58,8 +59,9 @@ Estimated **full-scale datapoints** = CPT records at `output.max_records=null` (
 | 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | Built (117) | **~120** (monthly, 2021→; grows) |
 | 42 | [Earnings Calls + SEC XBRL](./42_earnings_calls_xbrl/) | Built (demo 50) | **~25k+** (transcript × 12-q fundamentals); ⚠️ confirm SEC EDGAR overlap before scaling |
 | 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | Built (demo 50) | **~1.9k** IPL innings w/ report (~30k+ all formats); ⚠️ ESPN text redistribution pending sign-off |
+| 47 | [Fed Regional Business Surveys](./47_fed_regional_surveys/) | Built (demo 50) | **~190** MBOS months (2010→); **~2–4k** federated across ~18 Fed surveys; public domain; ⚠️ FRED-overlap sign-off |
 
-**Rough total ≈ 375k+ datapoints** across the built set (excluding license-gated Cricket), dominated by NOAA Storm Events (~150k) and FNSPID (~146k); the remaining ~12 packages contribute ~80k combined.
+**Rough total ≈ 375k+ datapoints** across the built set (excluding license-gated Cricket), dominated by NOAA Storm Events (~150k) and FNSPID (~146k); the remaining ~13 packages contribute ~80k combined.
 
 Each README follows the same layout: what it is → scale → record shape → key issues → how to run. Packages with a `NOTION_PAGE.md` (e.g. 11, 45) carry the review write-up.
 
