@@ -24,7 +24,7 @@ Small-scale samples for format inspection and freeze. Open each folder for its R
 | 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | 117 | 2 / 2 | `1m` / `1y` | 2 record types: temperature (global+Europe, 12-mo) + sea ice (Arctic+Antarctic, this-month-across-years) |
 | 42 | [Earnings Calls + SEC XBRL](./42_earnings_calls_xbrl/) | 50 | 3 | `1q` | transcript recites revenue/net-income/EPS = the XBRL series (12-quarter window) |
 | 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | 50 | 4 | `1over` | ESPNcricinfo match report + per-over runs/wickets/cumulative/run-rate · ⚠️ report text copyrighted, redistribution pending sign-off |
-| 47 | [Fed Regional Business Surveys](./47_fed_regional_surveys/) | 50 | 7 | `1M` | Philly MBOS release narrative recites the diffusion indices (24-mo window) · public domain · federated (more surveys to add) |
+| 47 | [Philadelphia Fed MBOS](./47_philadelphia_mbos/) | 50 | 7 | `1M` | MBOS release narrative recites the diffusion indices (24-mo window) · public domain · sibling Fed surveys = separate packages |
 
 ## Record format (frozen for dev set)
 
@@ -59,7 +59,7 @@ Estimated **full-scale datapoints** = CPT records at `output.max_records=null` (
 | 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | Built (117) | **~120** (monthly, 2021→; grows) |
 | 42 | [Earnings Calls + SEC XBRL](./42_earnings_calls_xbrl/) | Built (demo 50) | **~25k+** (transcript × 12-q fundamentals); ⚠️ confirm SEC EDGAR overlap before scaling |
 | 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | Built (demo 50) | **~1.9k** IPL innings w/ report (~30k+ all formats); ⚠️ ESPN text redistribution pending sign-off |
-| 47 | [Fed Regional Business Surveys](./47_fed_regional_surveys/) | Built (demo 50) | **~190** MBOS months (2010→); **~2–4k** federated across ~18 Fed surveys; public domain; ⚠️ FRED-overlap sign-off |
+| 47 | [Philadelphia Fed MBOS](./47_philadelphia_mbos/) | Built (demo 50) | **~190** monthly releases (2010→); public domain; ⚠️ FRED-overlap sign-off. First of the Fed regional surveys (siblings = separate packages, ~2–4k combined) |
 
 **Rough total ≈ 375k+ datapoints** across the built set (excluding license-gated Cricket), dominated by NOAA Storm Events (~150k) and FNSPID (~146k); the remaining ~13 packages contribute ~80k combined.
 

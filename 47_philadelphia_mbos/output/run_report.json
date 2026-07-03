@@ -1,0 +1,79 @@
+{
+  "survey": "Manufacturing Business Outlook Survey",
+  "bank": "Federal Reserve Bank of Philadelphia",
+  "window_months": 24,
+  "channels": [
+    "general_activity",
+    "new_orders",
+    "shipments",
+    "employment",
+    "prices_paid",
+    "prices_received",
+    "future_general_activity"
+  ],
+  "stats": {
+    "months_with_window": 51,
+    "emitted": 50,
+    "no_pdf": 1,
+    "short_text": 0,
+    "short_window": 0,
+    "invalid": 0
+  },
+  "config_snapshot": {
+    "data": {
+      "bank": "Federal Reserve Bank of Philadelphia",
+      "survey_title": "Manufacturing Business Outlook Survey",
+      "district": 3,
+      "domain": "manufacturing",
+      "data_csv_url": "https://www.philadelphiafed.org/-/media/FRBP/Assets/Surveys-And-Data/MBOS/Historical-Data/Diffusion-Indexes/bos_dif.csv",
+      "pdf_url_template": "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/{year}/bos{mmyy}.pdf",
+      "channels": [
+        {
+          "col": "GAC",
+          "name": "general_activity"
+        },
+        {
+          "col": "NOC",
+          "name": "new_orders"
+        },
+        {
+          "col": "SHC",
+          "name": "shipments"
+        },
+        {
+          "col": "NEC",
+          "name": "employment"
+        },
+        {
+          "col": "PPC",
+          "name": "prices_paid"
+        },
+        {
+          "col": "PRC",
+          "name": "prices_received"
+        },
+        {
+          "col": "GAF",
+          "name": "future_general_activity"
+        }
+      ],
+      "window_months": 24,
+      "cache_dir": ".cache",
+      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "request_delay_s": 0.3,
+      "timeout_s": 60
+    },
+    "text": {
+      "min_text_chars": 200,
+      "ts_intro_sentence": "{bank} {survey_title} - monthly diffusion indices (current general activity, new orders, shipments, employment, prices paid/received; plus future general activity), trailing {n} months through {month}: <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/philadelphia_mbos_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "dry_run": false
+}

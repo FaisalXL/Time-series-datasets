@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-"""Build CPT world-knowledge JSONL from Federal Reserve regional business surveys.
+"""Build CPT world-knowledge JSONL from the Philadelphia Fed Manufacturing Business
+Outlook Survey (MBOS).
 
-One record = one (survey, month): the survey's monthly release narrative (which recites
-the diffusion-index readings) paired with a trailing window of those indices. The prose
+One record = one release month: the MBOS monthly release narrative (which recites the
+diffusion-index readings) paired with a trailing window of those indices. The prose
 *describes* the series → "describes" (value-reciting, EIA/BLS-tier). text_quality "real".
 
-Federated: `data.surveys` is a registry. v1 = Philadelphia MBOS (Manufacturing Business
-Outlook Survey). Series = diffusion-index CSV (stdlib). Text = monthly release PDF →
-pdftotext (poppler). Each survey names an `extractor` for its PDF layout.
+Series: `bos_dif.csv` diffusion indices (May 1968 → present), stdlib CSV.
+Text  : monthly release PDF `…/mbos/{YYYY}/bos{MMYY}.pdf` → pdftotext (poppler). Real PDFs
+        ~2010→present; older months are HTML shells and are skipped.
 
-License: Federal Reserve Bank publications are U.S. public domain. NB the index series
-are also on FRED (see NOTION_PAGE.md overlap note); the novel element is the pairing.
+One of the Federal Reserve regional business surveys (see fed_surveys_discovery.md); the
+sibling surveys (NY Empire State, Richmond, Dallas TMOS, KC, …) are separate packages.
+
+License: Federal Reserve Bank publications are U.S. public domain. NB the index series are
+also on FRED (see NOTION_PAGE.md overlap note); the novel element is the pairing.
 
 Examples:
   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
@@ -47,9 +51,9 @@ _SSL.verify_mode = ssl.CERT_NONE
 
 _MONTHS = {m: i for i, m in enumerate(
     ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], 1)}
-_MONTH_NAME = {i: m for m, i in
-               zip(["January", "February", "March", "April", "May", "June", "July",
-                    "August", "September", "October", "November", "December"], range(1, 13))}
+_MONTH_NAME = dict(zip(range(1, 13),
+                   ["January", "February", "March", "April", "May", "June", "July",
+                    "August", "September", "October", "November", "December"]))
 
 
 # --- config helpers (same conventions as the other packages) ---------------
@@ -112,7 +116,7 @@ def download_cached(url: str, dest: Path, ua: str, timeout: int) -> Path:
 # --- series (diffusion-index CSV) ------------------------------------------
 
 def parse_mmm_yy(s: str) -> Optional[str]:
-    """'Jun-26' -> '2026-06'; '-May-68' -> '1968-05'. Pivot yy<40 => 20yy."""
+    """'Jun-26' -> '2026-06'; 'May-68' -> '1968-05'. Pivot yy<40 => 20yy."""
     m = re.match(r"([A-Za-z]{3})-(\d{2})", s.strip())
     if not m:
         return None
@@ -125,7 +129,7 @@ def parse_mmm_yy(s: str) -> Optional[str]:
 
 
 def load_series(url: str, cache: Path, ua: str, timeout: int) -> Dict[str, Dict[str, float]]:
-    fp = cache / (re.sub(r"[^A-Za-z0-9]+", "_", url.split("//")[-1])[-60:] + ".csv")
+    fp = cache / "bos_dif.csv"
     download_cached(url, fp, ua, timeout)
     out: Dict[str, Dict[str, float]] = {}
     rows = list(csv.reader(io.StringIO(fp.read_text(encoding="utf-8", errors="replace"))))
@@ -147,35 +151,33 @@ def load_series(url: str, cache: Path, ua: str, timeout: int) -> Dict[str, Dict[
     return out
 
 
-# --- narrative extractors (per survey layout) ------------------------------
+# --- narrative extraction --------------------------------------------------
 
-_MBOS_STOP = re.compile(r"^(the diffusion index is computed|note:|source:|special question|"
-                        r"return to (top|the survey)|for more information|the manufacturing "
-                        r"business outlook survey is a monthly survey)", re.I)
+_STOP = re.compile(r"^(the diffusion index is computed|note:|source:|special question|"
+                   r"return to (top|the survey)|for more information|the manufacturing "
+                   r"business outlook survey is a monthly survey)", re.I)
 
 
 def extract_mbos(txt: str) -> Optional[str]:
-    """Philadelphia MBOS release PDF → the narrative prose (summary + detail sections),
-    dropping chart axis blocks, captions, and the methodology footer. Layout-robust:
-    works whether or not a 'Chart 1' caption precedes the summary."""
+    """MBOS release PDF → the narrative prose (summary + detail sections), dropping chart
+    axis blocks, captions and the methodology footer. Layout-robust across 2010–2026."""
     paras = re.split(r"\n[ \t]*\n", txt)
     kept: List[str] = []
     for p in paras:
         joined = re.sub(r"\s+", " ", " ".join(l.strip() for l in p.splitlines())).strip()
         if not joined:
             continue
-        if _MBOS_STOP.match(joined):
+        if _STOP.match(joined):
             break                                   # methodology footer / appendix
-        # chart axis leaked into the prose (year sequence like "2007 2008 2009") → stop
         if re.search(r"\b(19|20)\d\d\s+(19|20)\d\d\b", joined):
-            break
+            break                                   # chart year-axis leaked into prose
         if joined.startswith(("Release Date", "Note:", "Chart ", "Source:")):
             continue
         if re.match(r"^[A-Z][a-z]+ \d{4}( to [A-Z][a-z]+ \d{4})?$", joined):
             continue                                # "June 2026" / date-range caption
         digits = sum(c.isdigit() for c in joined)
         alpha = sum(c.isalpha() for c in joined)
-        if alpha < 40 or alpha < 3 * digits:        # axis/number/year blocks
+        if alpha < 40 or alpha < 3 * digits:        # axis / number / year blocks
             continue
         if "." not in joined and len(joined) < 60:  # bare chart labels / short headers
             continue
@@ -185,14 +187,10 @@ def extract_mbos(txt: str) -> Optional[str]:
     text = "\n\n".join(kept).strip()
     if not text:
         return None
-    # strip a leading "Month YYYY" and/or "Note: Survey responses were collected ... ."
     text = re.sub(r"^[A-Z][a-z]+ \d{4}\s*", "", text)
     text = re.sub(r"^Note:.*?collected from[^.]*\.\s*", "", text, flags=re.I)
     text = re.sub(r"‐\s*", "", text)                # justified-text soft hyphen (U+2010)
     return text.strip() or None
-
-
-EXTRACTORS = {"mbos": extract_mbos}
 
 
 def pdftotext(pdf: bytes) -> str:
@@ -201,60 +199,54 @@ def pdftotext(pdf: bytes) -> str:
     return p.stdout.decode("utf-8", "replace")
 
 
-def fetch_narrative(survey: dict, ym: str, cache: Path, ua: str, timeout: int,
-                    delay: float) -> Optional[str]:
+def fetch_narrative(d: dict, ym: str, cache: Path) -> Optional[str]:
     yr, mon = ym.split("-")
-    mmyy = f"{mon}{yr[2:]}"
-    url = survey["pdf_url_template"].format(year=yr, mmyy=mmyy)
-    fp = cache / survey["name"] / f"{ym}.pdf"
+    url = d["pdf_url_template"].format(year=yr, mmyy=f"{mon}{yr[2:]}")
+    fp = cache / "releases" / f"{ym}.pdf"
     if fp.exists():
         raw = fp.read_bytes()
     else:
         try:
-            raw = http_get(url, ua, timeout)
+            raw = http_get(url, d["user_agent"], int(d["timeout_s"]))
         except Exception:
             return None
-        if not raw.startswith(b"%PDF"):     # soft-404 HTML shell → no release PDF
+        if not raw.startswith(b"%PDF"):             # soft-404 HTML shell → no release PDF
             return None
         fp.parent.mkdir(parents=True, exist_ok=True)
         fp.write_bytes(raw)
-        time.sleep(delay)
+        time.sleep(float(d.get("request_delay_s", 0.3)))
     if not raw.startswith(b"%PDF"):
         return None
-    txt = pdftotext(raw)
-    return EXTRACTORS[survey["extractor"]](txt)
+    return extract_mbos(pdftotext(raw))
 
 
-# --- record construction ---------------------------------------------------
+# --- pipeline --------------------------------------------------------------
 
-def build_records(survey: dict, cfg: Dict[str, Any], cache: Path,
-                  maxrec: Optional[int], have: int) -> Tuple[List[dict], Dict[str, int]]:
-    d, t = cfg["data"], cfg["text"]
+def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
+    d, t, out_cfg = cfg["data"], cfg["text"], cfg["output"]
+    cache = rp(d["cache_dir"])
     win = int(d["window_months"])
+    chans = d["channels"]
+    maxrec = out_cfg.get("max_records")
     ua, timeout = d["user_agent"], int(d["timeout_s"])
-    delay = float(d.get("request_delay_s", 0.3))
-    chans = survey["channels"]
-    title = survey["name"].split("_")[-1].upper()
-    survey_title = {"mbos": "Manufacturing Business Outlook Survey"}.get(survey["extractor"], title)
 
-    series = load_series(survey["data_csv_url"], cache, ua, timeout)
-    months = sorted(series)                     # ascending YYYY-MM
+    series = load_series(d["data_csv_url"], cache, ua, timeout)
+    months = sorted(series)
     idx = {ym: i for i, ym in enumerate(months)}
 
-    stat = {"months": 0, "emitted": 0, "no_pdf": 0, "short_text": 0, "short_window": 0}
-    out: List[dict] = []
+    stat = {"months_with_window": 0, "emitted": 0, "no_pdf": 0, "short_text": 0,
+            "short_window": 0, "invalid": 0}
+    records: List[dict] = []
 
-    for ym in reversed(months):                 # newest first (PDFs exist for recent months)
-        if maxrec is not None and have + len(out) >= int(maxrec):
+    for ym in reversed(months):                     # newest first (PDFs exist for recent months)
+        if maxrec is not None and len(records) >= int(maxrec):
             break
         i = idx[ym]
         if i + 1 < win:
             stat["short_window"] += 1
             continue
         window_ms = months[i - win + 1: i + 1]
-        # all channels present across the window
-        chan_vals = []
-        ok = True
+        chan_vals, ok = [], True
         for c in chans:
             vals = [series[m].get(c["col"]) for m in window_ms]
             if any(v is None for v in vals):
@@ -264,9 +256,9 @@ def build_records(survey: dict, cfg: Dict[str, Any], cache: Path,
         if not ok:
             stat["short_window"] += 1
             continue
+        stat["months_with_window"] += 1
 
-        stat["months"] += 1
-        narr = fetch_narrative(survey, ym, cache, ua, timeout, delay)
+        narr = fetch_narrative(d, ym, cache)
         if not narr:
             stat["no_pdf"] += 1
             continue
@@ -277,31 +269,35 @@ def build_records(survey: dict, cfg: Dict[str, Any], cache: Path,
         yr, mon = ym.split("-")
         month_label = f"{_MONTH_NAME[int(mon)]} {yr}"
         intro = t["ts_intro_sentence"].format(
-            bank=survey["bank"], survey_title=survey_title, n=win, month=month_label)
+            bank=d["bank"], survey_title=d["survey_title"], n=win, month=month_label)
         text = f"{narr}\n\n{intro}"
-        # unit carries the channel identity (repo convention); all are diffusion indices.
         timeseries = [{"values": chan_vals[j], "unit": chans[j]["name"], "freq": "1M"}
                       for j in range(len(chans))]
 
-        out.append({
+        rec = {
             "text": text,
             "timeseries": timeseries,
             "task_type": "world_knowledge",
             "text_quality": "real",
-            "survey": survey["name"],
-            "bank": survey["bank"],
-            "district": survey.get("district"),
-            "domain": survey["domain"],
+            "bank": d["bank"],
+            "survey": d["survey_title"],
+            "district": d.get("district"),
+            "domain": d["domain"],
             "release_month": ym,
             "window_months": win,
             "channels": [c["name"] for c in chans],
-            "dataset": "fed_regional_surveys",
-            "source": f"{survey['bank']} {survey_title} (U.S. public domain)",
+            "dataset": "philadelphia_mbos",
+            "source": f"{d['bank']} {d['survey_title']} (U.S. public domain)",
             "license": "Public domain (U.S. Government / Federal Reserve)",
-            "series_id": f"fedsurvey_{survey['name']}_{ym}",
-        })
+            "series_id": f"mbos_{ym}",
+        }
+        verr = validate(rec, win)
+        if verr:
+            stat["invalid"] += 1
+            continue
+        records.append(rec)
         stat["emitted"] += 1
-    return out, stat
+    return records, stat
 
 
 def validate(rec: dict, win: int) -> List[str]:
@@ -314,34 +310,15 @@ def validate(rec: dict, win: int) -> List[str]:
     return e
 
 
-# --- pipeline --------------------------------------------------------------
-
 def run(cfg: Dict[str, Any], dry: bool) -> Dict[str, Any]:
-    d, out_cfg = cfg["data"], cfg["output"]
     if not shutil.which("pdftotext"):
         raise SystemExit("pdftotext not found. Install poppler (brew install poppler / "
                          "apt-get install poppler-utils). See requirements.txt.")
-    cache = rp(d["cache_dir"])
-    win = int(d["window_months"])
-    maxrec = out_cfg.get("max_records")
-
-    records: List[dict] = []
-    stats: Dict[str, Any] = {"by_survey": {}, "emitted": 0, "invalid": 0}
-    for survey in d["surveys"]:
-        recs, st = build_records(survey, cfg, cache, maxrec, len(records))
-        for rec in recs:
-            if validate(rec, win):
-                stats["invalid"] += 1
-                continue
-            records.append(rec)
-            stats["emitted"] += 1
-            if maxrec is not None and len(records) >= int(maxrec):
-                break
-        stats["by_survey"][survey["name"]] = st
-        if maxrec is not None and len(records) >= int(maxrec):
-            break
-
-    report = {"window_months": win, "surveys": [s["name"] for s in d["surveys"]],
+    d, out_cfg = cfg["data"], cfg["output"]
+    records, stats = build(cfg)
+    report = {"survey": d["survey_title"], "bank": d["bank"],
+              "window_months": int(d["window_months"]),
+              "channels": [c["name"] for c in d["channels"]],
               "stats": stats, "config_snapshot": cfg, "dry_run": dry}
 
     if dry:
@@ -366,15 +343,17 @@ def run(cfg: Dict[str, Any], dry: bool) -> Dict[str, Any]:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Build Fed regional surveys → CPT JSONL")
+    ap = argparse.ArgumentParser(description="Build Philadelphia MBOS → CPT JSONL")
     ap.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     ap.add_argument("--set", dest="set", action="append", default=[])
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     cfg = load_config(args.config, args.set)
     rep = run(cfg, dry=args.dry_run)
-    print(f"\nDone: {rep['stats']['emitted']} records. by_survey="
-          f"{json.dumps(rep['stats']['by_survey'])}", file=sys.stderr)
+    s = rep["stats"]
+    print(f"\nDone: {s['emitted']} records (windows {s['months_with_window']}, "
+          f"no_pdf={s['no_pdf']}, short_text={s['short_text']}, invalid={s['invalid']}).",
+          file=sys.stderr)
 
 
 if __name__ == "__main__":
