@@ -1,0 +1,80 @@
+{
+  "survey": "Texas Manufacturing Outlook Survey",
+  "bank": "Federal Reserve Bank of Dallas",
+  "window_months": 24,
+  "channels": [
+    "general_business_activity",
+    "production",
+    "new_orders",
+    "shipments",
+    "employment",
+    "prices_raw_materials",
+    "company_outlook"
+  ],
+  "stats": {
+    "months_with_window": 132,
+    "emitted": 50,
+    "no_text": 82,
+    "short_text": 0,
+    "short_window": 0,
+    "invalid": 0
+  },
+  "config_snapshot": {
+    "data": {
+      "bank": "Federal Reserve Bank of Dallas",
+      "survey_title": "Texas Manufacturing Outlook Survey",
+      "district": 11,
+      "domain": "manufacturing",
+      "data_xlsx_url": "https://www.dallasfed.org/~/media/Documents/research/surveys/tmos/documents/index_sa.xls",
+      "pdf_url_template": "https://www.dallasfed.org/-/media/Documents/research/surveys/tmos/{year}/tmos{yymm}.pdf",
+      "html_url_template": "https://www.dallasfed.org/research/surveys/tmos/{year}/{yymm}",
+      "channels": [
+        {
+          "col": "Bact",
+          "name": "general_business_activity"
+        },
+        {
+          "col": "Prod",
+          "name": "production"
+        },
+        {
+          "col": "Vnwo",
+          "name": "new_orders"
+        },
+        {
+          "col": "Vshp",
+          "name": "shipments"
+        },
+        {
+          "col": "Nemp",
+          "name": "employment"
+        },
+        {
+          "col": "Prm",
+          "name": "prices_raw_materials"
+        },
+        {
+          "col": "Colk",
+          "name": "company_outlook"
+        }
+      ],
+      "window_months": 24,
+      "cache_dir": ".cache",
+      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "request_delay_s": 0.3,
+      "timeout_s": 60
+    },
+    "text": {
+      "min_text_chars": 250,
+      "ts_intro_sentence": "{bank} {survey_title} - monthly diffusion indices (general business activity, production, new orders, shipments, employment, raw materials prices, company outlook), trailing {n} months through {month}: <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/dallas_tmos_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "dry_run": false
+}

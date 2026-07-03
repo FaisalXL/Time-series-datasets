@@ -1,0 +1,9 @@
+pyyaml>=6.0
+# PyYAML is the only pip dependency (reads config.example.yaml).
+# Series: the diffusion-index workbook (.xls, actually XLSX) is parsed with the standard
+#   library (zipfile + xml.etree) — no openpyxl/pandas needed.
+# Text: release PDFs (2007-2023) -> text via the `pdftotext` CLI (poppler-utils); recent
+#   releases (2024+) are HTML and parsed with the stdlib. Install poppler:
+#     brew install poppler            (macOS)
+#     apt-get install poppler-utils   (Debian/Ubuntu)
+# The build checks for pdftotext and exits with a clear message if it is missing.
