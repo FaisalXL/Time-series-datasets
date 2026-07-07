@@ -1,6 +1,6 @@
 # Dallas Fed Texas Manufacturing Outlook Survey (TMOS) → CPT
 
-> **Status: Built** (demo: 50 records). Full build ≈ **~195 monthly releases** — PDF releases **2007–2020** + HTML releases **2024→present**, with a **2021–2023 gap** (see Key issues). One of the Federal Reserve regional business surveys (siblings — MBOS `47_philadelphia_mbos`, plus Dallas TSSOS/Energy/Ag/Banking — are separate packages; see [fed_surveys_discovery.md](../../fed_surveys_discovery.md)).
+> **Status: Built** (demo: 50 records). Full build ≈ **~195 monthly releases** — PDF releases **2007–2020** + HTML releases **2024→present**, with a **2021–2023 gap** (see Key issues). One of the Federal Reserve regional business surveys (siblings — MBOS `47_philadelphia_mbos`, plus Dallas TSSOS/Energy/Ag/Banking — are separate packages; see [fed_surveys_discovery.md](../../docs/fed_surveys_discovery.md)).
 
 **What it is:** One record = **one release month** — the TMOS monthly release narrative (which *recites* the diffusion-index readings: "the general business activity index inched up to -12.7… the employment index moved up two points to 5.7") paired with a **trailing 24-month window** of those indices. Value-reciting "describes," EIA/BLS-tier, self-contained.
 
@@ -70,4 +70,4 @@ python scripts/build_cpt_jsonl.py --set output.max_records=null          # full 
 
 **Output:** `output/dallas_tmos_cpt.jsonl` + `output/run_report.json`; `samples/example_output.jsonl` = first 3 records. (`.cache/` git-ignored.)
 
-**Sources:** [Dallas Fed TMOS](https://www.dallasfed.org/research/surveys/tmos) — **U.S. public domain**. Family map: [fed_surveys_discovery.md](../../fed_surveys_discovery.md).
+**Sources:** [Dallas Fed TMOS](https://www.dallasfed.org/research/surveys/tmos) — **U.S. public domain**. Family map: [fed_surveys_discovery.md](../../docs/fed_surveys_discovery.md).

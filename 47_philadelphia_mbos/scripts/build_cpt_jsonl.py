@@ -10,7 +10,7 @@ Series: `bos_dif.csv` diffusion indices (May 1968 → present), stdlib CSV.
 Text  : monthly release PDF `…/mbos/{YYYY}/bos{MMYY}.pdf` → pdftotext (poppler). Real PDFs
         ~2010→present; older months are HTML shells and are skipped.
 
-One of the Federal Reserve regional business surveys (see fed_surveys_discovery.md); the
+One of the Federal Reserve regional business surveys (see docs/fed_surveys_discovery.md); the
 sibling surveys (NY Empire State, Richmond, Dallas TMOS, KC, …) are separate packages.
 
 License: Federal Reserve Bank publications are U.S. public domain. NB the index series are

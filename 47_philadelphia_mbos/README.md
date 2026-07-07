@@ -1,6 +1,6 @@
 # Philadelphia Fed Manufacturing Business Outlook Survey (MBOS) → CPT
 
-> **Status: Built** (demo: 50 records). Full build ≈ **190 monthly releases** (PDF releases ~2010→present). One of the Federal Reserve regional business surveys — **sibling datasets** (NY Empire State, Richmond, Dallas TMOS, Kansas City, …) are separate packages; see [fed_surveys_discovery.md](../../fed_surveys_discovery.md).
+> **Status: Built** (demo: 50 records). Full build ≈ **190 monthly releases** (PDF releases ~2010→present). One of the Federal Reserve regional business surveys — **sibling datasets** (NY Empire State, Richmond, Dallas TMOS, Kansas City, …) are separate packages; see [fed_surveys_discovery.md](../../docs/fed_surveys_discovery.md).
 
 **What it is:** One record = **one release month** — the MBOS monthly release narrative (which *recites* the diffusion-index readings: "the general activity index rose to 10.3 from -0.4") paired with a **trailing 24-month window** of those indices. Value-reciting "describes," EIA/BLS-tier, and fully **self-contained** (text + series from one survey — no external join).
 
@@ -70,6 +70,6 @@ python scripts/build_cpt_jsonl.py --set output.max_records=null          # full 
 
 **Output:** `output/philadelphia_mbos_cpt.jsonl` + `output/run_report.json`; `samples/example_output.jsonl` = first 3 records. (`.cache/` git-ignored.)
 
-**Sibling surveys:** the other Fed regional business surveys (same "reciting release + diffusion series" pattern) are separate datasets with their own bank text and series — see the family map in [fed_surveys_discovery.md](../../fed_surveys_discovery.md). Each targets its bank's **release PDFs** and needs its own narrative extractor (layouts differ).
+**Sibling surveys:** the other Fed regional business surveys (same "reciting release + diffusion series" pattern) are separate datasets with their own bank text and series — see the family map in [fed_surveys_discovery.md](../../docs/fed_surveys_discovery.md). Each targets its bank's **release PDFs** and needs its own narrative extractor (layouts differ).
 
 **Sources:** [Philadelphia Fed MBOS](https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/manufacturing-business-outlook-survey) — **U.S. public domain**.

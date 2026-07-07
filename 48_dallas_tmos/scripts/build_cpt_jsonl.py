@@ -13,7 +13,7 @@ Text  : release PDF `…/tmos/{YYYY}/tmos{YYMM}.pdf` (2007-2023) → pdftotext, 
         structure both ways: lead "Texas factory/manufacturing activity…" → index prose →
         "Next release:"/methodology boilerplate (dropped).
 
-One of the Federal Reserve regional business surveys (see fed_surveys_discovery.md); the
+One of the Federal Reserve regional business surveys (see docs/fed_surveys_discovery.md); the
 sibling surveys are separate packages.
 
 License: Federal Reserve Bank publications are U.S. public domain. NB the index series are

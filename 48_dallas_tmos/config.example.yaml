@@ -4,7 +4,7 @@
 # diffusion-index readings) paired with a trailing window of those indices. The prose
 # *describes* the series → "describes" (value-reciting, EIA/BLS-tier). text_quality "real".
 #
-# One of the Federal Reserve regional business surveys (see fed_surveys_discovery.md).
+# One of the Federal Reserve regional business surveys (see docs/fed_surveys_discovery.md).
 # Sibling packages: 47_philadelphia_mbos; Dallas also runs TSSOS (services), Energy,
 # Agriculture, Banking — each its own dataset.
 #

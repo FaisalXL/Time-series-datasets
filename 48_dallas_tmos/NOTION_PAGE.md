@@ -7,7 +7,7 @@ UPDATE: devset built (demo 50; full ~195) @ https://github.com/FaisalXL/Time-ser
 > One record = **one release month** — the Dallas Fed Texas Manufacturing Outlook Survey
 (TMOS) release narrative (which recites the diffusion-index readings) + a trailing **24-month**
 window of those indices. Self-contained, value-reciting "describes." Sibling of MBOS
-(`47_philadelphia_mbos`); Dallas also runs TSSOS/Energy/Ag/Banking — see `fed_surveys_discovery.md`.
+(`47_philadelphia_mbos`); Dallas also runs TSSOS/Energy/Ag/Banking — see `docs/fed_surveys_discovery.md`.
 >
 
 ---
@@ -88,4 +88,4 @@ flowchart LR
 | `…/research/surveys/tmos/{YYYY}/{YYMM}` | Release narrative 2024→ (✅ 200 HTML) |
 | 2021–2023 | ⚠ not located on dallasfed.org — FRASER/Wayback |
 
-*(Family map in `fed_surveys_discovery.md`. Build flags in `README.md`. Needs `pdftotext`; build with repo `.venv/bin/python`.)*
+*(Family map in `docs/fed_surveys_discovery.md`. Build flags in `README.md`. Needs `pdftotext`; build with repo `.venv/bin/python`.)*
