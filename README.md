@@ -2,7 +2,7 @@
 
 Per-dataset packages for instruction-free continued pre-training: natural text with a single `<ts></ts>` placeholder + aligned time series.
 
-**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage. **16 packages built.**
+**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage. **17 packages built.**
 
 ## Dev Set (for review)
 
@@ -26,6 +26,7 @@ Small-scale samples for format inspection and freeze. Open each folder for its R
 | 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | 50 | 4 | `1over` | ESPNcricinfo match report + per-over runs/wickets/cumulative/run-rate · ⚠️ report text copyrighted, redistribution pending sign-off |
 | 47 | [Philadelphia Fed MBOS](./47_philadelphia_mbos/) | 50 | 7 | `1M` | MBOS release narrative recites the diffusion indices (24-mo window) · public domain · sibling Fed surveys = separate packages |
 | 48 | [Dallas Fed TMOS](./48_dallas_tmos/) | 50 | 7 | `1M` | Texas Mfg Outlook release recites diffusion indices (24-mo window) · PDF 2007–20 + HTML 2024→ (⚠ 2021–23 gap) · public domain |
+| 49 | [Richmond Fed Manufacturing](./49_richmond_manufacturing/) | 50 | 7 | `1M` | Fifth District Mfg release recites composite + sub-indices (24-mo window) · chart-heavy PDF, text ~2018→ · public domain |
 
 ## Record format (frozen for dev set)
 
@@ -62,6 +63,7 @@ Estimated **full-scale datapoints** = CPT records at `output.max_records=null` (
 | 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | Built (demo 50) | **~1.9k** IPL innings w/ report (~30k+ all formats); ⚠️ ESPN text redistribution pending sign-off |
 | 47 | [Philadelphia Fed MBOS](./47_philadelphia_mbos/) | Built (demo 50) | **~190** monthly releases (2010→); public domain; ⚠️ FRED-overlap sign-off. First of the Fed regional surveys (siblings = separate packages, ~2–4k combined) |
 | 48 | [Dallas Fed TMOS](./48_dallas_tmos/) | Built (demo 50) | **~195** monthly releases (2007–20 PDF + 2024→ HTML; ⚠️ 2021–23 gap); public domain; ⚠️ FRED-overlap sign-off |
+| 49 | [Richmond Fed Manufacturing](./49_richmond_manufacturing/) | Built (demo 50) | **~100** monthly releases (text ~2018→; series to 1993); public domain; ⚠️ chart-heavy PDF extraction + FRED-overlap sign-off |
 
 **Rough total ≈ 375k+ datapoints** across the built set (excluding license-gated Cricket), dominated by NOAA Storm Events (~150k) and FNSPID (~146k); the remaining ~13 packages contribute ~80k combined.
 

@@ -1,0 +1,63 @@
+# Richmond Fed Fifth District Survey of Manufacturing Activity → CPT world-knowledge JSONL
+#
+# One record = one release month: the monthly release narrative (which recites the
+# diffusion-index readings) paired with a trailing window of those indices. The prose
+# *describes* the series → "describes" (value-reciting, EIA/BLS-tier). text_quality "real".
+#
+# One of the Federal Reserve regional business surveys (see docs/fed_surveys_discovery.md).
+# Siblings: 47_philadelphia_mbos, 48_dallas_tmos; Richmond also runs a Non-Manufacturing
+# (service sector) survey — a separate package.
+#
+# License: Federal Reserve Bank publications are U.S. public domain / freely reusable.
+# ⚠ The index SERIES are also on FRED (Oliver's #9); the novel element is the
+#   release-narrative pairing. Get overlap sign-off before scaling. See NOTION_PAGE.md.
+#
+# Quick start:
+#   pip install -r requirements.txt        # + poppler (pdftotext)
+#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
+#   python scripts/build_cpt_jsonl.py                                  # demo (50)
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build (~100)
+
+data:
+  bank: "Federal Reserve Bank of Richmond"
+  survey_title: "Fifth District Survey of Manufacturing Activity"
+  district: 5
+  domain: "manufacturing"
+
+  # Diffusion-index workbook (.xlsx; stdlib-parsed). DATE col = Excel serial; monthly,
+  # composite + core indices from Nov-1993, cap-util/wages from ~1997.
+  data_xlsx_url: "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/manufacturing/data/mfg_historicaldata.xlsx"
+
+  # Release PDFs are named by RELEASE DATE (mfg_MM_DD_YY.pdf), ~4th Tuesday of the month,
+  # under /{YYYY}/pdf/. There is no clean archive listing, so the build COMPUTES the
+  # candidate release date and probes nearby days. Real PDFs exist ~2018 -> present.
+  pdf_dir_template: "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/manufacturing/{year}/pdf/mfg_{mm}_{dd}_{yy}.pdf"
+
+  # SA current-month diffusion channels (workbook column -> channel name). The narrative
+  # recites each. Composite = weighted avg of shipments (33%) + new orders (40%) + emp (27%).
+  channels:
+    - {col: "sa_mfg_composite",    name: "composite_index"}
+    - {col: "sa_mfg_ship_c",       name: "shipments"}
+    - {col: "sa_mfg_new_orders_c", name: "new_orders"}
+    - {col: "sa_mfg_emp_c",        name: "employment"}
+    - {col: "sa_mfg_bk_logs_c",    name: "order_backlog"}
+    - {col: "sa_mfg_cap_util_c",   name: "capacity_utilization"}
+    - {col: "sa_mfg_wage_c",       name: "wages"}
+
+  window_months: 24          # trailing months per record; dropped if fewer available
+  min_text_year: 2017        # release PDFs only exist ~2018+; skip older months (avoid wasted probes)
+  cache_dir: ".cache"
+  user_agent: "CPT-dataset-research faisal@usc.edu"
+  request_delay_s: 0.3
+  timeout_s: 60
+
+text:
+  min_text_chars: 250
+  ts_intro_sentence: "{bank} {survey_title} - monthly diffusion indices (composite, shipments, new orders, employment, order backlog, capacity utilization, wages), trailing {n} months through {month}: <ts></ts>"
+
+output:
+  output_path: output/richmond_manufacturing_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 50            # demo cap. null = full build (~100 releases, 2018->present)
+  indent: null
