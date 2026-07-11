@@ -1,0 +1,90 @@
+{
+  "dataset": "noaa_nwps_flood",
+  "source": "NOAA National Water Prediction Service (NWPS) flood impacts + USGS NWIS gage height",
+  "window_hours": 481,
+  "event_threshold": "minor",
+  "stats": {
+    "gauges": 9,
+    "gauges_ok": 8,
+    "events_found": 124,
+    "emitted": 50,
+    "no_impacts": 0,
+    "no_series": 1,
+    "no_threshold": 0,
+    "short_text": 0,
+    "no_matched_impact": 0,
+    "invalid": 0
+  },
+  "config_snapshot": {
+    "data": {
+      "user_agent": "cpt-dataset-builder/1.0 (research; contact flnu@usc.edu)",
+      "timeout_s": 60,
+      "request_delay_s": 0.3,
+      "cache_dir": ".cache",
+      "nwps_gauge_template": "https://api.water.noaa.gov/nwps/v1/gauges/{lid}",
+      "nwps_stageflow_template": "https://api.water.noaa.gov/nwps/v1/gauges/{lid}/stageflow",
+      "usgs_iv_template": "https://waterservices.usgs.gov/nwis/iv/?sites={usgs}&parameterCd=00065&startDT={start}&endDT={end}&format=json",
+      "usgs_year_start": 2012,
+      "usgs_year_end": 2026,
+      "gauges": [
+        {
+          "lid": "CCNO1",
+          "usgs": "03255000"
+        },
+        {
+          "lid": "CIDI4",
+          "usgs": "05464500"
+        },
+        {
+          "lid": "CRDA1",
+          "usgs": "02453500"
+        },
+        {
+          "lid": "HERP1",
+          "usgs": "01573560"
+        },
+        {
+          "lid": "LNNI4",
+          "usgs": "06605850"
+        },
+        {
+          "lid": "ERAM5",
+          "usgs": "04017000"
+        },
+        {
+          "lid": "CDCI2",
+          "usgs": "05536235"
+        },
+        {
+          "lid": "MLUL1",
+          "usgs": "07367005"
+        },
+        {
+          "lid": "LAPC2",
+          "usgs": "07128500"
+        }
+      ],
+      "resample_minutes": 60,
+      "event_threshold": "minor",
+      "min_event_hours": 6,
+      "event_gap_hours": 72,
+      "window_before_hours": 240,
+      "window_after_hours": 240,
+      "impact_band_ft": 2.0,
+      "max_events_per_gauge": 8,
+      "license": "Public domain (U.S. Government — NOAA/NWS + USGS)",
+      "source": "NOAA National Water Prediction Service (NWPS) flood impacts + USGS NWIS gage height"
+    },
+    "text": {
+      "min_text_chars": 120,
+      "ts_intro_sentence": "Hourly river stage (gage height, ft, aligned to the NWS gauge datum) over the {window_days}-day window around the crest at {gauge} ({state}): <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/noaa_nwps_flood_cpt.jsonl",
+      "samples_path": "samples/example_output.jsonl",
+      "report_path": "output/run_report.json",
+      "max_records": 50
+    }
+  },
+  "dry_run": false
+}
