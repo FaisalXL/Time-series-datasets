@@ -4,6 +4,27 @@ Per-dataset packages for instruction-free continued pre-training: natural text w
 
 **Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage. **19 packages built.**
 
+---
+
+## ⚑ For review — non-canonical datasets (outside the Defu-30)
+
+> **Reviewer note.** The packages numbered **01–30** map to ranks in the Defu canonical-30 registry and are **out of scope** for this pass (already vetted). The **8 packages below are NOT in the Defu-30** — they were sourced independently and need alignment sign-off. Alignment = *does the text genuinely describe the paired series* (not merely co-located). Verified by script on the committed `output/` on **2026-07-14** (see per-dataset notes for method + hit-rate).
+
+| # | Dataset | Text ↔ series pairing | Alignment tier (verified) | License | Reviewer flag |
+|---|---------|-----------------------|---------------------------|---------|---------------|
+| 49 | [Richmond Fed Manufacturing](./49_richmond_manufacturing/) | release narrative ↔ 7 diffusion indices | **Value-reciting — strong** (92% of records recite an exact series value) | Public domain | chart-heavy PDF (best-effort); FRED overlap; text ~2018→ |
+| 50 | [Richmond Fed Service Sector](./50_richmond_nonmanufacturing/) | release narrative ↔ 6 diffusion indices | **Value-reciting — strong** (90%) | Public domain | FRED overlap; text ~2018→ |
+| 48 | [Dallas Fed TMOS](./48_dallas_tmos/) | release narrative ↔ 7 diffusion indices | **Value-reciting** (recites production + key indices, exact) | Public domain | 2021–23 gap; FRED overlap; minor vintage drift |
+| 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | ESPN match report ↔ per-over series | **Describes — strong** (100% recite innings total = `cumulative_runs`) | ⚠️ ESPN **copyrighted** | redistribution pending sign-off (output git-ignored) |
+| 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | monthly bulletin ↔ temp-anomaly series | **Value-reciting — moderate** (55% state the anomaly; rest phrased as rankings, e.g. "2nd-warmest") | Copernicus (free reuse + attribution) | confirm ranking-style prose is acceptable |
+| 47 | [Philadelphia Fed MBOS](./47_philadelphia_mbos/) | release narrative ↔ 7 diffusion indices | ⚠️ **Mixed** — recent months recite exact values; **46/50 older records stop at the directional lead** (correct sign, no number) | Public domain | **extraction gap** — detail paragraph (exact values) not captured for older months; under investigation. FRED overlap |
+| 42 | [Earnings Calls + SEC XBRL](./42_earnings_calls_xbrl/) | earnings-call transcript ↔ revenue/net-income/EPS | ⚠️ **Semantic; exact-numeric partial** (34% exact; spoken figures rounded / non-GAAP vs exact XBRL) | ⚠️ transcripts third-party | value correspondence partial; SEC EDGAR overlap; transcript licensing |
+| 31 | [US Drought Monitor](./31_usdm_drought/) | National Drought Summary narrative ↔ D0–D4 % area | ⚠️ **Qualitative "describes"** — narrative describes the week's conditions but does **not recite** the % values (softest tier) | Public domain | confirm same-week co-located narrative is acceptable |
+
+**Verification method (per dataset):** structural invariants pass on all 8 (exactly one `<ts></ts>`, non-empty text, every channel populated). Alignment was then checked against the committed output — for value-reciting sets, the fraction of records whose prose recites an exact series value; for cricket, whether the report recites the innings total; for drought, topical correspondence of the same-week narrative. **Two items need a decision:** (1) **MBOS (47)** — accept the directional tier for older months, or wait for the extraction fix that recovers the exact-value paragraph; (2) **Drought (31)** — accept the qualitative same-week pairing, or drop it as too soft. The other six are cleared on alignment (license/overlap flags aside).
+
+---
+
 ## Dev Set (for review)
 
 Small-scale samples for format inspection and freeze. Open each folder for its README and `output/*.jsonl`:
