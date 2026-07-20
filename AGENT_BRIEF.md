@@ -16,6 +16,8 @@ This is **not** SFT. Do not produce Alpaca `instruction` / `input` / `output` tr
 
 ## Target record shape
 
+> **Finalized spec: [`schema/SCHEMA.md`](./schema/SCHEMA.md)** — field definitions, qualification rules, alignment taxonomy, license enum, and the `validate.py` gate. The summary below is unchanged but the schema folder is authoritative.
+
 Each line in `output/*_cpt.jsonl` is one JSON object:
 
 ```json
@@ -146,11 +148,36 @@ Every dataset README should start with a **status banner**, then:
 
 ## Adding a new dataset
 
-1. Check `defu_30_registry.csv` and SFT overlap in `PROJECT_CONTEXT.md`.
-2. Create `datasets/NN_<slug>/` following layout above.
-3. Use `01_noaa_storm_events/` or `07_cdc_fluview/` as reference (both use `build_cpt_jsonl.py`).
-4. Update `datasets/README.md` index table.
-5. Optional: save probe metadata in `reports/NN_probe.json`.
+Schema v1 is finalized in [`schema/SCHEMA.md`](./schema/SCHEMA.md) (+ `schema/cpt_record.schema.json` and `schema/validate.py`). **Existing packages need no rework** — they pass the required contract as-is (verified 1786/1786); the standardized optional vocab is a migration item, not a freeze blocker. **New packages must follow the full v1 spec and pass `--strict`.**
+
+### Before building — qualification checklist (SCHEMA.md §8)
+
+1. **Real first-party text** — official reports, advisories, filings. Third-party commentary only as a tagged minority (`text_source: third_party`); generated text only with team sign-off (`text_quality: generated`).
+2. **Native alignment** — text and series describe the *same* phenomenon at the *source's own* granularity. Classify it up front: `recites` / `describes` / `contextualizes`.
+3. **License is trainable** — public domain or permissive; otherwise flag `proprietary-review` and quarantine.
+4. **No SFT overlap** — check `defu_30_registry.csv` and the SFT table in `PROJECT_CONTEXT.md`.
+5. **Honest scale** — full-build estimate from real distinct source units, no sliding-window or template inflation.
+
+If a source fails 1–4 it is **out**; if it fails 5 it is **not ready**.
+
+### Building
+
+1. Create `datasets/NN_<slug>/` following the standard layout above; use `01_noaa_storm_events/` or `07_cdc_fluview/` as reference.
+2. Emit records with the **v1 optional fields from day one**: `series_id`, URL-form `source`, standard `license` enum, `text_source`, `alignment`, `period_start`/`period_end`. Nest dataset-specific extras under `meta` (do not add new top-level keys).
+3. Update the `datasets/README.md` index table.
+4. Optional: save probe metadata in `reports/NN_probe.json`.
+
+### After building — validate (required gate for new packages)
+
+```bash
+python3 schema/validate.py NN_<slug>/output/ --strict
+```
+
+Must pass with **zero errors and zero warnings**. Legacy packages are validated with the default (lenient) mode only:
+
+```bash
+python3 schema/validate.py .        # whole repo, required contract only
+```
 
 **Slug naming:** `NN_<lowercase_underscore_slug>` — e.g. `08_bls_cpi`, `28_ercot_notices`.
 
