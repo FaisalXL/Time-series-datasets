@@ -41,6 +41,8 @@ data:
     - {col: "GAF", name: "future_general_activity"}
 
   window_months: 24          # trailing months per record; dropped if fewer available
+  # canonical originating page (schema v1 `source` must be a URL)
+  source_url: "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/manufacturing-business-outlook-survey"
   cache_dir: ".cache"
   user_agent: "CPT-dataset-research faisal@usc.edu"
   request_delay_s: 0.3
