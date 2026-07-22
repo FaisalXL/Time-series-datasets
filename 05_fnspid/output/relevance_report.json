@@ -1,0 +1,174 @@
+{
+  "run_date": "2026-06-29T01:04:31Z",
+  "model": "gemma4-31b-it",
+  "lanes": [
+    "http://ds-serv10.ucsd.edu:8004/v1",
+    "http://ds-serv10.ucsd.edu:8005/v1",
+    "http://ds-serv10.ucsd.edu:8006/v1",
+    "http://ds-serv10.ucsd.edu:8007/v1"
+  ],
+  "min_confidence": 0.5,
+  "input_path": "output/fnspid_cpt.jsonl",
+  "output_path": "output/fnspid_cpt_filtered.jsonl",
+  "counts": {
+    "total": 5000,
+    "kept": 2723,
+    "dropped_irrelevant": 2277,
+    "dropped_low_conf": 0,
+    "kept_on_error": 0,
+    "errors": 0
+  },
+  "keep_rate": 0.5446,
+  "drop_examples": [
+    {
+      "series_id": "fnspid_AACG_2021-03-29",
+      "ticker": "AACG",
+      "confidence": 1.0,
+      "reason": "Broad sector round-up mentioning AACG as a laggard."
+    },
+    {
+      "series_id": "fnspid_AADR_2017-02-28",
+      "ticker": "AADR",
+      "confidence": 1.0,
+      "reason": "Article is about ITUB; AADR is only mentioned as an ETF."
+    },
+    {
+      "series_id": "fnspid_AAL_2023-06-27",
+      "ticker": "AAL",
+      "confidence": 1.0,
+      "reason": "Multi-stock options roundup; not specifically about AAL."
+    },
+    {
+      "series_id": "fnspid_AAOI_2023-01-09",
+      "ticker": "AAOI",
+      "confidence": 1.0,
+      "reason": "Broad sector summary mentioning AAOI as part of a list."
+    },
+    {
+      "series_id": "fnspid_AAOI_2023-08-14",
+      "ticker": "AAOI",
+      "confidence": 1.0,
+      "reason": "Sector round-up mentioning AAOI as a leader, not a specific story."
+    },
+    {
+      "series_id": "fnspid_AAON_2023-02-21",
+      "ticker": "AAON",
+      "confidence": 1.0,
+      "reason": "Broad industry overview mentioning AAON as one of several examples."
+    },
+    {
+      "series_id": "fnspid_AAPL_2023-03-29",
+      "ticker": "AAPL",
+      "confidence": 1.0,
+      "reason": "Broad market summary; AAPL is only mentioned at the end."
+    },
+    {
+      "series_id": "fnspid_AAPL_2023-11-29",
+      "ticker": "AAPL",
+      "confidence": 0.95,
+      "reason": "Broad market piece mentioning AAPL as one of several stocks."
+    },
+    {
+      "series_id": "fnspid_AA_2023-05-31",
+      "ticker": "AA",
+      "confidence": 1.0,
+      "reason": "Broad pre-market list; AA is not mentioned, only AAL and AAP."
+    },
+    {
+      "series_id": "fnspid_ABCB_2023-04-24",
+      "ticker": "ABCB",
+      "confidence": 1.0,
+      "reason": "Article is about CCBG, not ABCB."
+    },
+    {
+      "series_id": "fnspid_ABEO_2022-06-22",
+      "ticker": "ABEO",
+      "confidence": 1.0,
+      "reason": "Article is about Acer Therapeutics (ACER), not ABEO."
+    },
+    {
+      "series_id": "fnspid_ABEQ_2021-05-03",
+      "ticker": "ABEQ",
+      "confidence": 1.0,
+      "reason": "Broad market summary; ABEQ is only mentioned as a minor detail."
+    },
+    {
+      "series_id": "fnspid_ABM_2023-07-24",
+      "ticker": "ABM",
+      "confidence": 1.0,
+      "reason": "Listicle mentioning ABM among several dividend growth stocks."
+    },
+    {
+      "series_id": "fnspid_ABT_2023-07-31",
+      "ticker": "ABT",
+      "confidence": 1.0,
+      "reason": "Article is about Avantor (AVTR), not Abbott Laboratories (ABT)."
+    },
+    {
+      "series_id": "fnspid_AB_2023-04-18",
+      "ticker": "AB",
+      "confidence": 1.0,
+      "reason": "Article discusses Zacks ESP and Postal Realty Trust (PSTL), not AB."
+    },
+    {
+      "series_id": "fnspid_AB_2023-07-13",
+      "ticker": "AB",
+      "confidence": 0.9,
+      "reason": "Sector round-up mentioning AB among several other companies."
+    },
+    {
+      "series_id": "fnspid_ACAD_2023-05-23",
+      "ticker": "ACAD",
+      "confidence": 1.0,
+      "reason": "Article is about Baker Brothers portfolio, not specifically ACAD."
+    },
+    {
+      "series_id": "fnspid_ACB_2023-09-28",
+      "ticker": "ACB",
+      "confidence": 1.0,
+      "reason": "Article is about Canopy Growth (CGC), not Aurora Cannabis (ACB)."
+    },
+    {
+      "series_id": "fnspid_ACCO_2022-12-13",
+      "ticker": "ACCO",
+      "confidence": 0.95,
+      "reason": "Listicle mentioning multiple stocks and unrelated EV promotional content."
+    },
+    {
+      "series_id": "fnspid_ACES_2023-11-08",
+      "ticker": "ACES",
+      "confidence": 1.0,
+      "reason": "Broad sector analysis; ACES is only mentioned as one of many ETFs."
+    },
+    {
+      "series_id": "fnspid_ACHV_2018-11-29",
+      "ticker": "ACHV",
+      "confidence": 1.0,
+      "reason": "Listicle mentioning multiple stocks; not specifically about ACHV."
+    },
+    {
+      "series_id": "fnspid_ACHV_2020-10-09",
+      "ticker": "ACHV",
+      "confidence": 1.0,
+      "reason": "Market round-up mentioning multiple stocks; not specifically about ACHV."
+    },
+    {
+      "series_id": "fnspid_ACIU_2021-09-23",
+      "ticker": "ACIU",
+      "confidence": 1.0,
+      "reason": "Broad ETF analysis mentioning ACIU as one of several holdings."
+    },
+    {
+      "series_id": "fnspid_ACI_2023-03-31",
+      "ticker": "ACI",
+      "confidence": 1.0,
+      "reason": "Broad market roundup mentioning ACI as one of several companies."
+    },
+    {
+      "series_id": "fnspid_ACM_2023-03-30",
+      "ticker": "ACM",
+      "confidence": 1.0,
+      "reason": "Article focuses on IJH ETF outflows; ACM is merely mentioned."
+    }
+  ]
+}

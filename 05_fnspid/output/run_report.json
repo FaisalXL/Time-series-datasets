@@ -1,39 +1,74 @@
 {
-  "records_seen": 400,
-  "records_written": 50,
-  "records_skipped": {
-    "min_news_chars": 2,
-    "no_news": 6
-  },
-  "tickers_seen": [
-    "AAL"
-  ],
+  "run_date": "2026-06-28T23:04:54Z",
+  "news_rows_scanned": 15549299,
+  "groups_retained": 155529,
+  "candidate_records": null,
+  "records_written": 5000,
+  "down_sampled_to_max_records": true,
+  "unique_tickers": 2849,
   "date_range": {
-    "min": "2019-01-11",
-    "max": "2019-04-04"
+    "min": "2010-01-12",
+    "max": "2023-12-30"
   },
-  "avg_history_days": 7.0,
-  "avg_news_count": 3.56,
-  "validation_errors": [],
+  "avg_history_days": 29.99,
+  "avg_articles_per_record": 2.04,
+  "channels": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "adj_close",
+    "volume"
+  ],
+  "drops": {
+    "cap_per_ticker": 1509277,
+    "cap_per_ticker_month": 613582,
+    "empty_article": 11809209,
+    "insufficient_history": 607,
+    "no_price_csv": 9085,
+    "no_symbol": 1248312,
+    "short_text": 1
+  },
+  "license": "CC BY-NC 4.0 (research use only)",
   "config_snapshot": {
     "data": {
-      "train_path": "../../FNSPID/FNSPID_train.json",
-      "val_path": "../../FNSPID/FNSPID_val.json",
-      "split": "both",
+      "news_csv": "../../raw_data/05_fnspid/Stock_news/nasdaq_exteral_data.csv",
+      "prices_dir": "../../raw_data/05_fnspid/prices/full_history",
       "tickers_filter": [],
-      "min_history_days": 5,
-      "min_news_chars": 50
+      "date_min": null,
+      "date_max": null,
+      "max_news_rows": null,
+      "history_days": 30,
+      "min_history_days": 15,
+      "channels": [
+        "open",
+        "high",
+        "low",
+        "close",
+        "adj_close",
+        "volume"
+      ]
+    },
+    "filters": {
+      "require_symbol_in_text": false,
+      "min_article_chars": 200,
+      "max_articles_per_record": 5
+    },
+    "sampling": {
+      "max_per_ticker": 40,
+      "max_per_ticker_month": 4,
+      "random_seed": 42
     },
     "text": {
-      "max_chars": 2000
+      "max_chars": 3000,
+      "ts_intro_sentence": "Daily open, high, low, close, adjusted-close prices (USD) and share volume for {ticker} over the {n} trading days ending {last_date}: <ts></ts>."
     },
     "output": {
       "output_path": "output/fnspid_cpt.jsonl",
       "report_path": "output/run_report.json",
-      "max_records": 50,
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 5000,
       "indent": null
     }
-  },
-  "generated_at": "2026-06-19T06:12:31Z",
-  "dry_run": false
+  }
 }

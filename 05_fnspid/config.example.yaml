@@ -1,43 +1,115 @@
-# FNSPID → CPT world-knowledge JSONL
+# FNSPID → CPT world-knowledge JSONL  (full-scale HuggingFace build)
 #
-# Converts local Alpaca-format JSON (pre-downloaded demo slice) to CPT records.
-# For full-scale use (15.7M news records), download from HuggingFace — see README.
+# One record = one (ticker, news_date): the real financial-news article(s)
+# published that day, paired with the ticker's trailing daily OHLCV window
+# ending the trading day BEFORE the news date (no lookahead).
+#
+# Raw data is downloaded OUTSIDE the git repo by scripts/download_fnspid.py
+# (default: ../../raw_data/05_fnspid relative to the repo root).
 #
 # Quick start:
-#   pip install -r requirements.txt
-#   python scripts/build_cpt_jsonl.py --config config.example.yaml
-#
-# Dry-run (print one example record, no files written):
-#   python scripts/build_cpt_jsonl.py --dry-run
+#   python scripts/download_fnspid.py            # fetch raw data (~once)
+#   python scripts/build_cpt_from_hf.py --set output.max_records=20 \
+#       --set data.tickers_filter=[AAL,AAPL] --set data.max_news_rows=2000000   # smoke
+#   python scripts/build_cpt_from_hf.py                                          # capped build
+#   python scripts/build_cpt_from_hf.py --set output.max_records=null            # full sampled build
 
 data:
-  # Paths relative to this dataset folder (datasets/05_fnspid/)
-  train_path: "../../FNSPID/FNSPID_train.json"
-  val_path: "../../FNSPID/FNSPID_val.json"
+  # Raw inputs (absolute, or relative to the dataset folder). These live OUTSIDE
+  # the git repo so the multi-GB files are never committed.
+  news_csv:   "../../raw_data/05_fnspid/Stock_news/nasdaq_exteral_data.csv"
+  prices_dir: "../../raw_data/05_fnspid/prices/full_history"
 
-  # Which split(s) to load: both | train | val
-  split: "both"
-
-  # Empty list = all tickers; otherwise restrict to these symbols
-  # e.g. ["AAL", "AAPL"]
+  # Restrict to these symbols (empty = every ticker that has news + prices).
   tickers_filter: []
 
-  # Skip records with fewer than N historical price points
-  min_history_days: 5
+  # Optional date window on the NEWS date (ISO yyyy-mm-dd, or null for no bound).
+  date_min: null
+  date_max: null
 
-  # Skip records where combined unique news text is shorter than N chars
-  min_news_chars: 50
+  # Stop after scanning this many raw news rows (null = scan all 15.5M).
+  # Handy for fast smoke tests; leave null for real builds.
+  max_news_rows: null
+
+  # Trailing close window length (trading days) ending the day BEFORE news_date.
+  history_days: 30
+  # Drop a record if fewer than this many trading days are available.
+  min_history_days: 15
+
+  # Price channels to emit (multivariate). Order is preserved in the record.
+  # Valid: open, high, low, close, adj_close, volume
+  channels: ["open", "high", "low", "close", "adj_close", "volume"]
+
+filters:
+  # Require the article title/body to actually name the ticker/company.
+  # false = keep all tagged (ticker, date) pairs (higher volume, noisier).
+  # See CHALLENGES.md §A1 (text–ticker attribution).
+  require_symbol_in_text: false
+
+  # Drop a record if combined unique article text is shorter than this.
+  min_article_chars: 200
+
+  # Concatenate at most this many unique articles per (ticker, date).
+  # Extras are counted (n_articles) but not included in the text.
+  max_articles_per_record: 5
+
+sampling:
+  # Caps applied while streaming, to bound memory and avoid one loud ticker
+  # dominating the corpus. null disables a cap.
+  max_per_ticker: 40
+  max_per_ticker_month: 4
+  # Seed for the final down-sample to output.max_records.
+  random_seed: 42
 
 text:
-  # Truncate concatenated news text to this character limit
-  max_chars: 2000
+  # Max characters of concatenated article text per record (before the ts sentence).
+  max_chars: 3000
+  # Closing sentence carrying the single <ts></ts>. {ticker}, {n}, {last_date} are filled.
+  ts_intro_sentence: "Daily open, high, low, close, adjusted-close prices (USD) and share volume for {ticker} over the {n} trading days ending {last_date}: <ts></ts>."
+
+# Optional post-build stage: LLM relevance filter (scripts/filter_news_relevance.py).
+# Uses a local model as a JUDGE (keeps the real text, drops off-topic broad-market
+# articles). It NEVER rewrites text and NEVER sees the price outcome (no leakage).
+# See CHALLENGES.md §A1/B1. Works with any OpenAI-compatible endpoint (vLLM, SGLang,
+# Ollama, LM Studio, ...). Leave unused if you don't run the filter stage.
+relevance:
+  # Single endpoint (used if base_urls is empty).
+  base_url: "http://ds-serv10.ucsd.edu:8004/v1"
+  # Optional: round-robin across multiple lanes for throughput (team curation pool).
+  base_urls:
+    - "http://ds-serv10.ucsd.edu:8004/v1"
+    - "http://ds-serv10.ucsd.edu:8005/v1"
+    - "http://ds-serv10.ucsd.edu:8006/v1"
+    - "http://ds-serv10.ucsd.edu:8007/v1"
+  api_key: "EMPTY"
+  model: "gemma4-31b-it"          # Gemma4 31b (8004-8007). Qwen3.6 a3b lives on :8003 when up.
+  # Gemma4 does NOT support a system role -> fold the instructions into the user turn.
+  # Set true for models that support it (e.g. Qwen).
+  system_role: false
+  # Send {"chat_template_kwargs": {"enable_thinking": <bool>}} only if not null.
+  # Gemma: leave null. Qwen3.6: set false (avoids empty content with short max_tokens).
+  enable_thinking: null
+  concurrency: 8
+  timeout_s: 60
+  max_retries: 3
+  temperature: 0.0
+  # Article chars sent to the judge (keeps prompts cheap; full text stays in output).
+  max_chars: 2500
+  # Keep a record only if the judge says relevant AND confidence >= threshold.
+  min_confidence: 0.5
+  # On unparseable model output: keep the record (conservative — don't lose real data).
+  keep_on_parse_error: true
+  input_path:  "output/fnspid_cpt.jsonl"
+  output_path: "output/fnspid_cpt_filtered.jsonl"
+  report_path: "output/relevance_report.json"
 
 output:
-  output_path: output/fnspid_cpt.jsonl
-  report_path: output/run_report.json
+  output_path:  "output/fnspid_cpt.jsonl"
+  report_path:  "output/run_report.json"
+  samples_path: "samples/example_output.jsonl"
 
-  # Cap total records (demo). null = no cap.
-  max_records: 50
+  # Cap total emitted records (random sample across candidates). null = emit all.
+  max_records: 5000
 
-  # null = compact JSONL; integer = pretty-print each record
+  # null = compact JSONL; integer = pretty-print JSON array.
   indent: null
