@@ -47,6 +47,10 @@ try:
 except ImportError as exc:  # pragma: no cover
     raise SystemExit("PyYAML required. pip install -r requirements.txt") from exc
 
+# shared v1-compliant record builder (self-validates against schema/validate.py)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from emit import emit_record  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
 _SSL = ssl.create_default_context()
@@ -362,29 +366,35 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
             values = [round(v, 3) for _, v in win]
             timestamps = [tm.strftime("%Y-%m-%dT%H:00:00Z") for tm, _ in win]
             ev_id = ctime.strftime("%Y%m%dT%H")
-            rec = {
-                "text": text,
-                "timeseries": [{"values": values, "unit": "stage_ft", "freq": "1h"}],
-                "timestamps": timestamps,
-                "task_type": "world_knowledge",
-                "text_quality": "real",
-                "gauge_lid": lid,
-                "usgs_site": usgs,
-                "gauge_name": gauge_name,
-                "state": state,
-                "flood_stages": {c: cats[c] for c in _CAT_ORDER if c in cats},
-                "crest_ft": round(cval, 2),
-                "crest_time": ctime.strftime("%Y-%m-%dT%H:00:00Z"),
-                "category_reached": cat,
-                "datum_offset_ft": off,
-                "window_hours": len(win),
-                "dataset": "noaa_nwps_flood",
-                "source": d["source"],
-                "license": d["license"],
-                "series_id": f"nwps_{lid}_{ev_id}",
-            }
-            verr = validate(rec)
-            if verr:
+            region = f"US-{state}" if isinstance(state, str) and len(state) == 2 else "US"
+            try:
+                rec = emit_record(
+                    text=text,
+                    timeseries=[{"values": values, "unit": "stage_ft", "freq": "1h"}],
+                    timestamps=timestamps,
+                    alignment="describes",
+                    license="public-domain-us-gov",
+                    source=d["nwps_gauge_template"].format(lid=lid),
+                    dataset="noaa_nwps_flood",
+                    series_id=f"nwps_{lid}_{ev_id}",
+                    domain="hydrology",
+                    region=region,
+                    period_start=timestamps[0][:10],
+                    period_end=timestamps[-1][:10],
+                    meta={
+                        "gauge_lid": lid,
+                        "usgs_site": usgs,
+                        "gauge_name": gauge_name,
+                        "state": state,
+                        "flood_stages": {c: cats[c] for c in _CAT_ORDER if c in cats},
+                        "crest_ft": round(cval, 2),
+                        "crest_time": ctime.strftime("%Y-%m-%dT%H:00:00Z"),
+                        "category_reached": cat,
+                        "datum_offset_ft": off,
+                        "window_hours": len(win),
+                    },
+                )
+            except ValueError:
                 stat["invalid"] += 1
                 continue
             records.append(rec)
