@@ -2,7 +2,7 @@
 
 Per-dataset packages for instruction-free continued pre-training: natural text with a single `<ts></ts>` placeholder + aligned time series.
 
-**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage. **19 packages built.**
+**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage. **20 packages built.**
 
 ---
 
@@ -16,6 +16,7 @@ Per-dataset packages for instruction-free continued pre-training: natural text w
 | 50 | [Richmond Fed Service Sector](./50_richmond_nonmanufacturing/) | release narrative ↔ 6 diffusion indices | **Value-reciting — strong** (90%) | Public domain | FRED overlap; text ~2018→ |
 | 48 | [Dallas Fed TMOS](./48_dallas_tmos/) | release narrative ↔ 7 diffusion indices | **Value-reciting** (recites production + key indices, exact) | Public domain | 2021–23 gap; FRED overlap; minor vintage drift |
 | 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | ESPN match report ↔ per-over series | **Describes — strong** (100% recite innings total = `cumulative_runs`) | ⚠️ ESPN **copyrighted** | redistribution pending sign-off (output git-ignored) |
+| 41 | [USDA WASDE](./41_wasde/) | per-commodity narrative ↔ balance-sheet forecast vintages | **Recites — strong** (prose "722" = series endpoint; verified exact) | Public domain | ⚠️ series is **forecast-revision, not measured**; v1 wheat-only; archive JS-gated → local-file build |
 | 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | monthly bulletin ↔ temp-anomaly series | **Value-reciting — moderate** (55% state the anomaly; rest phrased as rankings, e.g. "2nd-warmest") | Copernicus (free reuse + attribution) | confirm ranking-style prose is acceptable |
 | 47 | [Philadelphia Fed MBOS](./47_philadelphia_mbos/) | release narrative ↔ 7 diffusion indices | ⚠️ **Mixed** — recent months recite exact values; **46/50 older records stop at the directional lead** (correct sign, no number) | Public domain | **extraction gap** — detail paragraph (exact values) not captured for older months; under investigation. FRED overlap |
 | 42 | [Earnings Calls + SEC XBRL](./42_earnings_calls_xbrl/) | earnings-call transcript ↔ revenue/net-income/EPS | ⚠️ **Semantic; exact-numeric partial** (34% exact; spoken figures rounded / non-GAAP vs exact XBRL) | ⚠️ transcripts third-party | value correspondence partial; SEC EDGAR overlap; transcript licensing |
@@ -44,6 +45,7 @@ Small-scale samples for format inspection and freeze. Open each folder for its R
 | 26 | [ICS-209-PLUS Wildfire](./26_ics209_wildfire/) | 50 | 3 | `1d` | fire situation-report narrative + daily acres/containment/personnel arc · CC BY 4.0 |
 | 31 | [US Drought Monitor](./31_usdm_drought/) | 50 | 5 | `1w` | 12-week window · D0–D4 % CONUS area · narrative PDF + stats API |
 | 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | 117 | 2 / 2 | `1m` / `1y` | 2 record types: temperature (global+Europe, 12-mo) + sea ice (Arctic+Antarctic, this-month-across-years) |
+| 41 | [USDA WASDE](./41_wasde/) | 7 | 1 | `1m` | per-commodity narrative recites balance-sheet forecast; series = monthly forecast-vintage revisions · v1 wheat · public domain |
 | 42 | [Earnings Calls + SEC XBRL](./42_earnings_calls_xbrl/) | 50 | 3 | `1q` | transcript recites revenue/net-income/EPS = the XBRL series (12-quarter window) |
 | 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | 50 | 4 | `1over` | ESPNcricinfo match report + per-over runs/wickets/cumulative/run-rate · ⚠️ report text copyrighted, redistribution pending sign-off |
 | 47 | [Philadelphia Fed MBOS](./47_philadelphia_mbos/) | 50 | 7 | `1M` | MBOS release narrative recites the diffusion indices (24-mo window) · public domain · sibling Fed surveys = separate packages |
@@ -83,6 +85,7 @@ Estimated **full-scale datapoints** = CPT records at `output.max_records=null` (
 | 26 | [ICS-209-PLUS Wildfire](./26_ics209_wildfire/) | Built (demo 50) | **~7–10k** wildfire incidents (1999–2020); **CC BY 4.0**; one record/incident (per-sitrep alt ≈ 80k) |
 | 31 | [US Drought Monitor](./31_usdm_drought/) | Built (demo 50) | **~269** weekly releases (2021-05→) |
 | 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | Built (117) | **~120** (monthly, 2021→; grows) |
+| 41 | [USDA WASDE](./41_wasde/) | Built (v1 wheat, 7) | **~1.4k** (7 commodities × ~195 monthly reports 2010→; ~4.4k if OCR-extended to 1973); **public domain**; ⚠️ forecast-revision series + archive JS-gated (local-file build) |
 | 42 | [Earnings Calls + SEC XBRL](./42_earnings_calls_xbrl/) | Built (demo 50) | **~25k+** (transcript × 12-q fundamentals); ⚠️ confirm SEC EDGAR overlap before scaling |
 | 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | Built (demo 50) | **~1.9k** IPL innings w/ report (~30k+ all formats); ⚠️ ESPN text redistribution pending sign-off |
 | 47 | [Philadelphia Fed MBOS](./47_philadelphia_mbos/) | Built (demo 50) | **~190** monthly releases (2010→); public domain; ⚠️ FRED-overlap sign-off. First of the Fed regional surveys (siblings = separate packages, ~2–4k combined) |

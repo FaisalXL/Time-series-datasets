@@ -13,3 +13,5 @@
 
 # Hand-authored example records — use output/ from script runs instead
 **/samples/
+
+**/NOTION_PAGE.md
