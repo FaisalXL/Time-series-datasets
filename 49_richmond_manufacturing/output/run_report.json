@@ -1,0 +1,80 @@
+{
+  "survey": "Fifth District Survey of Manufacturing Activity",
+  "bank": "Federal Reserve Bank of Richmond",
+  "window_months": 24,
+  "channels": [
+    "composite_index",
+    "shipments",
+    "new_orders",
+    "employment",
+    "order_backlog",
+    "capacity_utilization",
+    "wages"
+  ],
+  "stats": {
+    "months_with_window": 50,
+    "emitted": 50,
+    "no_text": 0,
+    "short_text": 0,
+    "short_window": 0,
+    "invalid": 0
+  },
+  "config_snapshot": {
+    "data": {
+      "bank": "Federal Reserve Bank of Richmond",
+      "survey_title": "Fifth District Survey of Manufacturing Activity",
+      "district": 5,
+      "domain": "manufacturing",
+      "data_xlsx_url": "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/manufacturing/data/mfg_historicaldata.xlsx",
+      "pdf_dir_template": "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/manufacturing/{year}/pdf/mfg_{mm}_{dd}_{yy}.pdf",
+      "channels": [
+        {
+          "col": "sa_mfg_composite",
+          "name": "composite_index"
+        },
+        {
+          "col": "sa_mfg_ship_c",
+          "name": "shipments"
+        },
+        {
+          "col": "sa_mfg_new_orders_c",
+          "name": "new_orders"
+        },
+        {
+          "col": "sa_mfg_emp_c",
+          "name": "employment"
+        },
+        {
+          "col": "sa_mfg_bk_logs_c",
+          "name": "order_backlog"
+        },
+        {
+          "col": "sa_mfg_cap_util_c",
+          "name": "capacity_utilization"
+        },
+        {
+          "col": "sa_mfg_wage_c",
+          "name": "wages"
+        }
+      ],
+      "window_months": 24,
+      "min_text_year": 2017,
+      "cache_dir": ".cache",
+      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "request_delay_s": 0.3,
+      "timeout_s": 60
+    },
+    "text": {
+      "min_text_chars": 250,
+      "ts_intro_sentence": "{bank} {survey_title} - monthly diffusion indices (composite, shipments, new orders, employment, order backlog, capacity utilization, wages), trailing {n} months through {month}: <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/richmond_manufacturing_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "dry_run": false
+}

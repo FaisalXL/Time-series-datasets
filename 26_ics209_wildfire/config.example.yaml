@@ -1,0 +1,55 @@
+# ICS-209-PLUS Wildfire Situation Reports → CPT world-knowledge JSONL
+#
+# One record = one WILDFIRE INCIDENT: the richest situation-report narrative for that
+# fire (the "anchor" report — significant events, current threat, projected activity,
+# weather, planned actions) paired with the incident's DAILY time series (acres burned,
+# percent contained, total personnel) from its first report through the anchor report.
+# The narrative *describes* the fire's progression the series quantifies → "describes".
+#
+# License: ICS-209-PLUS (St. Denis et al. 2023) is CC BY 4.0 — open, attribution only.
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
+#   python scripts/build_cpt_jsonl.py                                  # demo (50)
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build
+
+data:
+  # ICS-209-PLUS wildfire bundle on figshare (article 19858927, CC BY 4.0). Keyless.
+  # The sitrep CSV lives inside this zip; parsed with the stdlib (zipfile/csv).
+  wildfire_zip_url: "https://ndownloader.figshare.com/files/38766504"
+  sitreps_csv_name: "ics209plus-wildfire/ics209-plus-wf_sitreps_1999to2020.csv"
+
+  # Free-text narrative fields combined (in this order) to form the report prose.
+  narrative_fields:
+    - SIGNIF_EVENTS_SUMMARY
+    - CURRENT_THREAT_NARR
+    - PROJECTED_ACTIVITY_NARR
+    - WEATHER_CONCERNS_NARR
+    - PLANNED_ACTIONS
+    - STRATEGIC_NARR
+    - REMARKS
+
+  # Numeric channels (CSV column -> channel). A daily point is kept only if ALL are
+  # present (no imputation); days missing any are dropped, gaps kept explicit via dates.
+  channels:
+    - {col: "ACRES", name: "acres_burned", unit: "acres"}
+    - {col: "PCT_CONTAINED_COMPLETED", name: "percent_contained", unit: "percent"}
+    - {col: "TOTAL_PERSONNEL", name: "total_personnel", unit: "persons"}
+
+  min_reports: 3            # min daily points (through the anchor) or the incident is dropped
+  cache_dir: ".cache"
+  user_agent: "CPT-dataset-research faisal@usc.edu"
+  timeout_s: 180
+
+text:
+  min_text_chars: 300      # anchor report narrative must be at least this long
+  # Framing sentence carrying the single <ts></ts>. {name}/{state}/{n}/{date} filled in.
+  ts_intro_sentence: "Daily situation-report values — acres burned, percent contained, and total personnel — for the {name} Fire ({state}) across {n} reporting days through {date}: <ts></ts>"
+
+output:
+  output_path: output/ics209_wildfire_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 50          # demo cap. null = full build (all qualifying incidents)
+  indent: null

@@ -1,0 +1,62 @@
+# Dallas Fed Texas Manufacturing Outlook Survey (TMOS) → CPT world-knowledge JSONL
+#
+# One record = one release month: the TMOS monthly release narrative (which recites the
+# diffusion-index readings) paired with a trailing window of those indices. The prose
+# *describes* the series → "describes" (value-reciting, EIA/BLS-tier). text_quality "real".
+#
+# One of the Federal Reserve regional business surveys (see docs/fed_surveys_discovery.md).
+# Sibling packages: 47_philadelphia_mbos; Dallas also runs TSSOS (services), Energy,
+# Agriculture, Banking — each its own dataset.
+#
+# License: Federal Reserve Bank publications are U.S. public domain / freely reusable.
+# ⚠ The index SERIES are also on FRED (Oliver's #9); the novel element is the
+#   release-narrative pairing. Get overlap sign-off before scaling. See NOTION_PAGE.md.
+#
+# Quick start:
+#   pip install -r requirements.txt        # + poppler (pdftotext)
+#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
+#   python scripts/build_cpt_jsonl.py                                  # demo (50)
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build (~230)
+
+data:
+  bank: "Federal Reserve Bank of Dallas"
+  survey_title: "Texas Manufacturing Outlook Survey"
+  district: 11
+  domain: "manufacturing"
+
+  # Seasonally-adjusted diffusion indices (.xls extension but actually XLSX; stdlib-parsed).
+  # DATE col like "Jun-25"; monthly Jun-2004 -> present. 34 cols (current + future).
+  data_xlsx_url: "https://www.dallasfed.org/~/media/Documents/research/surveys/tmos/documents/index_sa.xls"
+
+  # Release narrative: Dallas serves PDFs for ~2007-2023 and HTML pages for ~2024->present.
+  # The build tries the PDF first, then the HTML page. {year}=YYYY, {yymm}=YY+MM (e.g. 2506).
+  pdf_url_template: "https://www.dallasfed.org/-/media/Documents/research/surveys/tmos/{year}/tmos{yymm}.pdf"
+  html_url_template: "https://www.dallasfed.org/research/surveys/tmos/{year}/{yymm}"
+
+  # Diffusion-index channels (workbook column -> channel name). The narrative recites
+  # each of these. Values are diffusion indices (% increase - % decrease; ~ -100..+100).
+  channels:
+    - {col: "Bact", name: "general_business_activity"}
+    - {col: "Prod", name: "production"}
+    - {col: "Vnwo", name: "new_orders"}
+    - {col: "Vshp", name: "shipments"}
+    - {col: "Nemp", name: "employment"}
+    - {col: "Prm",  name: "prices_raw_materials"}
+    - {col: "Colk", name: "company_outlook"}
+
+  window_months: 24          # trailing months per record; dropped if fewer available
+  cache_dir: ".cache"
+  user_agent: "CPT-dataset-research faisal@usc.edu"
+  request_delay_s: 0.3
+  timeout_s: 60
+
+text:
+  min_text_chars: 250
+  ts_intro_sentence: "{bank} {survey_title} - monthly diffusion indices (general business activity, production, new orders, shipments, employment, raw materials prices, company outlook), trailing {n} months through {month}: <ts></ts>"
+
+output:
+  output_path: output/dallas_tmos_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 50            # demo cap. null = full build (~230 monthly releases)
+  indent: null

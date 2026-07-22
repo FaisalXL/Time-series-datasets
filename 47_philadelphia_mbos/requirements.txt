@@ -1,0 +1,6 @@
+pyyaml>=6.0
+# PyYAML is the only pip dependency (reads config.example.yaml).
+# Series: diffusion-index CSV parsed with the stdlib (csv/urllib).
+# Text: release PDF -> text via the `pdftotext` CLI (poppler-utils), via subprocess:
+#   brew install poppler   (macOS)  /  apt-get install poppler-utils   (Debian/Ubuntu)
+# The build checks for pdftotext and exits with a clear message if missing.

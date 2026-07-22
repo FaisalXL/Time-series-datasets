@@ -1,0 +1,65 @@
+{
+  "wildfire_zip_url": "https://ndownloader.figshare.com/files/38766504",
+  "min_reports": 3,
+  "channels": [
+    "acres_burned",
+    "percent_contained",
+    "total_personnel"
+  ],
+  "min_text_chars": 300,
+  "stats": {
+    "incidents": 266,
+    "emitted": 50,
+    "few_points": 116,
+    "short_text": 100,
+    "invalid": 0
+  },
+  "config_snapshot": {
+    "data": {
+      "wildfire_zip_url": "https://ndownloader.figshare.com/files/38766504",
+      "sitreps_csv_name": "ics209plus-wildfire/ics209-plus-wf_sitreps_1999to2020.csv",
+      "narrative_fields": [
+        "SIGNIF_EVENTS_SUMMARY",
+        "CURRENT_THREAT_NARR",
+        "PROJECTED_ACTIVITY_NARR",
+        "WEATHER_CONCERNS_NARR",
+        "PLANNED_ACTIONS",
+        "STRATEGIC_NARR",
+        "REMARKS"
+      ],
+      "channels": [
+        {
+          "col": "ACRES",
+          "name": "acres_burned",
+          "unit": "acres"
+        },
+        {
+          "col": "PCT_CONTAINED_COMPLETED",
+          "name": "percent_contained",
+          "unit": "percent"
+        },
+        {
+          "col": "TOTAL_PERSONNEL",
+          "name": "total_personnel",
+          "unit": "persons"
+        }
+      ],
+      "min_reports": 3,
+      "cache_dir": ".cache",
+      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "timeout_s": 180
+    },
+    "text": {
+      "min_text_chars": 300,
+      "ts_intro_sentence": "Daily situation-report values — acres burned, percent contained, and total personnel — for the {name} Fire ({state}) across {n} reporting days through {date}: <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/ics209_wildfire_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "dry_run": false
+}

@@ -1,0 +1,60 @@
+# NOAA NWPS + USGS river flood → CPT world-knowledge dataset
+# One record = one FLOOD EVENT at a river gauge: the hourly stage hydrograph around the
+# crest, paired with the National Weather Service flood-category definitions and the
+# official impact statement(s) for the stage the river reached. "describes" via
+# threshold semantics (see README caveat on alignment tier + text_quality).
+
+data:
+  user_agent: "cpt-dataset-builder/1.0 (research; contact flnu@usc.edu)"
+  timeout_s: 60
+  request_delay_s: 0.3
+  cache_dir: ".cache"
+
+  # NWPS (National Water Prediction Service) — flood categories + impact statements.
+  nwps_gauge_template: "https://api.water.noaa.gov/nwps/v1/gauges/{lid}"
+  nwps_stageflow_template: "https://api.water.noaa.gov/nwps/v1/gauges/{lid}/stageflow"
+
+  # USGS NWIS instantaneous values (00065 = gage height, ft). Deep sub-daily history.
+  usgs_iv_template: "https://waterservices.usgs.gov/nwis/iv/?sites={usgs}&parameterCd=00065&startDT={start}&endDT={end}&format=json"
+  usgs_year_start: 2012           # first year of USGS iv history to pull (per gauge)
+  usgs_year_end: 2026
+
+  # Seed of VERIFIED rich-impact flood gauges (lid -> USGS site id). Full national
+  # enumeration (~12,756 NWPS gauges; ~2,760 with >=5 impact statements) is documented
+  # in the README as the harvest plan; the demo runs this seed. Empty usgs id => skip
+  # (NWPS-only gauge, no deep USGS history).
+  gauges:
+    - {lid: "CCNO1", usgs: "03255000"}   # Ohio R. — 28 impacts
+    - {lid: "CIDI4", usgs: "05464500"}   # Cedar R. at Cedar Rapids — 21 impacts
+    - {lid: "CRDA1", usgs: "02453500"}   # 11
+    - {lid: "HERP1", usgs: "01573560"}   # 10
+    - {lid: "LNNI4", usgs: "06605850"}   # 10
+    - {lid: "ERAM5", usgs: "04017000"}   # 9
+    - {lid: "CDCI2", usgs: "05536235"}   # 8
+    - {lid: "MLUL1", usgs: "07367005"}   # 8
+    - {lid: "LAPC2", usgs: "07128500"}   # 7
+
+  # Event detection + windowing (Option B — event-anchored, fixed hourly window).
+  resample_minutes: 60            # decimate raw 15-min iv to hourly buckets (bucket max)
+  event_threshold: "minor"        # flood category whose crossing defines an event
+  min_event_hours: 6              # ignore blips shorter than this above threshold
+  event_gap_hours: 72             # >= this many hours below threshold separates two events
+  window_before_hours: 240        # hourly window: crest - 10 days ...
+  window_after_hours: 240         # ... crest + 10 days  (=> up to ~481 hourly points)
+  impact_band_ft: 2.0             # match impact statements with stage in [crest-band, crest]
+  max_events_per_gauge: 8         # cap so no single gauge dominates the demo
+
+  license: "Public domain (U.S. Government — NOAA/NWS + USGS)"
+  source: "NOAA National Water Prediction Service (NWPS) flood impacts + USGS NWIS gage height"
+
+text:
+  min_text_chars: 120             # need at least one usable impact statement
+  ts_intro_sentence: >-
+    Hourly river stage (gage height, ft, aligned to the NWS gauge datum) over the
+    {window_days}-day window around the crest at {gauge} ({state}): <ts></ts>
+
+output:
+  output_path: output/noaa_nwps_flood_cpt.jsonl
+  samples_path: samples/example_output.jsonl
+  report_path: output/run_report.json
+  max_records: 50                 # demo cap; set null for full seed run

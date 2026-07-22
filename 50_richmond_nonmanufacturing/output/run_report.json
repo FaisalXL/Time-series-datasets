@@ -1,0 +1,79 @@
+{
+  "survey": "Fifth District Survey of Service Sector Activity",
+  "bank": "Federal Reserve Bank of Richmond",
+  "window_months": 24,
+  "channels": [
+    "revenues",
+    "demand",
+    "employment",
+    "wages",
+    "local_business_conditions",
+    "capital_expenditures"
+  ],
+  "stats": {
+    "months_with_window": 50,
+    "emitted": 50,
+    "no_text": 0,
+    "short_text": 0,
+    "short_window": 0,
+    "invalid": 0
+  },
+  "config_snapshot": {
+    "data": {
+      "bank": "Federal Reserve Bank of Richmond",
+      "survey_title": "Fifth District Survey of Service Sector Activity",
+      "district": 5,
+      "domain": "non-manufacturing",
+      "data_xlsx_url": "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/non-manufacturing/data/nmf_historicaldata.xlsx",
+      "pdf_dir_template": "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/non-manufacturing/{year}/pdf/{prefix}_{mm}_{dd}_{yy}.pdf",
+      "pdf_prefixes": [
+        "nmf",
+        "svc"
+      ],
+      "channels": [
+        {
+          "col": "sa_svc_revs_sales_c",
+          "name": "revenues"
+        },
+        {
+          "col": "sa_svc_demand_c",
+          "name": "demand"
+        },
+        {
+          "col": "sa_svc_emp_c",
+          "name": "employment"
+        },
+        {
+          "col": "sa_svc_ave_wage_c",
+          "name": "wages"
+        },
+        {
+          "col": "sa_svc_local_bus_cond_c",
+          "name": "local_business_conditions"
+        },
+        {
+          "col": "sa_svc_capital_expnd_c",
+          "name": "capital_expenditures"
+        }
+      ],
+      "window_months": 24,
+      "min_text_year": 2017,
+      "source_url": "https://www.richmondfed.org/region_communities/regional_data_analysis/surveys/service_sector",
+      "cache_dir": ".cache",
+      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "request_delay_s": 0.3,
+      "timeout_s": 60
+    },
+    "text": {
+      "min_text_chars": 200,
+      "ts_intro_sentence": "{bank} {survey_title} - monthly diffusion indices (revenues, demand, employment, wages, local business conditions, capital expenditures), trailing {n} months through {month}: <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/richmond_nonmanufacturing_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50
+    }
+  },
+  "dry_run": false
+}

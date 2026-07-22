@@ -1,0 +1,52 @@
+# EIA Weekly Petroleum Status Report (Highlights) + Weekly Supply Series → CPT JSONL
+#
+# One record = one weekly report: the WPSR "Highlights" narrative (which describes the
+# week's inventory / refinery / import figures) paired with a trailing 52-week window of
+# the exact national supply series it describes. The prose *describes* the series →
+# "describes". text_quality = "real"; a week whose report/series can't be assembled is
+# dropped.
+#
+# License: EIA data AND report text are U.S. Government works → public domain. No gate.
+#
+# Quick start:
+#   pip install -r requirements.txt        # + poppler (pdftotext); see requirements.txt
+#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
+#   python scripts/build_cpt_jsonl.py                                   # demo (50)
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null     # full (~779)
+
+data:
+  # Report text — WPSR Highlights. The archive index lists every release date
+  # (YYYY_MM_DD, ~779 back to Aug 2011); each release has a highlights PDF.
+  archive_index_url: "https://www.eia.gov/petroleum/supply/weekly/archive/"
+  highlights_url_template: "https://www.eia.gov/petroleum/supply/weekly/archive/{year}/{date}/pdf/highlights.pdf"
+
+  # Time series — EIA bulk petroleum file (keyless, public domain). One line per series;
+  # we keep the national weekly channels below. Period key = week-ending Friday YYYYMMDD.
+  bulk_pet_url: "https://www.eia.gov/opendata/bulk/PET.zip"
+
+  # National weekly channels the Highlights narrative describes. series_id = bulk id.
+  channels:
+    - {series_id: "PET.WCESTUS1.W", name: "crude_stocks_exspr",   unit: "thousand_barrels"}
+    - {series_id: "PET.WGTSTUS1.W", name: "gasoline_stocks_total", unit: "thousand_barrels"}
+    - {series_id: "PET.WDISTUS1.W", name: "distillate_stocks",     unit: "thousand_barrels"}
+    - {series_id: "PET.WCRRIUS2.W", name: "refinery_crude_inputs", unit: "thousand_barrels_per_day"}
+    - {series_id: "PET.WPULEUS3.W", name: "refinery_utilization",  unit: "percent"}
+    - {series_id: "PET.WCEIMUS2.W", name: "crude_imports_exspr",   unit: "thousand_barrels_per_day"}
+
+  window_weeks: 52          # trailing weeks ending at the report's data week; dropped if fewer
+  cache_dir: ".cache"
+  user_agent: "CPT-dataset-research faisal@usc.edu"
+  request_delay_s: 0.3      # be polite fetching per-week PDFs; cached per date
+  timeout_s: 90
+
+text:
+  min_text_chars: 300
+  # Closing sentence carrying the single <ts></ts>. {n}=window, {week}=data week-ending.
+  ts_intro_sentence: "Weekly U.S. petroleum supply and inventories (crude / gasoline / distillate stocks, refinery inputs and utilization, crude imports), trailing {n} weeks through the week ending {week}: <ts></ts>"
+
+output:
+  output_path: output/eia_petroleum_weekly_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 50           # demo cap. null = full build (~779 weekly reports)
+  indent: null

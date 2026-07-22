@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://internal/cpt_record.schema.json",
+  "title": "CPT World-Knowledge Record",
+  "description": "One line of output/*_cpt.jsonl: real official text natively aligned to a time series, for mid-pretraining world-knowledge injection. See SCHEMA.md. NOTE: semantic rules not expressible in JSON Schema are enforced by validate.py, namely: <ts></ts> count == 1 (or == len(timeseries) when multi_series); channels sharing a freq must share a length (mixed-frequency channels may differ); optional-vocab fields (source/license/text_source/alignment) are warnings unless --strict.",
+  "type": "object",
+  "required": ["text", "timeseries", "task_type", "text_quality"],
+  "properties": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Natural prose, no task instructions. Contains exactly one <ts></ts> (or len(timeseries) when multi_series is true).",
+      "pattern": "<ts></ts>"
+    },
+    "timeseries": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Channels. Channels sharing a freq are index-aligned and equal length; channels at different freqs may differ in length (mixed-frequency records).",
+      "items": {
+        "type": "object",
+        "required": ["values", "unit", "freq"],
+        "properties": {
+          "values": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": ["number", "null"]},
+            "description": "Numeric observations in time order; null allowed for genuine gaps."
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "description": "snake_case channel label + unit. Distinct labels recommended but not required (a physical unit may recur across channels)."
+          },
+          "freq": {
+            "type": "string",
+            "pattern": "^\\d+(ms|m|h|d|w|W|M|q|y|over)$",
+            "description": "Compact interval token, e.g. 100ms, 1h, 1d, 1w, 1M, 1q, 1y, 1over."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "task_type": {
+      "const": "world_knowledge"
+    },
+    "text_quality": {
+      "enum": ["real", "generated"]
+    },
+
+    "multi_series": {
+      "type": "boolean",
+      "description": "If true, number of <ts></ts> must equal len(timeseries), binding in order; channels need not share length."
+    },
+    "timestamps": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Optional ISO-8601 timestamps parallel to channel values (same length)."
+    },
+
+    "series_id": {"type": "string", "description": "Stable unique id, dataset:scope form."},
+    "dataset": {"type": "string", "description": "Package slug matching NN_<slug> folder."},
+    "source": {"type": "string", "description": "Canonical URL of the originating report."},
+    "license": {
+      "enum": ["public-domain-us-gov", "cc-by-4.0", "cc0", "proprietary-review", "unknown"]
+    },
+    "text_source": {
+      "enum": ["first_party_official", "first_party_human", "third_party", "generated"]
+    },
+    "alignment": {
+      "enum": ["recites", "describes", "contextualizes"]
+    },
+    "domain": {"type": "string"},
+    "region": {"type": "string"},
+    "period_start": {"type": "string"},
+    "period_end": {"type": "string"},
+    "meta": {
+      "type": "object",
+      "description": "Dataset-specific extras (season, ticker, gauge id, fiscal_quarter, ...).",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

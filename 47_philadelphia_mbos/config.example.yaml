@@ -1,0 +1,58 @@
+# Philadelphia Fed Manufacturing Business Outlook Survey (MBOS) → CPT world-knowledge JSONL
+#
+# One record = one release month: the MBOS monthly release narrative (which recites the
+# diffusion-index readings) paired with a trailing window of those indices. The prose
+# *describes* the series → "describes" (value-reciting, EIA/BLS-tier). text_quality "real".
+#
+# One of the Federal Reserve regional business surveys (see docs/fed_surveys_discovery.md).
+# Sibling packages will cover the other surveys (NY Empire State, Richmond, Dallas TMOS,
+# Kansas City, ...) — each is its own dataset (different bank text + diffusion series).
+#
+# License: Federal Reserve Bank publications are U.S. public domain / freely reusable.
+# ⚠ The index SERIES are also on FRED (Oliver's #9); the novel element is the
+#   release-narrative pairing. Get overlap sign-off before scaling. See NOTION_PAGE.md.
+#
+# Quick start:
+#   pip install -r requirements.txt        # + poppler (pdftotext)
+#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
+#   python scripts/build_cpt_jsonl.py                                  # demo (50)
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build (~190)
+
+data:
+  bank: "Federal Reserve Bank of Philadelphia"
+  survey_title: "Manufacturing Business Outlook Survey"
+  district: 3
+  domain: "manufacturing"
+
+  # Diffusion-index CSV: DATE col like "Jun-26"; current (C) + future (F) indices, 1968→.
+  data_csv_url: "https://www.philadelphiafed.org/-/media/FRBP/Assets/Surveys-And-Data/MBOS/Historical-Data/Diffusion-Indexes/bos_dif.csv"
+  # Monthly release PDF (real PDFs ~2010->present; older months 404 to an HTML shell).
+  pdf_url_template: "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/{year}/bos{mmyy}.pdf"
+
+  # Diffusion-index channels (CSV column -> channel name). Values are diffusion indices
+  # (% reporting increase - % reporting decrease; dimensionless, ~ -100..+100).
+  channels:
+    - {col: "GAC", name: "general_activity"}
+    - {col: "NOC", name: "new_orders"}
+    - {col: "SHC", name: "shipments"}
+    - {col: "NEC", name: "employment"}
+    - {col: "PPC", name: "prices_paid"}
+    - {col: "PRC", name: "prices_received"}
+    - {col: "GAF", name: "future_general_activity"}
+
+  window_months: 24          # trailing months per record; dropped if fewer available
+  cache_dir: ".cache"
+  user_agent: "CPT-dataset-research faisal@usc.edu"
+  request_delay_s: 0.3
+  timeout_s: 60
+
+text:
+  min_text_chars: 200
+  ts_intro_sentence: "{bank} {survey_title} - monthly diffusion indices (current general activity, new orders, shipments, employment, prices paid/received; plus future general activity), trailing {n} months through {month}: <ts></ts>"
+
+output:
+  output_path: output/philadelphia_mbos_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 50            # demo cap. null = full build (~190 monthly releases)
+  indent: null

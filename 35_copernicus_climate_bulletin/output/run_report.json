@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-07-01T04:10:56Z",
+  "start_month": "2019-01",
+  "end_month": "2026-06",
+  "themes": [
+    "temperature",
+    "sea_ice"
+  ],
+  "stats": {
+    "attempted": 180,
+    "emitted": 117,
+    "skipped_no_page": 2,
+    "skipped_short_text": 0,
+    "skipped_ts": 61,
+    "skipped_validation": 0
+  },
+  "per_theme": {
+    "temperature": 62,
+    "sea_ice": 55
+  },
+  "validation_errors": [],
+  "config_snapshot": {
+    "data": {
+      "start_month": "2019-01",
+      "end_month": null,
+      "base_url": "https://climate.copernicus.eu",
+      "themes": [
+        "temperature",
+        "sea_ice"
+      ],
+      "window_months": 12,
+      "sea_ice_window_years": null,
+      "html_cache_dir": ".cache/html",
+      "csv_cache_dir": ".cache/csv",
+      "request_delay_s": 1.0,
+      "timeout_s": 30
+    },
+    "text": {
+      "min_text_chars": 200,
+      "ts_intro_sentence": "{intro}: <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/copernicus_climate_bulletin_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": null,
+      "indent": null
+    }
+  },
+  "dry_run": false
+}
