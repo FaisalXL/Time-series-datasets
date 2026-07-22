@@ -33,6 +33,9 @@ data:
   pdf_url_template: "https://www.dallasfed.org/-/media/Documents/research/surveys/tmos/{year}/tmos{yymm}.pdf"
   html_url_template: "https://www.dallasfed.org/research/surveys/tmos/{year}/{yymm}"
 
+  # canonical originating page (schema v1 `source` must be a URL)
+  source_url: "https://www.dallasfed.org/research/surveys/tmos"
+
   # Diffusion-index channels (workbook column -> channel name). The narrative recites
   # each of these. Values are diffusion indices (% increase - % decrease; ~ -100..+100).
   channels:

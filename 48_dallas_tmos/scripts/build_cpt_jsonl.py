@@ -48,6 +48,10 @@ try:
 except ImportError as exc:  # pragma: no cover
     raise SystemExit("PyYAML required. pip install -r requirements.txt") from exc
 
+# shared v1-compliant record builder (self-validates against schema/validate.py)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from emit import emit_record  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
 _SSL = ssl.create_default_context()
@@ -313,25 +317,33 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
         timeseries = [{"values": chan_vals[j], "unit": chans[j]["name"], "freq": "1M"}
                       for j in range(len(chans))]
 
-        rec = {
-            "text": text,
-            "timeseries": timeseries,
-            "task_type": "world_knowledge",
-            "text_quality": "real",
-            "bank": d["bank"],
-            "survey": d["survey_title"],
-            "district": d.get("district"),
-            "domain": d["domain"],
-            "release_month": ym,
-            "window_months": win,
-            "channels": [c["name"] for c in chans],
-            "dataset": "dallas_tmos",
-            "source": f"{d['bank']} {d['survey_title']} (U.S. public domain)",
-            "license": "Public domain (U.S. Government / Federal Reserve)",
-            "series_id": f"tmos_{ym}",
-        }
-        verr = validate(rec, win)
-        if verr:
+        try:
+            rec = emit_record(
+                text=text,
+                timeseries=timeseries,
+                alignment="recites",
+                license="public-domain-us-gov",
+                source=d["source_url"],
+                dataset="dallas_tmos",
+                series_id=f"tmos_{ym}",
+                domain="macro_econ",
+                region="US",
+                period_start=f"{window_ms[0]}-01",
+                period_end=f"{ym}-01",
+                meta={
+                    "bank": d["bank"],
+                    "survey": d["survey_title"],
+                    "district": d.get("district"),
+                    "sector": d["domain"],
+                    "release_month": ym,
+                    "window_months": win,
+                    "channels": [c["name"] for c in chans],
+                },
+            )
+        except ValueError:
+            stat["invalid"] += 1
+            continue
+        if validate(rec, win):          # extra business rule: window length == win
             stat["invalid"] += 1
             continue
         records.append(rec)
