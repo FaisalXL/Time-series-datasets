@@ -43,6 +43,11 @@ except ImportError as exc:  # pragma: no cover
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
+
+# shared v1-compliant record builder (self-validates against schema/validate.py --strict)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from emit import emit_record  # noqa: E402
+
 _SSL = ssl.create_default_context()
 _SSL.check_hostname = False
 _SSL.verify_mode = ssl.CERT_NONE
@@ -229,36 +234,51 @@ def build_record(date: str, text_raw: str, series: Dict[str, Dict[str, float]],
         channels.append({"values": vals, "unit": c["unit"], "freq": "1W"})
 
     wk_iso = f"{week_end[:4]}-{week_end[4:6]}-{week_end[6:8]}"
+    report_date = f"{date[:4]}-{date[5:7]}-{date[8:10]}"
+    report_url = d["highlights_url_template"].format(year=date[:4], date=date)
+    win_start = window_start_iso(series, d["channels"], week_end, n)
     intro = t["ts_intro_sentence"].format(n=n, week=wk_iso)
     text = f"{prose}\n\n{intro}"
 
-    rec = {
-        "text": text,
-        "timeseries": channels,
-        "task_type": "world_knowledge",
-        "text_quality": "real",
-        "report_date": f"{date[:4]}-{date[5:7]}-{date[8:10]}",
-        "data_week_ending": wk_iso,
-        "window_weeks": n,
-        "dataset": "eia_petroleum_weekly",
-        "source": "eia.gov (U.S. Government, public domain)",
-        "report_url": d["highlights_url_template"].format(year=date[:4], date=date),
-        "series_id": f"eiapet_{week_end}",
-    }
+    try:
+        rec = emit_record(
+            text=text,
+            timeseries=channels,
+            alignment="describes",
+            license="public-domain-us-gov",
+            text_source="first_party_official",
+            source=report_url,
+            dataset="eia_petroleum_weekly",
+            series_id=f"eiapet_{week_end}",
+            domain="energy",
+            region="US",
+            period_start=win_start or wk_iso,
+            period_end=wk_iso,
+            meta={
+                "report_date": report_date,
+                "data_week_ending": wk_iso,
+                "window_weeks": n,
+                "report_url": report_url,
+            },
+        )
+    except ValueError as exc:
+        return None, f"invalid: {exc}"
     return rec, None
 
 
-def validate(rec: dict, channels: Sequence[dict], n: int) -> List[str]:
-    e = []
-    if rec["text"].count("<ts></ts>") != 1:
-        e.append("ts token count")
-    ts = rec.get("timeseries", [])
-    if [c["unit"] for c in ts] != [c["unit"] for c in channels]:
-        e.append("channel set/order mismatch")
-    lens = {len(c["values"]) for c in ts}
-    if len(lens) != 1 or next(iter(lens)) != n:
-        e.append(f"window {sorted(lens)} != {n}")
-    return e
+def window_start_iso(series: Dict[str, Dict[str, float]], channels: Sequence[dict],
+                     week_end: str, n: int) -> Optional[str]:
+    """Week-ending date (ISO) of the first point in the trailing n-week window."""
+    for c in channels:
+        s = series.get(c["series_id"])
+        if not s:
+            continue
+        periods = sorted(p for p in s if p <= week_end)
+        if len(periods) < n:
+            continue
+        p0 = periods[-n]
+        return f"{p0[:4]}-{p0[4:6]}-{p0[6:8]}"
+    return None
 
 
 # --- pipeline --------------------------------------------------------------
@@ -298,11 +318,12 @@ def run(cfg: Dict[str, Any], dry: bool) -> Dict[str, Any]:
         text_raw = pdftotext(fp.read_bytes())
         rec, err = build_record(date, text_raw, series, cfg)
         if rec is None:
-            stats["short_window" if err == "short window" else "short_text"] += 1
-            continue
-        verr = validate(rec, d["channels"], n)
-        if verr:
-            stats["invalid"] += 1
+            if err == "short window":
+                stats["short_window"] += 1
+            elif err and err.startswith("invalid:"):
+                stats["invalid"] += 1
+            else:
+                stats["short_text"] += 1
             continue
         records.append(rec)
         stats["emitted"] += 1

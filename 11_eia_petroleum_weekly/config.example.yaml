@@ -25,13 +25,14 @@ data:
   bulk_pet_url: "https://www.eia.gov/opendata/bulk/PET.zip"
 
   # National weekly channels the Highlights narrative describes. series_id = bulk id.
+  # unit doubles as the channel label (SCHEMA §2.1: "label + unit"), so each is distinct
   channels:
-    - {series_id: "PET.WCESTUS1.W", name: "crude_stocks_exspr",   unit: "thousand_barrels"}
-    - {series_id: "PET.WGTSTUS1.W", name: "gasoline_stocks_total", unit: "thousand_barrels"}
-    - {series_id: "PET.WDISTUS1.W", name: "distillate_stocks",     unit: "thousand_barrels"}
-    - {series_id: "PET.WCRRIUS2.W", name: "refinery_crude_inputs", unit: "thousand_barrels_per_day"}
-    - {series_id: "PET.WPULEUS3.W", name: "refinery_utilization",  unit: "percent"}
-    - {series_id: "PET.WCEIMUS2.W", name: "crude_imports_exspr",   unit: "thousand_barrels_per_day"}
+    - {series_id: "PET.WCESTUS1.W", name: "crude_stocks_exspr",   unit: "crude_stocks_thousand_barrels"}
+    - {series_id: "PET.WGTSTUS1.W", name: "gasoline_stocks_total", unit: "gasoline_stocks_thousand_barrels"}
+    - {series_id: "PET.WDISTUS1.W", name: "distillate_stocks",     unit: "distillate_stocks_thousand_barrels"}
+    - {series_id: "PET.WCRRIUS2.W", name: "refinery_crude_inputs", unit: "refinery_crude_inputs_thousand_barrels_per_day"}
+    - {series_id: "PET.WPULEUS3.W", name: "refinery_utilization",  unit: "refinery_utilization_percent"}
+    - {series_id: "PET.WCEIMUS2.W", name: "crude_imports_exspr",   unit: "crude_imports_thousand_barrels_per_day"}
 
   window_weeks: 52          # trailing weeks ending at the report's data week; dropped if fewer
   cache_dir: ".cache"
