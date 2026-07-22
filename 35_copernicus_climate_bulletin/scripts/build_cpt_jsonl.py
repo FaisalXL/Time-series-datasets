@@ -45,6 +45,10 @@ except ImportError as exc:  # pragma: no cover
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
 
+# shared v1-compliant record builder (self-validates against schema/validate.py --strict)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from emit import emit_record  # noqa: E402
+
 # --- theme definitions -----------------------------------------------------
 # Each channel: (csv keyword match list, column selector, unit). Column selector
 # is a name (temperature CSVs have named columns) or an int index (sea-ice CSVs).
@@ -324,13 +328,31 @@ def build_temperature_record(cfg, year, month, narrative, csvs, page_url):
     intro = (f"Global and European monthly surface air temperature anomalies "
              f"(ERA5, degrees C vs 1991-2020) for the 12 months ending {ym}")
     text = f"{narrative}\n\n{intro}: <ts></ts>"
-    rec = {
-        "text": text, "timeseries": channels,
-        "task_type": "world_knowledge", "text_quality": "real",
-        "theme": "temperature", "data_month": ym, "window_months": win,
-        "report_url": page_url, "dataset": "copernicus_climate_bulletin",
-        "source": "climate.copernicus.eu", "series_id": f"c3s_temperature_{ym}",
-    }
+    # window is monthly-continuous; period spans the first to last month in it.
+    start_ym, end_ym = months[0], months[-1]
+    period_start = f"{start_ym}-01"
+    end_y, end_m = int(end_ym[:4]), int(end_ym[5:7])
+    period_end = f"{end_ym}-{calendar.monthrange(end_y, end_m)[1]:02d}"
+    rec = emit_record(
+        text=text,
+        timeseries=channels,
+        alignment="describes",
+        license="cc-by-4.0",
+        text_source="first_party_official",
+        source=page_url,
+        dataset="copernicus_climate_bulletin",
+        series_id=f"c3s_temperature_{ym}",
+        domain="climate",
+        region="global",
+        period_start=period_start,
+        period_end=period_end,
+        meta={
+            "theme": "temperature",
+            "data_month": ym,
+            "window_months": win,
+            "report_url": page_url,
+        },
+    )
     return rec, None
 
 
@@ -368,35 +390,36 @@ def build_sea_ice_record(cfg, year, month, narrative, csvs, page_url):
     intro = (f"Arctic and Antarctic {monthname} sea-ice extent anomalies (million sq km, "
              f"vs 1991-2020) for each {monthname} through {year}")
     text = f"{narrative}\n\n{intro}: <ts></ts>"
-    rec = {
-        "text": text, "timeseries": channels,
-        "task_type": "world_knowledge", "text_quality": "real",
-        "theme": "sea_ice", "data_month": ym, "calendar_month": monthname,
-        "n_years": len(channels[0]["values"]),
-        "report_url": page_url, "dataset": "copernicus_climate_bulletin",
-        "source": "climate.copernicus.eu", "series_id": f"c3s_sea_ice_{ym}",
-    }
+    # this-calendar-month-across-years: span that month in the first year → the last.
+    first_year, last_year = common[0], common[-1]
+    period_start = f"{first_year:04d}-{month:02d}-01"
+    period_end = f"{last_year:04d}-{month:02d}-{calendar.monthrange(last_year, month)[1]:02d}"
+    rec = emit_record(
+        text=text,
+        timeseries=channels,
+        alignment="describes",
+        license="cc-by-4.0",
+        text_source="first_party_official",
+        source=page_url,
+        dataset="copernicus_climate_bulletin",
+        series_id=f"c3s_sea_ice_{ym}",
+        domain="climate",
+        region="global",
+        period_start=period_start,
+        period_end=period_end,
+        meta={
+            "theme": "sea_ice",
+            "data_month": ym,
+            "calendar_month": monthname,
+            "n_years": len(channels[0]["values"]),
+            "report_url": page_url,
+        },
+    )
     return rec, None
 
 
-def validate_record(rec: Dict[str, Any]) -> List[str]:
-    errs = []
-    if rec["text"].count("<ts></ts>") != 1:
-        errs.append("text needs exactly one <ts></ts>")
-    ts = rec.get("timeseries", [])
-    if not ts:
-        errs.append("no timeseries")
-    lengths = {len(c.get("values", [])) for c in ts}
-    if len(lengths) > 1:
-        errs.append(f"channel lengths differ: {sorted(lengths)}")
-    for c in ts:
-        if not c.get("values") or "unit" not in c or "freq" not in c:
-            errs.append("bad channel")
-        for v in c.get("values", []):
-            if v is None or (isinstance(v, float) and math.isnan(v)):
-                errs.append(f"NaN/None value in {c.get('unit')}")
-                break
-    return errs
+# Per-record validation now lives in emit_record(): each record is self-checked against
+# schema/validate.py --strict at construction time, raising ValueError on any violation.
 
 
 # --- pipeline --------------------------------------------------------------
@@ -447,17 +470,21 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
                 continue
             csvs = discover_csvs(html, base)
             builder = build_temperature_record if theme == "temperature" else build_sea_ice_record
-            rec, err = builder(cfg, year, month, narrative, csvs, page_url)
+            # emit_record() inside the builder self-validates against schema/validate.py
+            # --strict, raising ValueError on any violation (counted as skipped_validation).
+            try:
+                rec, err = builder(cfg, year, month, narrative, csvs, page_url)
+            except ValueError as exc:
+                stats["skipped_validation"] += 1
+                errors.append(f"{label}: {exc}")
+                if not cached:
+                    time.sleep(delay)
+                continue
             if rec is None:
                 stats["skipped_ts"] += 1
                 print(f"{label}: skipped ({err})")
                 if not cached:
                     time.sleep(delay)
-                continue
-            verrs = validate_record(rec)
-            if verrs:
-                stats["skipped_validation"] += 1
-                errors.extend(f"{label}: {e}" for e in verrs)
                 continue
             records.append(rec)
             per_theme[theme] += 1
