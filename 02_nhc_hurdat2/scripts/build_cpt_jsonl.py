@@ -38,6 +38,10 @@ DEFAULT_CONFIG = ROOT / "config.example.yaml"
 HURDAT_INDEX_URL = "https://www.nhc.noaa.gov/data/hurdat/"
 NHC_ARCHIVE_BASE = "https://www.nhc.noaa.gov/archive"
 
+# shared v1-compliant record builder (self-validates against schema/validate.py --strict)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from emit import emit_record  # noqa: E402
+
 QUALIFYING_STATUSES = frozenset({"TD", "TS", "HU", "SS", "SD"})
 
 _SAFFIR_SIMPSON = (
@@ -497,90 +501,58 @@ def fetch_advisory_text(
 # ---------------------------------------------------------------------------
 
 
+def basin_metadata(basin: str) -> Tuple[str, str]:
+    """Return (region, canonical HURDAT2 URL) for a basin code (AL / EP / CP)."""
+    if basin == "AL":
+        return "North Atlantic", (
+            "https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2023-051124.txt"
+        )
+    # EP and CP are covered by the eastern North Pacific best-track file.
+    return "Eastern North Pacific", (
+        "https://www.nhc.noaa.gov/data/hurdat/hurdat2-nepac-1949-2023-042624.txt"
+    )
+
+
 def storm_to_record(storm: Storm, advisory_text: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
     qtrack = qualifying_track(storm)
     peak = peak_observation(qtrack)
     peak_cat = saffir_simpson_category(peak.max_wind_kt, peak.status)
+    region, source_url = basin_metadata(storm.basin)
 
-    return {
-        "text": advisory_text,
-        "timeseries": build_timeseries(qtrack),
-        "track_date_range": [
-            format_datetime_iso(qtrack[0].timestamp),
-            format_datetime_iso(qtrack[-1].timestamp),
-        ],
-        "storm_name": storm.name.upper(),
-        "storm_id": storm.storm_id,
-        "basin": storm.basin,
-        "season": storm.year,
-        "peak_wind_kt": peak.max_wind_kt,
-        "peak_category": peak_cat,
-        "made_landfall": bool(landfall_points(storm)),
-        "dataset": "nhc_hurdat2",
-        "source": "nhc_hurdat2_best_track",
-        "series_id": storm.storm_id,
-        "task_type": "world_knowledge",
-        "text_quality": "real",
-        "text_source": "nhc_advisory",
-    }
+    # HURDAT2 records are nominally 6-hourly but include off-synoptic points
+    # (e.g. landfall/peak fixes), so the series is irregular in time. Emit an
+    # explicit timestamps array parallel to the channel values.
+    timestamps = [format_datetime_iso(p.timestamp) for p in qtrack]
 
-
-def validate_record(record: Dict[str, Any]) -> List[str]:
-    errors: List[str] = []
-    required = [
-        "text",
-        "timeseries",
-        "track_date_range",
-        "storm_name",
-        "storm_id",
-        "basin",
-        "season",
-        "peak_wind_kt",
-        "peak_category",
-        "made_landfall",
-        "dataset",
-        "source",
-        "series_id",
-        "task_type",
-        "text_quality",
-        "text_source",
-    ]
-    for key in required:
-        if key not in record:
-            errors.append(f"missing field: {key}")
-
-    text = record.get("text", "")
-    if text.count("<ts></ts>") != 1:
-        errors.append("text must contain exactly one <ts></ts>")
-
-    auto_phrases = (
-        "it developed as a",
-        "was an atlantic tropical cyclone active from",
-        "was an eastern pacific tropical cyclone active from",
-        "the storm dissipated on",
-        "the storm reached peak intensity of",
+    return emit_record(
+        text=advisory_text,
+        timeseries=build_timeseries(qtrack),
+        alignment="describes",
+        license="public-domain-us-gov",
+        text_source="first_party_official",
+        source=source_url,
+        dataset="nhc_hurdat2",
+        series_id=storm.storm_id,
+        domain="meteorology",
+        region=region,
+        period_start=format_datetime_iso(qtrack[0].timestamp),
+        period_end=format_datetime_iso(qtrack[-1].timestamp),
+        timestamps=timestamps,
+        meta={
+            "storm_name": storm.name.upper(),
+            "storm_id": storm.storm_id,
+            "basin": storm.basin,
+            "season": storm.year,
+            "peak_wind_kt": peak.max_wind_kt,
+            "peak_category": peak_cat,
+            "made_landfall": bool(landfall_points(storm)),
+            "text_source_product": "nhc_advisory",
+            "track_date_range": [
+                format_datetime_iso(qtrack[0].timestamp),
+                format_datetime_iso(qtrack[-1].timestamp),
+            ],
+        },
     )
-    lower = text.lower()
-    for phrase in auto_phrases:
-        if phrase in lower:
-            errors.append(f"text appears auto-generated: {phrase!r}")
-
-    if record.get("text_source") != "nhc_advisory":
-        errors.append("text_source must be nhc_advisory")
-
-    ts_list = record.get("timeseries", [])
-    expected_units = ["max_wind_kt", "min_pressure_mb", "lat", "lon", "r34_max_nm"]
-    if len(ts_list) != 5:
-        errors.append("timeseries must have exactly 5 objects")
-    else:
-        lengths = {len(obj.get("values", [])) for obj in ts_list}
-        if len(lengths) != 1:
-            errors.append("timeseries value arrays have mismatched lengths")
-        for obj, unit in zip(ts_list, expected_units):
-            if obj.get("unit") != unit:
-                errors.append(f"timeseries unit mismatch: expected {unit}")
-
-    return errors
 
 
 def write_output(records: List[Dict[str, Any]], cfg: Dict[str, Any], dry_run: bool) -> None:
@@ -644,11 +616,11 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
             continue
 
         storms_with_advisory += 1
-        record = storm_to_record(storm, advisory_text, cfg)
-        errors = validate_record(record)
-        if errors:
+        try:
+            record = storm_to_record(storm, advisory_text, cfg)
+        except ValueError as exc:
             skipped["validation_error"] = skipped.get("validation_error", 0) + 1
-            validation_errors.extend(f"{storm.storm_id}: {e}" for e in errors)
+            validation_errors.append(f"{storm.storm_id}: {exc}")
             continue
 
         records.append(record)
