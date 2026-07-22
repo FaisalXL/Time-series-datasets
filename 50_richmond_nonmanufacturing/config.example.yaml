@@ -45,6 +45,8 @@ data:
 
   window_months: 24          # trailing months per record; dropped if fewer available
   min_text_year: 2017        # release PDFs only exist ~2018+; skip older months
+  # canonical originating page (schema v1 `source` must be a URL)
+  source_url: "https://www.richmondfed.org/region_communities/regional_data_analysis/surveys/service_sector"
   cache_dir: ".cache"
   user_agent: "CPT-dataset-research faisal@usc.edu"
   request_delay_s: 0.3
