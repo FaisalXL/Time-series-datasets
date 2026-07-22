@@ -18,7 +18,7 @@ import json
 import re
 import sys
 import time
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -40,6 +40,10 @@ except ImportError as exc:
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
+
+# shared v1-compliant record builder (self-validates against schema/validate.py --strict)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from emit import emit_record  # noqa: E402
 
 PATTERN_A_SEASONS = {
     "2015-2016",
@@ -171,6 +175,23 @@ def parse_season(season: str) -> int:
 def season_for_week(year: int, week: int) -> str:
     start = year if week >= 40 else year - 1
     return f"{start}-{start + 1}"
+
+
+def mmwr_week_ending(year: int, week: int) -> str:
+    """Saturday date on which MMWR (epidemiological) `week` of `year` ends.
+
+    MMWR week 1 ends on the first Saturday of the year that has at least four
+    days in January; weeks run Sunday–Saturday. Used to give the record real
+    ISO-8601 `period_start` / `period_end` dates for the season-to-date window.
+    """
+    jan1 = date(year, 1, 1)
+    # Saturday of the week containing Jan 1 (weekday(): Mon=0 .. Sun=6).
+    first_saturday = jan1 + timedelta(days=(5 - jan1.weekday()) % 7)
+    # If that first Saturday leaves < 4 days of January in its week, MMWR week 1
+    # is the following week.
+    if first_saturday.day < 4:
+        first_saturday += timedelta(days=7)
+    return (first_saturday + timedelta(weeks=week - 1)).isoformat()
 
 
 def weeks_for_season(season: str, available: set[Tuple[int, int]]) -> List[Tuple[int, int]]:
@@ -511,21 +532,6 @@ def fetch_html(
 # ---------------------------------------------------------------------------
 
 
-def validate_record(record: Dict[str, Any]) -> List[str]:
-    errors: List[str] = []
-    if record["text"].count("<ts></ts>") != 1:
-        errors.append("text must contain exactly one <ts></ts>")
-    ts = record.get("timeseries", [])
-    if len(ts) != 15:
-        errors.append("timeseries must contain 15 channels")
-    lengths = {len(s.get("values", [])) for s in ts}
-    if len(lengths) > 1:
-        errors.append(f"all channels must share one length; got {sorted(lengths)}")
-    if lengths and min(lengths) < 1:
-        errors.append("timeseries channels must be non-empty")
-    return errors
-
-
 def build_record(
     season: str,
     year: int,
@@ -544,23 +550,35 @@ def build_record(
     text = f"{narrative}\n\n{intro}" if narrative else intro
     week_ending = parse_week_ending_date(html, year, week)
 
-    return {
-        "text": text,
-        "timeseries": build_timeseries(tables, window),
-        "season": season,
-        "year": year,
-        "week": week,
-        "week_ending_date": week_ending,
-        "window_n_weeks": n_weeks,
-        "window_start_week": window[0][1] if window else week,
-        "report_url": url,
-        "dataset": "cdc_fluview",
-        "source": "cdc.gov/fluview",
-        "series_id": f"fluview_{year}_w{week:02d}",
-        "task_type": "world_knowledge",
-        "text_source": "cdc_fluview_weekly_report",
-        "text_quality": "real",
-    }
+    start_key = window[0] if window else key
+    period_start = mmwr_week_ending(start_key[0], start_key[1])
+    # Prefer the week-ending date parsed from the report HTML for the report week;
+    # fall back to the computed MMWR Saturday when the page did not carry it.
+    period_end = week_ending or mmwr_week_ending(year, week)
+
+    return emit_record(
+        text=text,
+        timeseries=build_timeseries(tables, window),
+        alignment="recites",
+        license="public-domain-us-gov",
+        text_source="first_party_official",
+        source=url,
+        dataset="cdc_fluview",
+        series_id=f"cdc_fluview:{year}:w{week:02d}",
+        domain="public_health",
+        region="US",
+        period_start=period_start,
+        period_end=period_end,
+        meta={
+            "season": season,
+            "year": year,
+            "week": week,
+            "week_ending_date": week_ending,
+            "window_n_weeks": n_weeks,
+            "window_start_week": window[0][1] if window else week,
+            "report_url": url,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -607,6 +625,7 @@ def run_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "records_skipped_no_csv": 0,
         "records_skipped_short_text": 0,
         "records_skipped_short_window": 0,
+        "records_skipped_invalid": 0,
     }
 
     records: List[Dict[str, Any]] = []
@@ -668,29 +687,36 @@ def run_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     time.sleep(delay_s)
                 continue
 
-            record = build_record(
-                season=season,
-                year=year,
-                week=week,
-                narrative=narrative,
-                ts_intro=ts_intro,
-                html=html,
-                url=winning_url,
-                tables=tables,
-                available=available_weeks,
+            window_n_weeks = len(
+                season_to_date_window(season, (year, week), available_weeks)
             )
-            if record["window_n_weeks"] < min_window_weeks:
+            if window_n_weeks < min_window_weeks:
                 stats["records_skipped_short_window"] += 1
                 print(
-                    f"Week {label}: skipped (window {record['window_n_weeks']} "
+                    f"Week {label}: skipped (window {window_n_weeks} "
                     f"< min_window_weeks {min_window_weeks})"
                 )
                 if not from_cache:
                     time.sleep(delay_s)
                 continue
-            errors = validate_record(record)
-            if errors:
-                print(f"Week {label}: validation failed: {errors}", file=sys.stderr)
+
+            # emit_record() self-validates against schema/validate.py --strict and
+            # raises ValueError on any violation; count those as validation failures.
+            try:
+                record = build_record(
+                    season=season,
+                    year=year,
+                    week=week,
+                    narrative=narrative,
+                    ts_intro=ts_intro,
+                    html=html,
+                    url=winning_url,
+                    tables=tables,
+                    available=available_weeks,
+                )
+            except ValueError as exc:
+                stats["records_skipped_invalid"] += 1
+                print(f"Week {label}: validation failed: {exc}", file=sys.stderr)
                 if not from_cache:
                     time.sleep(delay_s)
                 continue
