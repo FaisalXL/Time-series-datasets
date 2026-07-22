@@ -1,0 +1,46 @@
+{
+  "dataset": "wasde",
+  "stats": {
+    "reports": 9,
+    "candidates": 9,
+    "emitted": 7,
+    "no_pdf": 0,
+    "no_prose": 0,
+    "short_series": 2,
+    "no_value": 0,
+    "invalid": 0
+  },
+  "config_snapshot": {
+    "data": {
+      "data_dir": "data",
+      "pdf_dirs": [
+        "data",
+        ".cache/reports"
+      ],
+      "source_url": "https://www.usda.gov/oce/commodity/wasde/",
+      "commodities": [
+        {
+          "key": "wheat",
+          "title_match": "U.S. Wheat Supply and Use",
+          "attribute": "Ending Stocks",
+          "channel": "wheat_ending_stocks_mil_bu",
+          "prose_start": "WHEAT:",
+          "prose_end": "COARSE GRAINS"
+        }
+      ],
+      "window_max": 36,
+      "min_series": 2,
+      "request_delay_s": 0.2
+    },
+    "text": {
+      "ts_intro": "Successive USDA WASDE monthly projections of {my} U.S. {commodity} {attr_label} across the trailing {n} reports (through {month}): <ts></ts>"
+    },
+    "output": {
+      "output_path": "output/wasde_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50
+    }
+  },
+  "dry_run": false
+}

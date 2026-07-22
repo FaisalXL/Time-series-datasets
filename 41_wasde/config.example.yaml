@@ -1,0 +1,53 @@
+# USDA WASDE (World Agricultural Supply and Demand Estimates) → CPT world-knowledge JSONL
+#
+# One record = (commodity x release month): the release's per-commodity prose block (which
+# recites the balance-sheet figures) paired with a trailing window of the SAME attribute's
+# monthly forecast vintages for the headline marketing year. Value-reciting "describes"
+# (alignment: recites). text_quality "real". License: US public domain (17 U.S.C. 105).
+#
+# SOURCES (both live in the same monthly report):
+#   - PROSE  : the report PDF (pdftotext) -> clean per-commodity narrative blocks.
+#   - SERIES : the report XML (structured: Report[sub_report_title] -> attribute ->
+#              market_year -> forecast_month -> Cell) -> unambiguous per-attribute values.
+#
+# ENUMERATION CAVEAT: the WASDE archive list is JS/AJAX-gated on both usda.gov/ESMIS and
+# Cornell mannlib, and release IDs are irregular -> headless harvest is blocked. This build
+# reads reports from a LOCAL folder (data/), so extending history = drop more report files in.
+# Supply BOTH per report: wasde{MMYY}.xml (series) AND wasde{MMYY}.pdf (prose). ~9 recent
+# months are pre-fetched; bulk-download older ones in-browser to grow the windows to ~24-36.
+#
+# MARKETING-YEAR bookkeeping: each report shows last-month + this-month projections for up to
+# 3 marketing years. We track ONE marketing year across reports (the report's headline "Proj."
+# year) to avoid a sawtooth at new-crop transitions.
+
+data:
+  data_dir: "data"                 # *.xml (series) live here
+  pdf_dirs: ["data", ".cache/reports"]   # matching *.pdf (prose) searched here
+  # canonical originating page (schema v1 `source` must be a URL). Per-report URL built when known.
+  source_url: "https://www.usda.gov/oce/commodity/wasde/"
+
+  # Commodities to build. Each: the XML sub_report_title to read the series from, the balance-
+  # sheet attribute, the channel unit label, and the PDF prose block delimiters. ONLY commodities
+  # whose XML table is validated to match the prose unit are enabled. (Corn/soybeans read in
+  # metric tons in their combined/products tables -> their bushels tables need separate mapping;
+  # disabled until validated -> see README.)
+  commodities:
+    - key: wheat
+      title_match: "U.S. Wheat Supply and Use"
+      attribute: "Ending Stocks"
+      channel: "wheat_ending_stocks_mil_bu"
+      prose_start: "WHEAT:"
+      prose_end: "COARSE GRAINS"
+
+  window_max: 36                   # cap the trailing vintage window (months)
+  min_series: 2                    # need >=2 vintages to be a series
+  request_delay_s: 0.2
+
+text:
+  ts_intro: "Successive USDA WASDE monthly projections of {my} U.S. {commodity} {attr_label} across the trailing {n} reports (through {month}): <ts></ts>"
+
+output:
+  output_path: output/wasde_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 50
