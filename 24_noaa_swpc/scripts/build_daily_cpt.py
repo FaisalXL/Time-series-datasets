@@ -27,6 +27,10 @@ from typing import Optional
 import requests
 import yaml
 
+# shared v1-compliant record builder (self-validates against schema/validate.py --strict)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from emit import emit_record  # noqa: E402
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
@@ -379,7 +383,8 @@ def run_pipeline(cfg: dict) -> None:
     # Iterate issue dates and emit records.
     stats = {"attempted": 0, "emitted": 0, "skip_no_sgas": 0,
              "skip_text_short": 0, "skip_no_dgd": 0, "skip_no_dsd": 0,
-             "skip_few_ts": 0}
+             "skip_few_ts": 0, "skip_invalid": 0}
+    validation_errors: list[str] = []
 
     out_f = out_path.open("w")
 
@@ -427,18 +432,38 @@ def run_pipeline(cfg: dict) -> None:
             continue
 
         full_text = text_body + "\n" + ts_intro
-        record = {
-            "text":       full_text,
-            "timeseries": ts,
-            "task_type":  "world_knowledge",
-            "text_quality": "real",
-            "obs_date":   obs_str,
-            "sgas_issue": issue_date.isoformat(),
-            "n_ts_channels": len(ts),
-        }
+
+        # SGAS text is a first-party official narrative of the day's space-weather
+        # episode (energetic events, geomagnetic/solar activity summary); it does not
+        # literally recite the Kp/A-index/flux values that form the series → "describes".
+        try:
+            record = emit_record(
+                text=full_text,
+                timeseries=ts,
+                alignment="describes",
+                license="public-domain-us-gov",
+                text_source="first_party_official",
+                source=sgas_url,
+                dataset="noaa_swpc",
+                series_id=f"noaa_swpc:daily:{obs_str}",
+                domain="space_weather",
+                region="global",
+                period_start=obs_str,
+                period_end=obs_str,
+                meta={
+                    "obs_date":      obs_str,
+                    "sgas_issue":    issue_date.isoformat(),
+                    "n_ts_channels": len(ts),
+                },
+            )
+        except ValueError as exc:
+            stats["skip_invalid"] += 1
+            validation_errors.append(f"{obs_str}: {exc}")
+            issue_date += timedelta(days=1)
+            continue
 
         indent = ocfg["indent"]
-        line = json.dumps(record, indent=indent)
+        line = json.dumps(record, indent=indent, ensure_ascii=False)
         out_f.write(line + "\n")
         stats["emitted"] += 1
         if stats["emitted"] % 10 == 0:
@@ -454,6 +479,7 @@ def run_pipeline(cfg: dict) -> None:
         "dgd_rows_loaded": len(dgd_data),
         "dsd_rows_loaded": len(dsd_data),
         "date_range": {"start": dcfg["start_date"], "end": dcfg["end_date"]},
+        "validation_errors": validation_errors[:20],
     }
     report_path.write_text(json.dumps(report, indent=2))
 
