@@ -47,6 +47,17 @@ csv.field_size_limit(10 * 1024 * 1024)  # narrative fields can be long
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
+
+# shared v1-compliant record builder (self-validates against schema/validate.py --strict)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from emit import emit_record  # noqa: E402
+
+# Canonical URL for the ICS-209-PLUS wildfire bundle (St. Denis et al. 2023, CC BY 4.0).
+SOURCE_URL = (
+    "https://figshare.com/articles/dataset/"
+    "All-hazards_dataset_mined_from_the_US_National_Incident_Management_System_"
+    "1999-2020/19858927"
+)
 _SSL = ssl.create_default_context()
 _SSL.check_hostname = False
 _SSL.verify_mode = ssl.CERT_NONE
@@ -185,45 +196,42 @@ def build_record(rows: List[Dict[str, str]], cfg) -> Tuple[Optional[dict], Optio
                                           n=len(window), date=anchor["date"])
     text = f"{anchor['narr']}\n\n{intro}"
 
-    rec = {
-        "text": text,
-        "timeseries": timeseries,
-        "report_dates": report_dates,
-        "task_type": "world_knowledge",
-        "text_quality": "real",
-        "incident_id": a.get("INCIDENT_ID"),
-        "incident_name": name,
-        "poo_state": state,
-        "start_year": yr or None,
-        "cause": cause,
-        "discovery_date": (a.get("DISCOVERY_DATE") or "")[:10] or None,
-        "anchor_report_date": anchor["date"],
-        "final_acres": to_float(a.get("EVENT_FINAL_ACRES")),
-        "n_reports": len(window),
-        "dataset": "ics209_wildfire",
-        "source": "figshare.com/articles/19858927 (St. Denis et al. 2023, ICS-209-PLUS, CC BY 4.0)",
-        "license": "CC BY 4.0",
-        "series_id": f"ics209_{a.get('INCIDENT_ID')}",
-    }
+    rec = emit_record(
+        text=text,
+        timeseries=timeseries,
+        timestamps=report_dates,
+        alignment="describes",
+        license="cc-by-4.0",
+        text_source="first_party_official",
+        source=SOURCE_URL,
+        dataset="ics209_wildfire",
+        series_id=f"ics209_{a.get('INCIDENT_ID')}",
+        domain="wildfire",
+        region=f"US-{state}" if state else "US",
+        period_start=report_dates[0],
+        period_end=report_dates[-1],
+        meta={
+            "report_dates": report_dates,
+            "incident_id": a.get("INCIDENT_ID"),
+            "incident_name": name,
+            "poo_state": state,
+            "start_year": yr or None,
+            "cause": cause,
+            "discovery_date": (a.get("DISCOVERY_DATE") or "")[:10] or None,
+            "anchor_report_date": anchor["date"],
+            "final_acres": to_float(a.get("EVENT_FINAL_ACRES")),
+            "n_reports": len(window),
+            "attribution": (
+                "St. Denis et al. 2023, ICS-209-PLUS, CC BY 4.0 "
+                "(figshare article 19858927)"
+            ),
+        },
+    )
     return rec, None
 
 
-def validate(rec: dict, n_channels: int, min_reports: int) -> List[str]:
-    e = []
-    if rec["text"].count("<ts></ts>") != 1:
-        e.append("ts token count")
-    ts = rec.get("timeseries", [])
-    if len(ts) != n_channels:
-        e.append("channel count")
-    lens = {len(c["values"]) for c in ts}
-    if len(lens) != 1:
-        e.append(f"channel length mismatch {sorted(lens)}")
-    n = next(iter(lens)) if lens else 0
-    if n < min_reports:
-        e.append("window too short")
-    if n != len(rec.get("report_dates", [])):
-        e.append("dates/values length mismatch")
-    return e
+# Per-record validation now lives in emit_record(): each record is self-checked against
+# schema/validate.py --strict at construction time, raising ValueError on any violation.
 
 
 # --- pipeline --------------------------------------------------------------
@@ -232,7 +240,6 @@ def run(cfg: Dict[str, Any], dry: bool) -> Dict[str, Any]:
     d, out_cfg = cfg["data"], cfg["output"]
     cache = rp(d["cache_dir"])
     min_reports = int(d["min_reports"])
-    nch = len(d["channels"])
     maxrec = out_cfg.get("max_records")
 
     zp = download_cached(d["wildfire_zip_url"], cache / "ics209plus-wildfire.zip",
@@ -246,13 +253,14 @@ def run(cfg: Dict[str, Any], dry: bool) -> Dict[str, Any]:
     def flush(rows: List[Dict[str, str]]) -> bool:
         """Process one incident's rows; return True if we should stop (hit max)."""
         stats["incidents"] += 1
-        rec, err = build_record(rows, cfg)
+        try:
+            rec, err = build_record(rows, cfg)
+        except ValueError:
+            # emit_record rejected the assembled record (strict schema violation).
+            stats["invalid"] += 1
+            return False
         if rec is None:
             stats[err] += 1
-            return False
-        verr = validate(rec, nch, min_reports)
-        if verr:
-            stats["invalid"] += 1
             return False
         records.append(rec)
         stats["emitted"] += 1
