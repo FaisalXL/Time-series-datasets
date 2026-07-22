@@ -44,6 +44,10 @@ NOAA_INDEX_URL = (
     "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/"
 )
 
+# shared v1-compliant record builder (self-validates against schema/validate.py --strict)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from emit import emit_record  # noqa: E402
+
 
 # ---------------------------------------------------------------------------
 # Config helpers
@@ -388,6 +392,12 @@ def make_series_id(episode_id: str, state: str, rows: List[EventRow]) -> str:
     return f"{first_date.isoformat()}_{state}_{slug_event_type(first_type)}"
 
 
+def _year_source_url(cfg: Dict[str, Any], year: int) -> str:
+    """Canonical URL for the NCEI Storm Events source covering `year`."""
+    tmpl = cfg["data"].get("download_url_template")
+    return tmpl.format(year=year) if tmpl else NOAA_INDEX_URL
+
+
 def episode_to_record(group: EpisodeGroup, cfg: Dict[str, Any]) -> Dict[str, Any]:
     rows = filter_episode_rows(group.rows, cfg)
     first_date = min(r.event_date for r in rows)
@@ -400,22 +410,29 @@ def episode_to_record(group: EpisodeGroup, cfg: Dict[str, Any]) -> Dict[str, Any
     ).format(geography=group.state)
     text = assemble_text(rows, cfg, intro)
 
-    return {
-        "text": text,
-        "timeseries": [
+    return emit_record(
+        text=text,
+        timeseries=[
             {"values": injuries, "unit": "injuries/day", "freq": "1d"},
             {"values": damage, "unit": "USD/day", "freq": "1d"},
             {"values": events, "unit": "events/day", "freq": "1d"},
         ],
-        "date_range": [first_date.isoformat(), last_date.isoformat()],
-        "geography": group.state,
-        "event_types": event_types,
-        "dataset": "noaa_storm_events",
-        "source": "ncei_storm_events_db",
-        "series_id": make_series_id(group.episode_id, group.state, rows),
-        "task_type": "world_knowledge",
-        "text_quality": "real",
-    }
+        alignment="describes",
+        license="public-domain-us-gov",
+        text_source="first_party_official",
+        source=_year_source_url(cfg, first_date.year),
+        dataset="noaa_storm_events",
+        series_id=make_series_id(group.episode_id, group.state, rows),
+        domain="meteorology",
+        region="US",
+        period_start=first_date.isoformat(),
+        period_end=last_date.isoformat(),
+        meta={
+            "geography": group.state,
+            "event_types": event_types,
+            "date_range": [first_date.isoformat(), last_date.isoformat()],
+        },
+    )
 
 
 def month_bounds(year: int, month: int) -> Tuple[date, date]:
@@ -453,25 +470,32 @@ def state_month_to_record(group: StateMonthGroup, cfg: Dict[str, Any]) -> Dict[s
     month_limit = int(text_cfg.get("month_narrative_char_limit", 2500))
     text = assemble_text(rows, cfg, intro, episode_limit=month_limit)
 
-    return {
-        "text": text,
-        "timeseries": [
+    return emit_record(
+        text=text,
+        timeseries=[
             {"values": injuries, "unit": "injuries/day", "freq": "1d"},
             {"values": damage, "unit": "USD/day", "freq": "1d"},
             {"values": events, "unit": "events/day", "freq": "1d"},
         ],
-        "date_range": [first_date.isoformat(), last_date.isoformat()],
-        "month": month_label,
-        "geography": group.state,
-        "event_types": event_types,
-        "n_episodes": n_episodes,
-        "n_events": len(rows),
-        "dataset": "noaa_storm_events",
-        "source": "ncei_storm_events_db",
-        "series_id": f"{group.state.replace(' ', '_')}_{month_label}",
-        "task_type": "world_knowledge",
-        "text_quality": "real",
-    }
+        alignment="describes",
+        license="public-domain-us-gov",
+        text_source="first_party_official",
+        source=_year_source_url(cfg, group.year),
+        dataset="noaa_storm_events",
+        series_id=f"{group.state.replace(' ', '_')}_{month_label}",
+        domain="meteorology",
+        region="US",
+        period_start=first_date.isoformat(),
+        period_end=last_date.isoformat(),
+        meta={
+            "month": month_label,
+            "geography": group.state,
+            "event_types": event_types,
+            "n_episodes": n_episodes,
+            "n_events": len(rows),
+            "date_range": [first_date.isoformat(), last_date.isoformat()],
+        },
+    )
 
 
 def should_skip_state_month(
@@ -533,45 +557,8 @@ def should_skip_episode(
 # ---------------------------------------------------------------------------
 
 
-def validate_record(record: Dict[str, Any]) -> List[str]:
-    errors: List[str] = []
-    required = [
-        "text",
-        "timeseries",
-        "date_range",
-        "geography",
-        "event_types",
-        "dataset",
-        "source",
-        "series_id",
-        "task_type",
-        "text_quality",
-    ]
-    for key in required:
-        if key not in record:
-            errors.append(f"missing field: {key}")
-
-    text = record.get("text", "")
-    if text.count("<ts></ts>") != 1:
-        errors.append("text must contain exactly one <ts></ts>")
-
-    ts_list = record.get("timeseries", [])
-    if len(ts_list) != 3:
-        errors.append("timeseries must have exactly 3 objects")
-    else:
-        lengths = {len(obj.get("values", [])) for obj in ts_list}
-        if len(lengths) != 1:
-            errors.append("timeseries value arrays have mismatched lengths")
-
-        start, end = record.get("date_range", ["", ""])
-        try:
-            expected_days = (date.fromisoformat(end) - date.fromisoformat(start)).days + 1
-            if lengths and next(iter(lengths)) != expected_days:
-                errors.append("timeseries length does not match date_range")
-        except ValueError:
-            errors.append("invalid date_range")
-
-    return errors
+# Per-record validation now lives in emit_record(): each record is self-checked against
+# schema/validate.py --strict at construction time, raising ValueError on any violation.
 
 
 def write_output(
@@ -638,13 +625,11 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
             skipped[reason] += 1
             continue
 
-        record = record_fn(group, cfg)
-        errors = validate_record(record)
-        if errors:
+        try:
+            record = record_fn(group, cfg)
+        except ValueError as exc:
             skipped["validation_error"] += 1
-            validation_errors.extend(
-                f"{label_fn(group)}: {err}" for err in errors
-            )
+            validation_errors.append(f"{label_fn(group)}: {exc}")
             continue
 
         records.append(record)
