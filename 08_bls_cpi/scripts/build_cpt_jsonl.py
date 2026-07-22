@@ -44,6 +44,10 @@ except ImportError as exc:
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
 
+# shared v1-compliant record builder (self-validates against schema/validate.py --strict)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from emit import emit_record  # noqa: E402
+
 CDX_API_URL = "http://web.archive.org/cdx/search/cdx"
 BLS_ARCHIVE_BASE = "https://www.bls.gov/news.release/archives/"
 BLS_HISTORY_URL = "https://www.bls.gov/news.release/history/"
@@ -678,18 +682,8 @@ def build_timeseries_window(
 # ---------------------------------------------------------------------------
 
 
-def validate_record(record: Dict[str, Any], n_channels: int, window: int) -> List[str]:
-    errors = []
-    if record["text"].count("<ts></ts>") != 1:
-        errors.append("text must contain exactly one <ts></ts>")
-    if len(record.get("timeseries", [])) != n_channels:
-        errors.append(
-            f"expected {n_channels} timeseries channels, got {len(record.get('timeseries', []))}"
-        )
-    for ch in record.get("timeseries", []):
-        if len(ch.get("values", [])) != window:
-            errors.append(f"channel {ch.get('unit')} must have {window} values")
-    return errors
+# Per-record validation now lives in emit_record(): each record is self-checked against
+# schema/validate.py --strict at construction time, raising ValueError on any violation.
 
 
 def build_record(
@@ -705,20 +699,35 @@ def build_record(
     dm = ym_str(data_year, data_month)
     intro = ts_intro.format(data_month=dm)
     text = f"{narrative}\n\n{intro}"
-    record: Dict[str, Any] = {
-        "text": text,
-        "timeseries": ts_channels,
-        "task_type": "world_knowledge",
-        "text_quality": "real",
+
+    # period covered = the 12-month rolling window ending at data_month
+    window_months_list = months_in_window(data_year, data_month, len(ts_channels[0]["values"]))
+    period_start = f"{window_months_list[0]}-01"
+    period_end = f"{dm}-01"
+
+    meta: Dict[str, Any] = {
         "data_month": dm,
         "release_date": release_date_iso,
         "report_url": report_url,
-        "dataset": "bls_cpi",
-        "source": "bls.gov",
     }
     if fetch_url and fetch_url != report_url:
-        record["fetch_url"] = fetch_url
-    return record
+        meta["fetch_url"] = fetch_url
+
+    return emit_record(
+        text=text,
+        timeseries=ts_channels,
+        alignment="describes",
+        license="public-domain-us-gov",
+        text_source="first_party_official",
+        source=report_url,
+        dataset="bls_cpi",
+        series_id=f"bls_cpi:{dm}",
+        domain="macro_econ",
+        region="US",
+        period_start=period_start,
+        period_end=period_end,
+        meta=meta,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -855,15 +864,15 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
         release_date_iso = f"{rel_year:04d}-{rel_month:02d}-{rel_day:02d}"
         report_url = f"{BLS_HISTORY_URL}cpi_{date_str}.txt"
 
-        record = build_record(
-            narrative, ts_channels, data_year, data_month,
-            release_date_iso, report_url, ts_intro,
-            fetch_url=used_url if used_url != report_url else None,
-        )
-        errors = validate_record(record, len(series_spec), window)
-        if errors:
+        try:
+            record = build_record(
+                narrative, ts_channels, data_year, data_month,
+                release_date_iso, report_url, ts_intro,
+                fetch_url=used_url if used_url != report_url else None,
+            )
+        except ValueError as exc:
             stats["skipped_validation"] += 1
-            print(f"{label}: {cache_note}, validation failed: {errors}", file=sys.stderr)
+            print(f"{label}: {cache_note}, validation failed: {exc}", file=sys.stderr)
             if not from_cache:
                 time.sleep(delay_s)
             continue
@@ -908,15 +917,15 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
 
         release_date_iso = f"{mmddyyyy[4:8]}-{mmddyyyy[0:2]}-{mmddyyyy[2:4]}"
         report_url = f"{BLS_ARCHIVE_BASE}cpi_{mmddyyyy}.htm"
-        record = build_record(
-            narrative, ts_channels, data_year, data_month,
-            release_date_iso, report_url, ts_intro,
-            fetch_url=wayback_url if wayback_url != report_url else None,
-        )
-        errors = validate_record(record, len(series_spec), window)
-        if errors:
+        try:
+            record = build_record(
+                narrative, ts_channels, data_year, data_month,
+                release_date_iso, report_url, ts_intro,
+                fetch_url=wayback_url if wayback_url != report_url else None,
+            )
+        except ValueError as exc:
             stats["skipped_validation"] += 1
-            print(f"{label}: {cache_note}, validation failed: {errors}", file=sys.stderr)
+            print(f"{label}: {cache_note}, validation failed: {exc}", file=sys.stderr)
             if not from_cache:
                 time.sleep(delay_s)
             continue
@@ -992,12 +1001,12 @@ def main() -> None:
     print(
         f"\nDone: {report['records_emitted']} records emitted "
         f"({report['releases_attempted']} releases attempted, "
-        f"{report['releases_in_cdx']} in CDX).",
+        f"{report['html_releases_in_cdx']} in CDX).",
         file=sys.stderr,
     )
     print(
         f"  skipped: {report['skipped_incomplete_ts']} incomplete TS, "
-        f"{report['skipped_no_html']} no HTML, "
+        f"{report['skipped_no_text']} no text, "
         f"{report['skipped_short_text']} short text.",
         file=sys.stderr,
     )
