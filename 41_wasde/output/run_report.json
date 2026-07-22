@@ -1,22 +1,21 @@
 {
   "dataset": "wasde",
   "stats": {
-    "reports": 9,
-    "candidates": 9,
-    "emitted": 7,
+    "reports": 190,
+    "candidates": 1118,
+    "emitted": 980,
     "no_pdf": 0,
     "no_prose": 0,
-    "short_series": 2,
+    "short_series": 138,
     "no_value": 0,
     "invalid": 0
   },
   "config_snapshot": {
     "data": {
-      "data_dir": "data",
-      "pdf_dirs": [
-        "data",
-        ".cache/reports"
-      ],
+      "api_base": "https://esmis.nal.usda.gov/api/v1",
+      "publication_identifier": "wasde",
+      "cache_dir": ".cache/reports",
+      "max_reports": null,
       "source_url": "https://www.usda.gov/oce/commodity/wasde/",
       "commodities": [
         {
@@ -24,22 +23,74 @@
           "title_match": "U.S. Wheat Supply and Use",
           "attribute": "Ending Stocks",
           "channel": "wheat_ending_stocks_mil_bu",
+          "month_style": "abbr",
+          "alignment": "recites",
           "prose_start": "WHEAT:",
           "prose_end": "COARSE GRAINS"
+        },
+        {
+          "key": "corn",
+          "title_match": "U.S. Feed Grain and Corn Supply and Use",
+          "attribute": "Ending Stocks",
+          "channel": "corn_ending_stocks_mil_bu",
+          "month_style": "full",
+          "alignment": "describes",
+          "prose_start": "COARSE GRAINS:",
+          "prose_end": "RICE:"
+        },
+        {
+          "key": "soybean",
+          "title_match": "U.S. Soybeans and Products Supply and Use (Domestic Measure)",
+          "attribute": "Ending Stocks",
+          "channel": "soybean_ending_stocks_mil_bu",
+          "month_style": "abbr",
+          "alignment": "recites",
+          "prose_start": "OILSEEDS:",
+          "prose_end": "SUGAR:"
+        },
+        {
+          "key": "rice",
+          "title_match": "U.S. Rice Supply and Use",
+          "attribute": "Ending Stocks",
+          "channel": "rice_ending_stocks_mil_cwt",
+          "month_style": "abbr",
+          "alignment": "recites",
+          "prose_start": "RICE:",
+          "prose_end": "OILSEEDS:"
+        },
+        {
+          "key": "cotton",
+          "title_match": "U.S. Cotton Supply and Use",
+          "attribute": "Ending Stocks",
+          "channel": "cotton_ending_stocks_mil_bales",
+          "month_style": "abbr",
+          "alignment": "recites",
+          "prose_start": "COTTON:",
+          "prose_end": "__LAST_SECTION__"
+        },
+        {
+          "key": "sugar",
+          "title_match": "U.S. Sugar Supply and Use",
+          "attribute": "Ending Stocks",
+          "channel": "sugar_ending_stocks_1000_strv",
+          "month_style": "abbr",
+          "alignment": "describes",
+          "prose_start": "SUGAR:",
+          "prose_end": "LIVESTOCK"
         }
       ],
-      "window_max": 36,
-      "min_series": 2,
+      "window_max": 24,
+      "min_series": 24,
       "request_delay_s": 0.2
     },
     "text": {
-      "ts_intro": "Successive USDA WASDE monthly projections of {my} U.S. {commodity} {attr_label} across the trailing {n} reports (through {month}): <ts></ts>"
+      "ts_intro": "USDA's successive monthly WASDE projections of U.S. {commodity} {attr_label} for the then-current marketing year, across the trailing {n} monthly reports through {month} (ending with the {my} estimate): <ts></ts>"
     },
     "output": {
       "output_path": "output/wasde_cpt.jsonl",
       "report_path": "output/run_report.json",
       "samples_path": "samples/example_output.jsonl",
-      "max_records": 50
+      "max_records": null
     }
   },
   "dry_run": false

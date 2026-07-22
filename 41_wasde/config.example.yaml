@@ -10,44 +10,106 @@
 #   - SERIES : the report XML (structured: Report[sub_report_title] -> attribute ->
 #              market_year -> forecast_month -> Cell) -> unambiguous per-attribute values.
 #
-# ENUMERATION CAVEAT: the WASDE archive list is JS/AJAX-gated on both usda.gov/ESMIS and
-# Cornell mannlib, and release IDs are irregular -> headless harvest is blocked. This build
-# reads reports from a LOCAL folder (data/), so extending history = drop more report files in.
-# Supply BOTH per report: wasde{MMYY}.xml (series) AND wasde{MMYY}.pdf (prose). ~9 recent
-# months are pre-fetched; bulk-download older ones in-browser to grow the windows to ~24-36.
+# ENUMERATION: the ESMIS REST API (/api/v1/release/findByIdentifier/wasde) lists all 700 WASDE
+# releases with file URLs + dates. The build paginates it and auto-fetches each release's .xml
+# (series) + .pdf (prose). Machine-readable .xml exists ~2010-> (~195 reports); older are
+# PDF-only scans (1973->~2010, OCR-tier follow-up). No scraping / manual download needed.
 #
-# MARKETING-YEAR bookkeeping: each report shows last-month + this-month projections for up to
-# 3 marketing years. We track ONE marketing year across reports (the report's headline "Proj."
-# year) to avoid a sawtooth at new-crop transitions.
+# SERIES CONSTRUCTION (continuous, current-marketing-year): each monthly report projects the
+# THEN-CURRENT (headline "Proj.") marketing year's balance sheet. We stitch that this-month
+# projection across reports into a CONTINUOUS monthly line, ending at the report's own headline
+# figure (which its prose recites). The line deliberately crosses new-crop transitions -- a real
+# regime step (e.g. old-crop ~938 -> new-crop ~762) -- so the model sees a genuine long monthly
+# signal rather than a ~12-point single-crop-year stub (the model patches series in 32-point
+# blocks, so short series are penalised). The prose recites the ENDPOINT + this-year-vs-last-year
+# deltas; older months are honest context (same endpoint-recites convention as the Fed/EIA
+# packages). Alignment: recites (by endpoint). window_max caps the trailing window.
 
 data:
-  data_dir: "data"                 # *.xml (series) live here
-  pdf_dirs: ["data", ".cache/reports"]   # matching *.pdf (prose) searched here
-  # canonical originating page (schema v1 `source` must be a URL). Per-report URL built when known.
+  # ENUMERATION: the ESMIS REST API (https://esmis.nal.usda.gov/api-documentation) lists every
+  # WASDE release with its file URLs + date — no scraping, no manual download. We paginate
+  # /release/findByIdentifier/wasde, take releases that ship an .xml (machine-readable ~2010→,
+  # ~195 reports), and fetch each release's .xml (series) + .pdf (prose) into the cache.
+  api_base: "https://esmis.nal.usda.gov/api/v1"
+  publication_identifier: "wasde"
+  cache_dir: ".cache/reports"      # downloaded {ym}.xml / {ym}.pdf land here
+  max_reports: null                # newest N xml-era reports; null = all (~193, 2010-07→present)
+  # canonical originating page (schema v1 `source` must be a URL)
   source_url: "https://www.usda.gov/oce/commodity/wasde/"
 
-  # Commodities to build. Each: the XML sub_report_title to read the series from, the balance-
-  # sheet attribute, the channel unit label, and the PDF prose block delimiters. ONLY commodities
-  # whose XML table is validated to match the prose unit are enabled. (Corn/soybeans read in
-  # metric tons in their combined/products tables -> their bushels tables need separate mapping;
-  # disabled until validated -> see README.)
+  # Commodities to build. Each: the XML sub_report_title, the balance-sheet attribute, the channel
+  # unit label, the measure panel (month_style), the alignment tier, and the PDF prose delimiters.
+  # 6 validated: wheat/corn/soybean/rice/cotton/sugar. Units differ (mil bu / mil cwt / mil bales /
+  # 1000 STRV). Still candidate: sorghum-barley-oats (combined-aggregate table, shares corn prose)
+  # + livestock/poultry/dairy/eggs (quarterly, different structure).
+  # month_style selects which measure panel to read when a table stacks two (keyed by the
+  # forecast-month spelling): "abbr" (e.g. "Jul") or "full" ("July"). Wheat & soybeans recite
+  # the abbreviated panel; the combined Feed-Grain-and-Corn table puts feed-grain METRIC TONS in
+  # the abbreviated panel and corn BUSHELS in the full panel, so corn reads "full". Validated
+  # exact against the prose across 2015/2020/2026 (corn bushels, soy ending stocks).
   commodities:
+    # alignment is per-commodity: wheat & soybean prose recite the ending-stocks LEVEL most of the
+    # time (endpoint recited 62% / 89%) -> "recites". Corn's COARSE GRAINS narrative is change- and
+    # old-crop-oriented and states the ending-stocks level only ~36% of the time -> honest "describes"
+    # (text describes the corn balance sheet; series is the correct bushels ending-stocks trajectory).
     - key: wheat
       title_match: "U.S. Wheat Supply and Use"
       attribute: "Ending Stocks"
       channel: "wheat_ending_stocks_mil_bu"
+      month_style: "abbr"
+      alignment: "recites"
       prose_start: "WHEAT:"
       prose_end: "COARSE GRAINS"
+    - key: corn
+      title_match: "U.S. Feed Grain and Corn Supply and Use"
+      attribute: "Ending Stocks"
+      channel: "corn_ending_stocks_mil_bu"
+      month_style: "full"          # full-month panel = corn in BUSHELS (abbr panel is feed-grain metric tons)
+      alignment: "describes"       # narrative describes the balance sheet; recites the level only ~36%
+      prose_start: "COARSE GRAINS:"
+      prose_end: "RICE:"
+    - key: soybean
+      title_match: "U.S. Soybeans and Products Supply and Use (Domestic Measure)"
+      attribute: "Ending Stocks"
+      channel: "soybean_ending_stocks_mil_bu"
+      month_style: "abbr"          # abbr panel = soybean ending stocks in bushels (full panel is a products line)
+      alignment: "recites"
+      prose_start: "OILSEEDS:"
+      prose_end: "SUGAR:"
+    - key: rice
+      title_match: "U.S. Rice Supply and Use"
+      attribute: "Ending Stocks"
+      channel: "rice_ending_stocks_mil_cwt"
+      month_style: "abbr"          # all-rice ending stocks, million cwt (full panel = a by-class subset)
+      alignment: "recites"         # measured 86% endpoint-recite ("...projected at 153.3 million cwt")
+      prose_start: "RICE:"
+      prose_end: "OILSEEDS:"
+    - key: cotton
+      title_match: "U.S. Cotton Supply and Use"
+      attribute: "Ending Stocks"
+      channel: "cotton_ending_stocks_mil_bales"
+      month_style: "abbr"          # million 480-lb bales (single panel)
+      alignment: "recites"         # prose recites "ending stocks ... to 4.X million" bales
+      prose_start: "COTTON:"
+      prose_end: "__LAST_SECTION__"   # cotton is the last narrative block -> 4000-char fallback slice
+    - key: sugar
+      title_match: "U.S. Sugar Supply and Use"
+      attribute: "Ending Stocks"
+      channel: "sugar_ending_stocks_1000_strv"
+      month_style: "abbr"          # thousand short tons, raw value (single panel)
+      alignment: "describes"       # measured only 8% recite — prose is often administrative; WEAKEST, drop-candidate
+      prose_start: "SUGAR:"
+      prose_end: "LIVESTOCK"
 
-  window_max: 36                   # cap the trailing vintage window (months)
-  min_series: 2                    # need >=2 vintages to be a series
+  window_max: 24                   # trailing continuous monthly window (Xinyue: >=~32 ideal; 24 for now, extend on ask)
+  min_series: 24                   # emit only full-length windows (uniform 24; drops the earliest under-filled reports)
   request_delay_s: 0.2
 
 text:
-  ts_intro: "Successive USDA WASDE monthly projections of {my} U.S. {commodity} {attr_label} across the trailing {n} reports (through {month}): <ts></ts>"
+  ts_intro: "USDA's successive monthly WASDE projections of U.S. {commodity} {attr_label} for the then-current marketing year, across the trailing {n} monthly reports through {month} (ending with the {my} estimate): <ts></ts>"
 
 output:
   output_path: output/wasde_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
-  max_records: 50
+  max_records: null                # null = emit all (~501: 3 commodities × ~167); set an int to cap

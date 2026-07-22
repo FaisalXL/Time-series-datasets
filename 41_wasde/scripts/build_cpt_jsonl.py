@@ -2,18 +2,20 @@
 """Build CPT world-knowledge JSONL from USDA WASDE reports.
 
 One record = (commodity x release month): the release's per-commodity prose block (which
-recites the balance-sheet figures) paired with a trailing window of that attribute's monthly
-forecast vintages for the report's HEADLINE marketing year. alignment: recites; text real.
+recites the balance-sheet figures) paired with a trailing window of the CONTINUOUS monthly
+current-marketing-year projection for that attribute. alignment: recites; text real.
 
 Series : report XML (structured) — Report[@sub_report_title] -> attribute -> market_year ->
-         forecast_month -> Cell[@cell_value]. We take, per report, the "this-month" value
-         (forecast_month == the report's own month) for the headline marketing year, and stitch
-         across reports chronologically. Tracking a single marketing year avoids the sawtooth at
-         new-crop transitions.
+         forecast_month -> Cell[@cell_value]. Per report we take the "this-month" value
+         (forecast_month == the report's own month) for that report's THEN-CURRENT (headline
+         "Proj.") marketing year, and stitch across reports chronologically into a continuous
+         monthly line. It deliberately crosses new-crop transitions (a real regime step, e.g.
+         938 -> 762) so the series is a long monthly signal, not a ~12-point single-crop stub.
+         The endpoint is the report's own headline figure (which its prose recites).
 Text   : report PDF (pdftotext) — the per-commodity narrative block (e.g. "WHEAT: ...").
 
-Reports are read from a LOCAL folder (the WASDE archive list is JS-gated, so headless full
-enumeration is blocked — see README). Supply wasde{MMYY}.xml + wasde{MMYY}.pdf per report.
+Reports are enumerated + fetched from the ESMIS REST API (release/findByIdentifier/wasde),
+which lists every WASDE release with its .xml (series) + .pdf (prose) URLs — see README.
 
 Examples:
   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
@@ -27,10 +29,18 @@ import glob
 import json
 import os
 import re
+import ssl
 import subprocess
 import sys
+import time
+import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+_SSL = ssl.create_default_context()
+_SSL.check_hostname = False
+_SSL.verify_mode = ssl.CERT_NONE
+_UA = "cpt-dataset-builder/1.0 (research; flnu@usc.edu)"
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 try:
@@ -46,8 +56,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
 _MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 _MONTH_NUM = {m: i + 1 for i, m in enumerate(_MONTH_ABBR)}
-_MONTH_FULL = {"January": 1, "February": 2, "March": 3, "April": 4, "May": 5, "June": 6,
-               "July": 7, "August": 8, "September": 9, "October": 10, "November": 11, "December": 12}
+_MONTH_FULL_NAMES = ["January", "February", "March", "April", "May", "June",
+                     "July", "August", "September", "October", "November", "December"]
+_MONTH_FULL = {m: i + 1 for i, m in enumerate(_MONTH_FULL_NAMES)}
 
 
 # --- config helpers (same conventions as the other packages) ---------------
@@ -148,11 +159,19 @@ def _to_float(v: str) -> Optional[float]:
         return None
 
 
-def this_month_value(rows, title_match, attribute, report_ym, market_year) -> Optional[float]:
-    """The report's own-month projection for (title, attribute, market_year)."""
-    want_abbr = _MONTH_ABBR[int(report_ym[5:7]) - 1]
+def this_month_value(rows, title_match, attribute, report_ym, market_year,
+                     month_style="abbr") -> Optional[float]:
+    """The report's own-month projection for (title, attribute, market_year).
+
+    WASDE tables can stack two measure panels under one sub_report_title, keyed by the
+    forecast-month spelling: abbreviated ("Jul") vs full ("July"). For the combined
+    "Feed Grain and Corn" table the abbreviated panel is feed-grain METRIC TONS and the full
+    panel is corn BUSHELS; for wheat/soybeans the abbreviated panel is the one the prose
+    recites. So each commodity declares which style to read (config `month_style`)."""
+    mn = int(report_ym[5:7])
+    want = _MONTH_ABBR[mn - 1] if month_style == "abbr" else _MONTH_FULL_NAMES[mn - 1]
     for ti, at, my, fm, val in rows:
-        if title_match in ti and at == attribute and _norm_my(my) == market_year and fm == want_abbr:
+        if title_match in ti and at == attribute and _norm_my(my) == market_year and fm == want:
             f = _to_float(val)
             if f is not None:
                 return f
@@ -181,25 +200,65 @@ def prose_block(txt: str, start: str, end: str) -> Optional[str]:
     j = txt.find(end, i + len(start))
     block = txt[i: j if j > 0 else i + 4000]
     block = re.sub(r"\s+", " ", block).strip()
-    # keep well-formed sentences (drop stray page/table fragments)
-    sents = re.findall(r"[A-Z][^.]{15,600}?\.(?=\s|$)", block)
-    out = " ".join(s.strip() for s in sents if re.search(r"[a-z]{3,}", s))
+    block = re.sub(r"\s*WASDE\s*-\s*\d+\s*-\s*\d+\s*", " ", block)  # strip page-break footers ("WASDE-673-5")
+    # split on real sentence boundaries (punct + space + capital) so decimals ("1.881 billion")
+    # and dates ("2026/27") stay intact; keep prose-like sentences, drop stray fragments.
+    sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+(?=[A-Z(])", block)]
+    out = " ".join(s for s in sents if 15 <= len(s) <= 700 and re.search(r"[a-z]{3,}", s))
     return out or None
 
 
-# --- report discovery -------------------------------------------------------
+# --- report discovery: ESMIS REST API --------------------------------------
 
-def find_pdf(report_ym: str, pdf_dirs) -> Optional[Path]:
-    mmyy = f"{report_ym[5:7]}{report_ym[2:4]}"
-    cands = []
-    for d in pdf_dirs:
-        base = rp(d)
-        cands += [base / f"wasde{mmyy}.pdf", base / f"wasde{mmyy}v2.pdf",
-                  base / f"{report_ym}.pdf"]
-    for c in cands:
-        if c.exists():
-            return c
-    return None
+def _http(url: str, timeout: int = 60) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": "*/*"})
+    return urllib.request.urlopen(req, timeout=timeout, context=_SSL).read()
+
+
+def enumerate_releases(d: dict) -> List[Tuple[str, str, Optional[str]]]:
+    """Paginate the ESMIS API for WASDE releases. Return [(report_ym, xml_url, pdf_url)] for
+    releases that ship an .xml (the machine-readable ~2010→ era), newest-first."""
+    base, ident = d["api_base"], d["publication_identifier"]
+    delay = float(d.get("request_delay_s", 0.2))
+    out: List[Tuple[str, str, Optional[str]]] = []
+    page = 0
+    while True:
+        url = f"{base}/release/findByIdentifier/{ident}?page={page}"
+        try:
+            doc = json.loads(_http(url))
+        except Exception as e:
+            print(f"  API page {page} failed: {e}", file=sys.stderr)
+            break
+        results = doc.get("results", [])
+        for r in results:
+            files = r.get("files", []) or []
+            xml_url = next((f for f in files if f.endswith(".xml")), None)
+            if not xml_url:
+                continue  # PDF-only (pre-~2010 scan); skip until OCR tier
+            pdf_url = next((f for f in files if f.endswith(".pdf")), None)
+            dt = (r.get("release_datetime") or "")[:7]  # YYYY-MM
+            if re.match(r"\d{4}-\d{2}", dt):
+                out.append((dt, xml_url, pdf_url))
+        pager = doc.get("pager", {})
+        if page >= int(pager.get("total_pages", 1)) - 1 or not results:
+            break
+        page += 1
+        time.sleep(delay)
+    out.sort(key=lambda x: x[0], reverse=True)   # newest first
+    return out
+
+
+def download_cached(url: str, dest: Path, delay: float) -> Optional[Path]:
+    if dest.exists():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        dest.write_bytes(_http(url))
+        time.sleep(delay)
+        return dest
+    except Exception as e:
+        print(f"  download failed {url}: {e}", file=sys.stderr)
+        return None
 
 
 # --- pipeline ---------------------------------------------------------------
@@ -209,49 +268,73 @@ def build(cfg) -> Tuple[List[dict], Dict[str, Any]]:
     maxrec = out_cfg.get("max_records")
     win_max, min_series = int(d["window_max"]), int(d["min_series"])
 
-    # parse every report XML once
-    xmls = sorted(glob.glob(str(rp(d["data_dir"]) / "*.xml")))
+    # enumerate releases via the ESMIS API, fetch xml (series) + pdf (prose) into the cache
+    cache = rp(d["cache_dir"])
+    delay = float(d.get("request_delay_s", 0.2))
+    releases = enumerate_releases(d)
+    maxr = d.get("max_reports")
+    if maxr is not None:
+        releases = releases[: int(maxr)]           # newest N
     reports: Dict[str, dict] = {}   # ym -> {rows, pdf}
-    for x in xmls:
-        ym, rows = parse_report_xml(Path(x))
-        if not ym:
+    for ym, xml_url, pdf_url in releases:
+        xmlp = download_cached(xml_url, cache / f"{ym}.xml", delay)
+        if not xmlp:
             continue
-        reports[ym] = {"rows": rows, "pdf": find_pdf(ym, d["pdf_dirs"])}
+        _, rows = parse_report_xml(xmlp)
+        pdfp = download_cached(pdf_url, cache / f"{ym}.pdf", delay) if pdf_url else None
+        reports[ym] = {"rows": rows, "pdf": pdfp}
     months = sorted(reports)
 
     stat = {"reports": len(months), "candidates": 0, "emitted": 0,
             "no_pdf": 0, "no_prose": 0, "short_series": 0, "no_value": 0, "invalid": 0}
     records: List[dict] = []
 
+    text_cache: Dict[str, str] = {}   # memoize pdftotext per report (else 1 call per commodity×report)
+
+    def report_text(ym: str) -> str:
+        if ym not in text_cache:
+            pdf = reports[ym]["pdf"]
+            text_cache[ym] = pdf_text(pdf) if pdf else ""
+        return text_cache[ym]
+
     for com in d["commodities"]:
         tm, attr = com["title_match"], com["attribute"]
+        style = com.get("month_style", "abbr")
         for i, ym in enumerate(months):
             if maxrec is not None and len(records) >= int(maxrec):
                 break
             rows = reports[ym]["rows"]
-            my = headline_my(rows, tm, attr)
+            my = headline_my(rows, tm, attr)   # endpoint report's headline MY (label + endpoint)
             if not my:
                 continue
             stat["candidates"] += 1
-            # series = this-month value of `my` across all reports up to ym that carry it
-            series, series_months = [], []
+            # CONTINUOUS series: for each prior report, take ITS OWN then-current (headline)
+            # marketing-year this-month projection, stitched chronologically. Crosses new-crop
+            # transitions by design (real regime steps); endpoint == this report's headline value.
+            series, series_months, series_mys = [], [], []
             for pm in months[: i + 1]:
-                v = this_month_value(reports[pm]["rows"], tm, attr, pm, my)
+                pm_rows = reports[pm]["rows"]
+                pm_my = headline_my(pm_rows, tm, attr)
+                if not pm_my:
+                    continue
+                v = this_month_value(pm_rows, tm, attr, pm, pm_my, style)
                 if v is not None:
                     series.append(v)
                     series_months.append(pm)
-            series, series_months = series[-win_max:], series_months[-win_max:]
+                    series_mys.append(pm_my)
+            series = series[-win_max:]
+            series_months = series_months[-win_max:]
+            series_mys = series_mys[-win_max:]
             if len(series) < min_series:
                 stat["short_series"] += 1
                 continue
-            if this_month_value(rows, tm, attr, ym, my) is None:
+            if this_month_value(rows, tm, attr, ym, my, style) is None:
                 stat["no_value"] += 1
                 continue
-            pdf = reports[ym]["pdf"]
-            if not pdf:
+            if not reports[ym]["pdf"]:
                 stat["no_pdf"] += 1
                 continue
-            prose = prose_block(pdf_text(pdf), com["prose_start"], com["prose_end"])
+            prose = prose_block(report_text(ym), com["prose_start"], com["prose_end"])
             if not prose or len(prose) < 120:
                 stat["no_prose"] += 1
                 continue
@@ -265,7 +348,7 @@ def build(cfg) -> Tuple[List[dict], Dict[str, Any]]:
                 rec = emit_record(
                     text=text,
                     timeseries=[{"values": values, "unit": com["channel"], "freq": "1m"}],
-                    alignment="recites",
+                    alignment=com.get("alignment", "recites"),
                     license="public-domain-us-gov",
                     source=d["source_url"],
                     dataset="wasde",
@@ -277,10 +360,14 @@ def build(cfg) -> Tuple[List[dict], Dict[str, Any]]:
                     meta={
                         "commodity": com["key"],
                         "attribute": attr,
-                        "marketing_year": my,
-                        "series_note": "monthly forecast vintages (this-month projection per report)",
+                        "marketing_year": my,   # endpoint (headline) marketing year, recited by prose
+                        "series_note": ("continuous monthly current-marketing-year this-month "
+                                        "projection; crosses new-crop transitions (real regime steps)"),
                         "report_month": ym,
                         "vintage_months": series_months,
+                        "vintage_marketing_years": series_mys,
+                        "marketing_years_spanned": sorted(set(series_mys)),
+                        "new_crop_resets": len(set(series_mys)) - 1,
                         "window": len(series),
                     },
                 )
