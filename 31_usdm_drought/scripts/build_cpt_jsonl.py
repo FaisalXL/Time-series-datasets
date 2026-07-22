@@ -47,6 +47,10 @@ except ImportError as exc:  # pragma: no cover
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
 
+# shared v1-compliant record builder (self-validates against schema/validate.py --strict)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from emit import emit_record  # noqa: E402
+
 # D0-D4 cumulative drought categories → channel unit names.
 CATEGORY_UNITS = [
     ("d0", "pct_area_d0_abnormally_dry"),
@@ -222,36 +226,33 @@ def build_record(
     stype = int(cfg["data"]["statistics_type"])
     intro = cfg["text"]["ts_intro_sentence"].format(date=valid_date.isoformat())
     text = f"{narrative}\n\n{intro}"
-    return {
-        "text": text,
-        "timeseries": build_timeseries(rows),
-        "task_type": "world_knowledge",
-        "text_quality": "real",
-        "data_week": valid_date.isoformat(),
-        "release_date": valid_date.isoformat(),
-        "window_weeks": len(rows),
-        "statistics_type": "cumulative" if stype == 1 else "marginal",
-        "area_of_interest": cfg["data"]["area_of_interest"],
-        "report_url": pdf_url,
-        "dataset": "usdm_drought",
-        "source": "droughtmonitor.unl.edu",
-        "series_id": f"usdm_{valid_date.isoformat()}",
-    }
+    window_start = valid_date - timedelta(weeks=len(rows) - 1)
+    return emit_record(
+        text=text,
+        timeseries=build_timeseries(rows),
+        alignment="describes",
+        license="unknown",
+        text_source="first_party_official",
+        source=pdf_url,
+        dataset="usdm_drought",
+        series_id=f"usdm_{valid_date.isoformat()}",
+        domain="climate",
+        region="US",
+        period_start=window_start.isoformat(),
+        period_end=valid_date.isoformat(),
+        meta={
+            "data_week": valid_date.isoformat(),
+            "release_date": valid_date.isoformat(),
+            "window_weeks": len(rows),
+            "statistics_type": "cumulative" if stype == 1 else "marginal",
+            "area_of_interest": cfg["data"]["area_of_interest"],
+            "report_url": pdf_url,
+        },
+    )
 
 
-def validate_record(record: Dict[str, Any], window_weeks: int) -> List[str]:
-    errors: List[str] = []
-    if record["text"].count("<ts></ts>") != 1:
-        errors.append("text must contain exactly one <ts></ts>")
-    ts = record.get("timeseries", [])
-    if len(ts) != len(CATEGORY_UNITS):
-        errors.append(f"timeseries must have {len(CATEGORY_UNITS)} channels")
-    lengths = {len(c.get("values", [])) for c in ts}
-    if len(lengths) > 1:
-        errors.append(f"channels have mismatched lengths: {sorted(lengths)}")
-    if lengths and next(iter(lengths)) != window_weeks:
-        errors.append(f"window length {sorted(lengths)} != {window_weeks}")
-    return errors
+# Per-record validation now lives in emit_record(): each record is self-checked against
+# schema/validate.py --strict at construction time, raising ValueError on any violation.
 
 
 # ---------------------------------------------------------------------------
@@ -342,11 +343,11 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
                 time.sleep(delay)
             continue
 
-        record = build_record(vd, narrative, rows, pdf_url, cfg)
-        errors = validate_record(record, window_weeks)
-        if errors:
+        try:
+            record = build_record(vd, narrative, rows, pdf_url, cfg)
+        except ValueError as exc:
             stats["skipped_validation"] += 1
-            validation_errors.extend(f"{label}: {e}" for e in errors)
+            validation_errors.append(f"{label}: {exc}")
             continue
 
         records.append(record)
