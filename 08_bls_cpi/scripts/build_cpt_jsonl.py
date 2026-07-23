@@ -2,10 +2,15 @@
 """Build CPT world-knowledge JSONL from BLS CPI monthly press releases + BLS API.
 
 One record per monthly release: BLS HTML narrative (via Internet Archive Wayback
-Machine) paired with a 12-month rolling window of CPI index values from the BLS
-public API (v1, no key required).
+Machine) paired with an EXPANDING window of CPI index values from the BLS
+public API (v1, no key required) — the full monthly history of every configured
+series from a common start month through that release's data month. The window
+grows over time, so recent releases carry hundreds of monthly points.
 
-Records are dropped if the 12-month window is incomplete for any configured series,
+The window is anchored at `common_start`: the earliest month where every configured
+series already has a value (max over series of each series' first month). Interior
+gaps become null (JSON null) so all channels stay equal-length; genuine gaps are not
+fabricated. Records are dropped only if fewer than `min_points` months are available,
 or if no Wayback Machine snapshot is available for that release.
 
 Note: bls.gov blocks automated access; HTML is fetched via the Wayback Machine CDX
@@ -156,14 +161,22 @@ def ym_str(year: int, month: int) -> str:
     return f"{year:04d}-{month:02d}"
 
 
-def months_in_window(end_year: int, end_month: int, window: int = 12) -> List[str]:
-    """Return list of 'YYYY-MM' strings for the window ending at end_year/end_month."""
-    result = []
-    y, m = end_year, end_month
-    for _ in range(window):
+def next_month(year: int, month: int) -> Tuple[int, int]:
+    if month == 12:
+        return year + 1, 1
+    return year, month + 1
+
+
+def months_between(start_ym: str, end_ym: str) -> List[str]:
+    """Return the inclusive list of 'YYYY-MM' strings from start_ym through end_ym."""
+    sy, sm = int(start_ym[:4]), int(start_ym[5:7])
+    ey, em = int(end_ym[:4]), int(end_ym[5:7])
+    result: List[str] = []
+    y, m = sy, sm
+    while (y, m) <= (ey, em):
         result.append(ym_str(y, m))
-        y, m = previous_month(y, m)
-    return list(reversed(result))
+        y, m = next_month(y, m)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -653,28 +666,50 @@ def load_api_timeseries(
     return all_data
 
 
-def build_timeseries_window(
+def compute_common_start(
     api_data: Dict[str, Dict[str, float]],
     series_spec: List[Dict[str, str]],
+) -> Optional[str]:
+    """Earliest 'YYYY-MM' where EVERY configured series already has a value.
+
+    = max over series of each series' first non-null month. Returns None if any series
+    is empty (no common anchor exists), which makes the whole build skip.
+    """
+    firsts: List[str] = []
+    for spec in series_spec:
+        series_map = api_data.get(spec["id"], {})
+        if not series_map:
+            return None
+        firsts.append(min(series_map))
+    return max(firsts) if firsts else None
+
+
+def build_timeseries_expanding(
+    api_data: Dict[str, Dict[str, float]],
+    series_spec: List[Dict[str, str]],
+    common_start: str,
     data_year: int,
     data_month: int,
-    window: int = 12,
-) -> Optional[List[Dict[str, Any]]]:
-    """Build rolling window TS. Returns None if any month/series value is missing."""
-    months = months_in_window(data_year, data_month, window)
+    min_points: int,
+) -> Optional[Tuple[List[Dict[str, Any]], List[str]]]:
+    """Build the expanding-window TS: full monthly history from common_start through the
+    release's data month. Each channel spans the same months; missing values become None
+    (JSON null) — do NOT fabricate. Returns (channels, window_months) or None if the
+    window is shorter than min_points."""
+    data_ym = ym_str(data_year, data_month)
+    if data_ym < common_start:
+        return None
+    window_months = months_between(common_start, data_ym)
+    if len(window_months) < min_points:
+        return None
     channels = []
     for spec in series_spec:
-        sid = spec["id"]
-        unit = spec["unit"]
-        series_map = api_data.get(sid, {})
-        values = []
-        for ym in months:
-            val = series_map.get(ym)
-            if val is None:
-                return None
-            values.append(val)
-        channels.append({"values": values, "unit": unit, "freq": "1M"})
-    return channels
+        series_map = api_data.get(spec["id"], {})
+        values = [series_map.get(ym) for ym in window_months]  # None -> JSON null
+        channels.append({"values": values, "unit": spec["unit"], "freq": "1M"})
+    # all channels must share length (equal to the window)
+    assert len({len(c["values"]) for c in channels}) == 1, "channel lengths differ"
+    return channels, window_months
 
 
 # ---------------------------------------------------------------------------
@@ -689,6 +724,7 @@ def build_timeseries_window(
 def build_record(
     narrative: str,
     ts_channels: List[Dict[str, Any]],
+    window_months: List[str],
     data_year: int,
     data_month: int,
     release_date_iso: str,
@@ -697,16 +733,18 @@ def build_record(
     fetch_url: Optional[str] = None,
 ) -> Dict[str, Any]:
     dm = ym_str(data_year, data_month)
-    intro = ts_intro.format(data_month=dm)
+    series_start = window_months[0]
+    intro = ts_intro.format(start=series_start, data_month=dm)
     text = f"{narrative}\n\n{intro}"
 
-    # period covered = the 12-month rolling window ending at data_month
-    window_months_list = months_in_window(data_year, data_month, len(ts_channels[0]["values"]))
-    period_start = f"{window_months_list[0]}-01"
+    # period covered = the expanding window: series_start (first month) through data_month
+    period_start = f"{series_start}-01"
     period_end = f"{dm}-01"
 
     meta: Dict[str, Any] = {
         "data_month": dm,
+        "series_start": series_start,
+        "n_points": len(window_months),
         "release_date": release_date_iso,
         "report_url": report_url,
     }
@@ -763,7 +801,7 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
     timeout_s = float(data_cfg.get("timeout_s", 15))
     start_year = int(data_cfg.get("start_year", 2009))
     end_year = int(data_cfg.get("end_year", 2026))
-    window = int(data_cfg.get("window_months", 12))
+    min_points = int(data_cfg.get("min_points", 2))
     min_text_chars = int(text_cfg.get("min_text_chars", 200))
     ts_intro = text_cfg["ts_intro_sentence"]
     series_spec = data_cfg["series"]
@@ -778,7 +816,7 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
         "txt_releases_found": 0,
         "releases_attempted": 0,
         "records_emitted": 0,
-        "skipped_incomplete_ts": 0,
+        "skipped_short_window": 0,
         "skipped_no_text": 0,
         "skipped_short_text": 0,
         "skipped_validation": 0,
@@ -800,6 +838,14 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
         n = len(api_data.get(spec["id"], {}))
         flag = "OK" if n > 0 else "WARNING: 0 values — check series ID"
         print(f"  {spec['id']} ({spec['unit']}): {n} months — {flag}", file=sys.stderr)
+
+    # Expanding-window anchor: earliest month where EVERY configured series has begun.
+    common_start = compute_common_start(api_data, series_spec)
+    if common_start is None:
+        print("  WARNING: no common start month across series — no records will be emitted",
+              file=sys.stderr)
+    else:
+        print(f"  common_start (expanding-window anchor): {common_start}", file=sys.stderr)
 
     # 2. Discover HTML releases via Wayback CDX (2009–2026)
     print("\nQuerying Wayback CDX for HTML CPI releases...", file=sys.stderr)
@@ -831,11 +877,13 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
         dm = ym_str(data_year, data_month)
         label = f"cpi_{date_str}.txt ({dm})"
 
-        ts_channels = build_timeseries_window(api_data, series_spec, data_year, data_month, window)
-        if ts_channels is None:
-            stats["skipped_incomplete_ts"] += 1
-            print(f"{label}: skipped (incomplete {window}m TS window)")
+        built = None if common_start is None else build_timeseries_expanding(
+            api_data, series_spec, common_start, data_year, data_month, min_points)
+        if built is None:
+            stats["skipped_short_window"] += 1
+            print(f"{label}: skipped (window shorter than {min_points} points)")
             continue
+        ts_channels, window_months = built
 
         cache_file = html_cache_dir / f"cpi_{date_str}.txt"
         content, from_cache, used_url = fetch_txt(session, bls_url, wayback_url, cache_file, timeout_s)
@@ -866,7 +914,7 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
 
         try:
             record = build_record(
-                narrative, ts_channels, data_year, data_month,
+                narrative, ts_channels, window_months, data_year, data_month,
                 release_date_iso, report_url, ts_intro,
                 fetch_url=used_url if used_url != report_url else None,
             )
@@ -892,11 +940,13 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
         dm = ym_str(data_year, data_month)
         label = f"cpi_{mmddyyyy} ({dm})"
 
-        ts_channels = build_timeseries_window(api_data, series_spec, data_year, data_month, window)
-        if ts_channels is None:
-            stats["skipped_incomplete_ts"] += 1
-            print(f"{label}: skipped (incomplete {window}m TS window)")
+        built = None if common_start is None else build_timeseries_expanding(
+            api_data, series_spec, common_start, data_year, data_month, min_points)
+        if built is None:
+            stats["skipped_short_window"] += 1
+            print(f"{label}: skipped (window shorter than {min_points} points)")
             continue
+        ts_channels, window_months = built
 
         cache_file = html_cache_dir / f"cpi_{mmddyyyy}.html"
         html, from_cache = fetch_html(session, wayback_url, cache_file, timeout_s)
@@ -919,7 +969,7 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
         report_url = f"{BLS_ARCHIVE_BASE}cpi_{mmddyyyy}.htm"
         try:
             record = build_record(
-                narrative, ts_channels, data_year, data_month,
+                narrative, ts_channels, window_months, data_year, data_month,
                 release_date_iso, report_url, ts_intro,
                 fetch_url=wayback_url if wayback_url != report_url else None,
             )
@@ -948,7 +998,9 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
         "run_date": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "start_year": start_year,
         "end_year": end_year,
-        "window_months": window,
+        "window": "expanding (full series history from common_start to each release month)",
+        "common_start": common_start,
+        "min_points": min_points,
         "series": series_spec,
         **stats,
         "config_snapshot": cfg,
@@ -1005,7 +1057,7 @@ def main() -> None:
         file=sys.stderr,
     )
     print(
-        f"  skipped: {report['skipped_incomplete_ts']} incomplete TS, "
+        f"  skipped: {report['skipped_short_window']} short window, "
         f"{report['skipped_no_text']} no text, "
         f"{report['skipped_short_text']} short text.",
         file=sys.stderr,

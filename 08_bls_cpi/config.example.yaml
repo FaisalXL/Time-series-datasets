@@ -29,7 +29,8 @@ data:
   api_url: "https://api.bls.gov/publicAPI/v1/timeseries/data/"
 
   # CPI series to include in each record's timeseries.
-  # Each series contributes one channel of `window_months` values.
+  # Each series contributes one channel spanning the FULL monthly history of that
+  # series up to the release month (expanding window; see min_points below).
   # Verify series IDs at https://data.bls.gov/timeseries/ if results look wrong.
   series:
     - id: CUSR0000SA0
@@ -43,8 +44,11 @@ data:
     - id: CUSR0000SA0E
       unit: cpi_u_energy_sa
 
-  # Rolling window length in months. Records dropped if any month is missing.
-  window_months: 12
+  # Expanding window: each release is paired with the full monthly history of every
+  # series from a common start month (the earliest month where every configured series
+  # already has a value) through the release's data month. Interior gaps become null.
+  # Records are dropped only if fewer than min_points months are available.
+  min_points: 2
 
   # Polite delay between live HTTP requests (seconds)
   request_delay_s: 1.0
@@ -56,8 +60,8 @@ text:
   # Drop records with less than this many narrative characters
   min_text_chars: 200
 
-  # Closing sentence containing exactly one <ts></ts>; {data_month} = "YYYY-MM"
-  ts_intro_sentence: "Monthly CPI indicators for the 12 months ending {data_month}: <ts></ts>"
+  # Closing sentence containing exactly one <ts></ts>; {start}/{data_month} = "YYYY-MM"
+  ts_intro_sentence: "Monthly CPI indicators covering the full series history from {start} through {data_month}: <ts></ts>"
 
 output:
   output_path: output/bls_cpi_cpt.jsonl
@@ -65,7 +69,7 @@ output:
   samples_path: samples/example_output.jsonl
 
   # Demo cap — set null for full build (~385 records, 1994–2026)
-  max_records: 50
+  max_records: 25
 
   # null = compact JSONL (one record per line); integer = pretty-print JSON array
   indent: null
