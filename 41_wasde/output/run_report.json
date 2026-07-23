@@ -1,13 +1,18 @@
 {
   "dataset": "wasde",
   "stats": {
-    "reports": 190,
-    "candidates": 1118,
-    "emitted": 980,
-    "no_pdf": 0,
-    "no_prose": 0,
+    "reports": 376,
+    "reports_xml": 190,
+    "reports_txt": 186,
+    "series_specs": 35,
+    "candidates": 2046,
+    "emitted": 1904,
+    "recites": 1446,
+    "describes": 458,
+    "channels_emitted": 11072,
+    "no_prose": 4,
     "short_series": 138,
-    "no_value": 0,
+    "no_value": 210,
     "invalid": 0
   },
   "config_snapshot": {
@@ -16,67 +21,280 @@
       "publication_identifier": "wasde",
       "cache_dir": ".cache/reports",
       "max_reports": null,
+      "use_txt_tier": true,
+      "txt_min_ym": "1995-01",
       "source_url": "https://www.usda.gov/oce/commodity/wasde/",
       "commodities": [
         {
-          "key": "wheat",
-          "title_match": "U.S. Wheat Supply and Use",
-          "attribute": "Ending Stocks",
-          "channel": "wheat_ending_stocks_mil_bu",
-          "month_style": "abbr",
-          "alignment": "recites",
+          "commodity": "wheat",
+          "xml_title": "U.S. Wheat Supply and Use",
+          "xml_month_style": "abbr",
+          "txt_title": "Wheat Supply and Use",
           "prose_start": "WHEAT:",
-          "prose_end": "COARSE GRAINS"
+          "prose_end": "COARSE GRAINS",
+          "channels": [
+            {
+              "xml_name": "Beginning Stocks",
+              "txt_label": "Beginning stocks",
+              "channel": "wheat_beginning_stocks_mil_bu",
+              "human": "beginning stocks"
+            },
+            {
+              "xml_name": "Production",
+              "txt_label": "Production",
+              "channel": "wheat_production_mil_bu",
+              "human": "production"
+            },
+            {
+              "xml_name": "Imports",
+              "txt_label": "Imports",
+              "channel": "wheat_imports_mil_bu",
+              "human": "imports"
+            },
+            {
+              "xml_name": "Domestic, Total",
+              "txt_label": "Domestic, total",
+              "channel": "wheat_domestic_use_mil_bu",
+              "human": "domestic use"
+            },
+            {
+              "xml_name": "Exports",
+              "txt_label": "Exports",
+              "channel": "wheat_exports_mil_bu",
+              "human": "exports"
+            },
+            {
+              "xml_name": "Ending Stocks",
+              "txt_label": "Ending stocks",
+              "channel": "wheat_ending_stocks_mil_bu",
+              "human": "ending stocks"
+            }
+          ]
         },
         {
-          "key": "corn",
-          "title_match": "U.S. Feed Grain and Corn Supply and Use",
-          "attribute": "Ending Stocks",
-          "channel": "corn_ending_stocks_mil_bu",
-          "month_style": "full",
-          "alignment": "describes",
+          "commodity": "corn",
+          "xml_title": "U.S. Feed Grain and Corn Supply and Use",
+          "xml_month_style": "full",
+          "txt_title": "Feed Grain and Corn Supply and Use",
+          "txt_subsection": "CORN",
           "prose_start": "COARSE GRAINS:",
-          "prose_end": "RICE:"
+          "prose_end": "RICE:",
+          "channels": [
+            {
+              "xml_name": "Beginning Stocks",
+              "txt_label": "Beginning stocks",
+              "channel": "corn_beginning_stocks_mil_bu",
+              "human": "beginning stocks"
+            },
+            {
+              "xml_name": "Production",
+              "txt_label": "Production",
+              "channel": "corn_production_mil_bu",
+              "human": "production"
+            },
+            {
+              "xml_name": "Imports",
+              "txt_label": "Imports",
+              "channel": "corn_imports_mil_bu",
+              "human": "imports"
+            },
+            {
+              "xml_name": "Domestic, Total",
+              "txt_label": "Domestic, total",
+              "channel": "corn_domestic_use_mil_bu",
+              "human": "domestic use"
+            },
+            {
+              "xml_name": "Exports",
+              "txt_label": "Exports",
+              "channel": "corn_exports_mil_bu",
+              "human": "exports"
+            },
+            {
+              "xml_name": "Ending Stocks",
+              "txt_label": "Ending stocks",
+              "channel": "corn_ending_stocks_mil_bu",
+              "human": "ending stocks"
+            }
+          ]
         },
         {
-          "key": "soybean",
-          "title_match": "U.S. Soybeans and Products Supply and Use (Domestic Measure)",
-          "attribute": "Ending Stocks",
-          "channel": "soybean_ending_stocks_mil_bu",
-          "month_style": "abbr",
-          "alignment": "recites",
+          "commodity": "soybean",
+          "xml_title": "U.S. Soybeans and Products Supply and Use (Domestic Measure)",
+          "xml_month_style": "abbr",
+          "txt_title": "Soybeans and Products Supply and Use",
           "prose_start": "OILSEEDS:",
-          "prose_end": "SUGAR:"
+          "prose_end": "SUGAR:",
+          "channels": [
+            {
+              "xml_name": "Beginning Stocks",
+              "txt_label": "Beginning stocks",
+              "channel": "soybean_beginning_stocks_mil_bu",
+              "human": "beginning stocks"
+            },
+            {
+              "xml_name": "Production",
+              "txt_label": "Production",
+              "channel": "soybean_production_mil_bu",
+              "human": "production"
+            },
+            {
+              "xml_name": "Imports",
+              "txt_label": "Imports",
+              "channel": "soybean_imports_mil_bu",
+              "human": "imports"
+            },
+            {
+              "xml_name": "Crushings",
+              "txt_label": "Crushings",
+              "channel": "soybean_crush_mil_bu",
+              "human": "crush"
+            },
+            {
+              "xml_name": "Exports",
+              "txt_label": "Exports",
+              "channel": "soybean_exports_mil_bu",
+              "human": "exports"
+            },
+            {
+              "xml_name": "Ending Stocks",
+              "txt_label": "Ending stocks",
+              "channel": "soybean_ending_stocks_mil_bu",
+              "human": "ending stocks"
+            }
+          ]
         },
         {
-          "key": "rice",
-          "title_match": "U.S. Rice Supply and Use",
-          "attribute": "Ending Stocks",
-          "channel": "rice_ending_stocks_mil_cwt",
-          "month_style": "abbr",
-          "alignment": "recites",
+          "commodity": "rice",
+          "xml_title": "U.S. Rice Supply and Use",
+          "xml_month_style": "abbr",
+          "txt_title": "Rice Supply and Use",
           "prose_start": "RICE:",
-          "prose_end": "OILSEEDS:"
+          "prose_end": "OILSEEDS:",
+          "channels": [
+            {
+              "xml_name": "Beginning Stocks",
+              "txt_label": "Beginning stocks",
+              "channel": "rice_beginning_stocks_mil_cwt",
+              "human": "beginning stocks"
+            },
+            {
+              "xml_name": "Production",
+              "txt_label": "Production",
+              "channel": "rice_production_mil_cwt",
+              "human": "production"
+            },
+            {
+              "xml_name": "Imports",
+              "txt_label": "Imports",
+              "channel": "rice_imports_mil_cwt",
+              "human": "imports"
+            },
+            {
+              "xml_name": "Exports, Total",
+              "txt_label": "Exports",
+              "channel": "rice_exports_mil_cwt",
+              "human": "exports"
+            },
+            {
+              "xml_name": "Ending Stocks",
+              "txt_label": "Ending stocks",
+              "channel": "rice_ending_stocks_mil_cwt",
+              "human": "ending stocks"
+            }
+          ]
         },
         {
-          "key": "cotton",
-          "title_match": "U.S. Cotton Supply and Use",
-          "attribute": "Ending Stocks",
-          "channel": "cotton_ending_stocks_mil_bales",
-          "month_style": "abbr",
-          "alignment": "recites",
+          "commodity": "cotton",
+          "xml_title": "U.S. Cotton Supply and Use",
+          "xml_month_style": "abbr",
+          "txt_title": "Cotton Supply and Use",
           "prose_start": "COTTON:",
-          "prose_end": "__LAST_SECTION__"
+          "prose_end": "__LAST_SECTION__",
+          "channels": [
+            {
+              "xml_name": "Beginning Stocks",
+              "txt_label": "Beginning stocks",
+              "channel": "cotton_beginning_stocks_mil_bales",
+              "human": "beginning stocks"
+            },
+            {
+              "xml_name": "Production",
+              "txt_label": "Production",
+              "channel": "cotton_production_mil_bales",
+              "human": "production"
+            },
+            {
+              "xml_name": "Imports",
+              "txt_label": "Imports",
+              "channel": "cotton_imports_mil_bales",
+              "human": "imports"
+            },
+            {
+              "xml_name": "Domestic Use",
+              "txt_label": "Domestic use",
+              "channel": "cotton_domestic_use_mil_bales",
+              "human": "domestic use"
+            },
+            {
+              "xml_name": "Exports, Total",
+              "txt_label": "Exports",
+              "channel": "cotton_exports_mil_bales",
+              "human": "exports"
+            },
+            {
+              "xml_name": "Ending Stocks",
+              "txt_label": "Ending stocks",
+              "channel": "cotton_ending_stocks_mil_bales",
+              "human": "ending stocks"
+            }
+          ]
         },
         {
-          "key": "sugar",
-          "title_match": "U.S. Sugar Supply and Use",
-          "attribute": "Ending Stocks",
-          "channel": "sugar_ending_stocks_1000_strv",
-          "month_style": "abbr",
-          "alignment": "describes",
+          "commodity": "sugar",
+          "xml_title": "U.S. Sugar Supply and Use",
+          "xml_month_style": "abbr",
+          "txt_title": null,
           "prose_start": "SUGAR:",
-          "prose_end": "LIVESTOCK"
+          "prose_end": "LIVESTOCK",
+          "channels": [
+            {
+              "xml_name": "Beginning Stocks",
+              "txt_label": "Beginning stocks",
+              "channel": "sugar_beginning_stocks_1000_strv",
+              "human": "beginning stocks"
+            },
+            {
+              "xml_name": "Production",
+              "txt_label": "Production",
+              "channel": "sugar_production_1000_strv",
+              "human": "production"
+            },
+            {
+              "xml_name": "Imports",
+              "txt_label": "Imports",
+              "channel": "sugar_imports_1000_strv",
+              "human": "imports"
+            },
+            {
+              "xml_name": "Deliveries",
+              "txt_label": "Deliveries",
+              "channel": "sugar_deliveries_1000_strv",
+              "human": "deliveries"
+            },
+            {
+              "xml_name": "Exports",
+              "txt_label": "Exports",
+              "channel": "sugar_exports_1000_strv",
+              "human": "exports"
+            },
+            {
+              "xml_name": "Ending Stocks",
+              "txt_label": "Ending stocks",
+              "channel": "sugar_ending_stocks_1000_strv",
+              "human": "ending stocks"
+            }
+          ]
         }
       ],
       "window_max": 24,
@@ -84,7 +302,7 @@
       "request_delay_s": 0.2
     },
     "text": {
-      "ts_intro": "USDA's successive monthly WASDE projections of U.S. {commodity} {attr_label} for the then-current marketing year, across the trailing {n} monthly reports through {month} (ending with the {my} estimate): <ts></ts>"
+      "ts_intro": "USDA's successive monthly WASDE balance-sheet projections for U.S. {commodity} — {channels} — for the then-current marketing year ({my}), across the trailing {n} monthly reports through {month}: <ts></ts>"
     },
     "output": {
       "output_path": "output/wasde_cpt.jsonl",

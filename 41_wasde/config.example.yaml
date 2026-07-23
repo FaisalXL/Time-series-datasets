@@ -1,112 +1,149 @@
 # USDA WASDE (World Agricultural Supply and Demand Estimates) → CPT world-knowledge JSONL
 #
-# One record = (commodity x release month): the release's per-commodity prose block (which
-# recites the balance-sheet figures) paired with a trailing window of the SAME attribute's
-# monthly forecast vintages for the headline marketing year. Value-reciting "describes"
-# (alignment: recites). text_quality "real". License: US public domain (17 U.S.C. 105).
+# One record = (commodity x attribute x release month): the release's per-commodity prose block
+# paired with a trailing 24-month CONTINUOUS monthly line of that attribute's current-marketing-year
+# projection. 6 commodities x {Ending Stocks, Production, Exports} = 15 series (rice: no Exports;
+# sugar: ES only). text_quality "real". License: US public domain (17 U.S.C. 105).
 #
-# SOURCES (both live in the same monthly report):
-#   - PROSE  : the report PDF (pdftotext) -> clean per-commodity narrative blocks.
-#   - SERIES : the report XML (structured: Report[sub_report_title] -> attribute ->
-#              market_year -> forecast_month -> Cell) -> unambiguous per-attribute values.
+# SOURCES — two eras stitched into one continuous series per (commodity, attribute):
+#   - xml era (2010-07->present): SERIES from the structured report .xml, PROSE from the .pdf.
+#   - txt era (1995-2009): SERIES + PROSE both from the one machine-readable .txt (fixed-width
+#     tables; this-month = last numeric column; headline MY = "YYYY/YY Projections" header).
+#   Pre-1995 releases are pdf-only image scans -> skipped (OCR tier, phase-2).
 #
 # ENUMERATION: the ESMIS REST API (/api/v1/release/findByIdentifier/wasde) lists all 700 WASDE
-# releases with file URLs + dates. The build paginates it and auto-fetches each release's .xml
-# (series) + .pdf (prose). Machine-readable .xml exists ~2010-> (~195 reports); older are
-# PDF-only scans (1973->~2010, OCR-tier follow-up). No scraping / manual download needed.
+# releases with file URLs + dates. The build paginates it (fault-tolerant) and auto-fetches each
+# release's .xml/.pdf (or .txt) into the cache. No scraping / manual download.
 #
 # SERIES CONSTRUCTION (continuous, current-marketing-year): each monthly report projects the
-# THEN-CURRENT (headline "Proj.") marketing year's balance sheet. We stitch that this-month
-# projection across reports into a CONTINUOUS monthly line, ending at the report's own headline
-# figure (which its prose recites). The line deliberately crosses new-crop transitions -- a real
-# regime step (e.g. old-crop ~938 -> new-crop ~762) -- so the model sees a genuine long monthly
-# signal rather than a ~12-point single-crop-year stub (the model patches series in 32-point
-# blocks, so short series are penalised). The prose recites the ENDPOINT + this-year-vs-last-year
-# deltas; older months are honest context (same endpoint-recites convention as the Fed/EIA
-# packages). Alignment: recites (by endpoint). window_max caps the trailing window.
+# THEN-CURRENT (headline "Proj.") marketing year. We stitch that this-month projection across
+# reports into a CONTINUOUS monthly line, ending at the report's own headline figure. The line
+# deliberately crosses new-crop transitions -- a real regime step (e.g. old-crop ~938 -> new-crop
+# ~762) -- so the model sees a long monthly signal, not a ~12-point single-crop stub (the model
+# patches series in 32-point blocks). window_max caps the trailing window. Alignment is per-record
+# (see below).
 
 data:
-  # ENUMERATION: the ESMIS REST API (https://esmis.nal.usda.gov/api-documentation) lists every
-  # WASDE release with its file URLs + date — no scraping, no manual download. We paginate
-  # /release/findByIdentifier/wasde, take releases that ship an .xml (machine-readable ~2010→,
-  # ~195 reports), and fetch each release's .xml (series) + .pdf (prose) into the cache.
+  # ENUMERATION: the ESMIS REST API (https://esmis.nal.usda.gov/api-documentation) lists every WASDE
+  # release with its file URLs + date. We paginate /release/findByIdentifier/wasde and take, per release:
+  #   - kind "xml" (2010-07→present, ~193 reports): series from the structured .xml, prose from the .pdf.
+  #   - kind "txt" (1995-2009, when no .xml): series + prose both from the one machine-readable .txt.
+  # Pre-1995 releases are pdf-only image scans (no text layer, 27 chars via pdftotext) -> skipped (OCR
+  # tier, phase-2). No scraping / manual download.
   api_base: "https://esmis.nal.usda.gov/api/v1"
   publication_identifier: "wasde"
-  cache_dir: ".cache/reports"      # downloaded {ym}.xml / {ym}.pdf land here
-  max_reports: null                # newest N xml-era reports; null = all (~193, 2010-07→present)
+  cache_dir: ".cache/reports"      # downloaded {ym}.xml / {ym}.pdf / {ym}.txt land here
+  max_reports: null                # newest N reports; null = all (~193 xml + ~150 txt = full 1995→present)
+  use_txt_tier: true               # include the 1995-2009 .txt reports (machine-readable, no OCR)
+  txt_min_ym: "1995-01"            # earliest .txt release; pre-1995 is image-scan only
   # canonical originating page (schema v1 `source` must be a URL)
   source_url: "https://www.usda.gov/oce/commodity/wasde/"
 
-  # Commodities to build. Each: the XML sub_report_title, the balance-sheet attribute, the channel
-  # unit label, the measure panel (month_style), the alignment tier, and the PDF prose delimiters.
-  # 6 validated: wheat/corn/soybean/rice/cotton/sugar. Units differ (mil bu / mil cwt / mil bales /
-  # 1000 STRV). Still candidate: sorghum-barley-oats (combined-aggregate table, shares corn prose)
-  # + livestock/poultry/dairy/eggs (quarterly, different structure).
-  # month_style selects which measure panel to read when a table stacks two (keyed by the
-  # forecast-month spelling): "abbr" (e.g. "Jul") or "full" ("July"). Wheat & soybeans recite
-  # the abbreviated panel; the combined Feed-Grain-and-Corn table puts feed-grain METRIC TONS in
-  # the abbreviated panel and corn BUSHELS in the full panel, so corn reads "full". Validated
-  # exact against the prose across 2015/2020/2026 (corn bushels, soy ending stocks).
+  # COMMODITIES × ATTRIBUTES. Each commodity gives the XML sub_report_title (+ measure panel via
+  # month_style), the .txt table title (+ optional subsection for stacked metric/bushels tables), the
+  # shared prose delimiters, and a `channels` list = the balance-sheet lines bundled as MULTIPLE
+  # CHANNELS in ONE record per (commodity, release month) under a single <ts>. This avoids repeating
+  # the same prose block across attributes; the series is the commodity's whole balance sheet over time.
+  # Each series (per channel) stitches the .txt (1995-2009) and .xml (2010+) eras. The window is anchored
+  # on Ending Stocks (present for every commodity); each channel is that line's continuous current-crop
+  # monthly projection. Footnote markers in attribute names ("Beginning Stocks 2/") are matched tolerantly.
+  #
+  # xml_month_style (XML two-panel tables, keyed by forecast-month spelling): "abbr" ("Jul") vs "full"
+  # ("July"). The combined Feed-Grain-and-Corn XML table hides feed-grain METRIC TONS in the abbr panel
+  # and corn BUSHELS in the full panel -> corn reads "full"; in .txt the same split is a "CORN" subsection.
+  # All channels validated to the correct US unit (mil bu / mil cwt / mil bales / 1000 STRV) vs the prose.
+  #
+  # alignment is computed PER RECORD by the build: "recites" when ANY channel's endpoint value is stated
+  # in the prose block, else "describes". Sugar = XML-only (txt_title null; .txt has unit drift).
+  # Still candidate (not built): sorghum-barley-oats + livestock/poultry/dairy/eggs.
   commodities:
-    # alignment is per-commodity: wheat & soybean prose recite the ending-stocks LEVEL most of the
-    # time (endpoint recited 62% / 89%) -> "recites". Corn's COARSE GRAINS narrative is change- and
-    # old-crop-oriented and states the ending-stocks level only ~36% of the time -> honest "describes"
-    # (text describes the corn balance sheet; series is the correct bushels ending-stocks trajectory).
-    - key: wheat
-      title_match: "U.S. Wheat Supply and Use"
-      attribute: "Ending Stocks"
-      channel: "wheat_ending_stocks_mil_bu"
-      month_style: "abbr"
-      alignment: "recites"
+    - commodity: wheat
+      xml_title: "U.S. Wheat Supply and Use"
+      xml_month_style: "abbr"
+      txt_title: "Wheat Supply and Use"
       prose_start: "WHEAT:"
       prose_end: "COARSE GRAINS"
-    - key: corn
-      title_match: "U.S. Feed Grain and Corn Supply and Use"
-      attribute: "Ending Stocks"
-      channel: "corn_ending_stocks_mil_bu"
-      month_style: "full"          # full-month panel = corn in BUSHELS (abbr panel is feed-grain metric tons)
-      alignment: "describes"       # narrative describes the balance sheet; recites the level only ~36%
+      channels:
+        - {xml_name: "Beginning Stocks", txt_label: "Beginning stocks", channel: "wheat_beginning_stocks_mil_bu", human: "beginning stocks"}
+        - {xml_name: "Production",       txt_label: "Production",       channel: "wheat_production_mil_bu",       human: "production"}
+        - {xml_name: "Imports",          txt_label: "Imports",          channel: "wheat_imports_mil_bu",          human: "imports"}
+        - {xml_name: "Domestic, Total",  txt_label: "Domestic, total",  channel: "wheat_domestic_use_mil_bu",     human: "domestic use"}
+        - {xml_name: "Exports",          txt_label: "Exports",          channel: "wheat_exports_mil_bu",          human: "exports"}
+        - {xml_name: "Ending Stocks",    txt_label: "Ending stocks",    channel: "wheat_ending_stocks_mil_bu",    human: "ending stocks"}
+    - commodity: corn
+      xml_title: "U.S. Feed Grain and Corn Supply and Use"
+      xml_month_style: "full"        # full-month XML panel = corn BUSHELS (abbr = feed-grain metric tons)
+      txt_title: "Feed Grain and Corn Supply and Use"
+      txt_subsection: "CORN"         # .txt CORN sub-panel = bushels (above it is feed-grain metric tons)
       prose_start: "COARSE GRAINS:"
       prose_end: "RICE:"
-    - key: soybean
-      title_match: "U.S. Soybeans and Products Supply and Use (Domestic Measure)"
-      attribute: "Ending Stocks"
-      channel: "soybean_ending_stocks_mil_bu"
-      month_style: "abbr"          # abbr panel = soybean ending stocks in bushels (full panel is a products line)
-      alignment: "recites"
+      channels:
+        - {xml_name: "Beginning Stocks", txt_label: "Beginning stocks", channel: "corn_beginning_stocks_mil_bu", human: "beginning stocks"}
+        - {xml_name: "Production",       txt_label: "Production",       channel: "corn_production_mil_bu",       human: "production"}
+        - {xml_name: "Imports",          txt_label: "Imports",          channel: "corn_imports_mil_bu",          human: "imports"}
+        - {xml_name: "Domestic, Total",  txt_label: "Domestic, total",  channel: "corn_domestic_use_mil_bu",     human: "domestic use"}
+        - {xml_name: "Exports",          txt_label: "Exports",          channel: "corn_exports_mil_bu",          human: "exports"}
+        - {xml_name: "Ending Stocks",    txt_label: "Ending stocks",    channel: "corn_ending_stocks_mil_bu",    human: "ending stocks"}
+    - commodity: soybean
+      xml_title: "U.S. Soybeans and Products Supply and Use (Domestic Measure)"
+      xml_month_style: "abbr"
+      txt_title: "Soybeans and Products Supply and Use"
       prose_start: "OILSEEDS:"
       prose_end: "SUGAR:"
-    - key: rice
-      title_match: "U.S. Rice Supply and Use"
-      attribute: "Ending Stocks"
-      channel: "rice_ending_stocks_mil_cwt"
-      month_style: "abbr"          # all-rice ending stocks, million cwt (full panel = a by-class subset)
-      alignment: "recites"         # measured 86% endpoint-recite ("...projected at 153.3 million cwt")
+      channels:
+        - {xml_name: "Beginning Stocks", txt_label: "Beginning stocks", channel: "soybean_beginning_stocks_mil_bu", human: "beginning stocks"}
+        - {xml_name: "Production",       txt_label: "Production",       channel: "soybean_production_mil_bu",       human: "production"}
+        - {xml_name: "Imports",          txt_label: "Imports",          channel: "soybean_imports_mil_bu",          human: "imports"}
+        - {xml_name: "Crushings",        txt_label: "Crushings",        channel: "soybean_crush_mil_bu",            human: "crush"}
+        - {xml_name: "Exports",          txt_label: "Exports",          channel: "soybean_exports_mil_bu",          human: "exports"}
+        - {xml_name: "Ending Stocks",    txt_label: "Ending stocks",    channel: "soybean_ending_stocks_mil_bu",    human: "ending stocks"}
+    - commodity: rice
+      xml_title: "U.S. Rice Supply and Use"
+      xml_month_style: "abbr"
+      txt_title: "Rice Supply and Use"
       prose_start: "RICE:"
       prose_end: "OILSEEDS:"
-    - key: cotton
-      title_match: "U.S. Cotton Supply and Use"
-      attribute: "Ending Stocks"
-      channel: "cotton_ending_stocks_mil_bales"
-      month_style: "abbr"          # million 480-lb bales (single panel)
-      alignment: "recites"         # prose recites "ending stocks ... to 4.X million" bales
+      channels:
+        - {xml_name: "Beginning Stocks", txt_label: "Beginning stocks", channel: "rice_beginning_stocks_mil_cwt", human: "beginning stocks"}
+        - {xml_name: "Production",       txt_label: "Production",       channel: "rice_production_mil_cwt",       human: "production"}
+        - {xml_name: "Imports",          txt_label: "Imports",          channel: "rice_imports_mil_cwt",          human: "imports"}
+        - {xml_name: "Exports, Total",   txt_label: "Exports",          channel: "rice_exports_mil_cwt",          human: "exports"}
+        - {xml_name: "Ending Stocks",    txt_label: "Ending stocks",    channel: "rice_ending_stocks_mil_cwt",    human: "ending stocks"}
+    - commodity: cotton
+      xml_title: "U.S. Cotton Supply and Use"
+      xml_month_style: "abbr"
+      txt_title: "Cotton Supply and Use"
       prose_start: "COTTON:"
-      prose_end: "__LAST_SECTION__"   # cotton is the last narrative block -> 4000-char fallback slice
-    - key: sugar
-      title_match: "U.S. Sugar Supply and Use"
-      attribute: "Ending Stocks"
-      channel: "sugar_ending_stocks_1000_strv"
-      month_style: "abbr"          # thousand short tons, raw value (single panel)
-      alignment: "describes"       # measured only 8% recite — prose is often administrative; WEAKEST, drop-candidate
+      prose_end: "__LAST_SECTION__"  # cotton is the last narrative block -> 4000-char fallback slice
+      channels:
+        - {xml_name: "Beginning Stocks", txt_label: "Beginning stocks", channel: "cotton_beginning_stocks_mil_bales", human: "beginning stocks"}
+        - {xml_name: "Production",       txt_label: "Production",       channel: "cotton_production_mil_bales",       human: "production"}
+        - {xml_name: "Imports",          txt_label: "Imports",          channel: "cotton_imports_mil_bales",          human: "imports"}
+        - {xml_name: "Domestic Use",     txt_label: "Domestic use",     channel: "cotton_domestic_use_mil_bales",     human: "domestic use"}
+        - {xml_name: "Exports, Total",   txt_label: "Exports",          channel: "cotton_exports_mil_bales",          human: "exports"}
+        - {xml_name: "Ending Stocks",    txt_label: "Ending stocks",    channel: "cotton_ending_stocks_mil_bales",    human: "ending stocks"}
+    - commodity: sugar
+      xml_title: "U.S. Sugar Supply and Use"
+      xml_month_style: "abbr"
+      txt_title: null                # sugar .txt has unit drift across years -> XML-only for now
       prose_start: "SUGAR:"
       prose_end: "LIVESTOCK"
+      channels:
+        - {xml_name: "Beginning Stocks", txt_label: "Beginning stocks", channel: "sugar_beginning_stocks_1000_strv", human: "beginning stocks"}
+        - {xml_name: "Production",       txt_label: "Production",       channel: "sugar_production_1000_strv",       human: "production"}
+        - {xml_name: "Imports",          txt_label: "Imports",          channel: "sugar_imports_1000_strv",          human: "imports"}
+        - {xml_name: "Deliveries",       txt_label: "Deliveries",       channel: "sugar_deliveries_1000_strv",       human: "deliveries"}
+        - {xml_name: "Exports",          txt_label: "Exports",          channel: "sugar_exports_1000_strv",          human: "exports"}
+        - {xml_name: "Ending Stocks",    txt_label: "Ending stocks",    channel: "sugar_ending_stocks_1000_strv",    human: "ending stocks"}
 
   window_max: 24                   # trailing continuous monthly window (Xinyue: >=~32 ideal; 24 for now, extend on ask)
   min_series: 24                   # emit only full-length windows (uniform 24; drops the earliest under-filled reports)
   request_delay_s: 0.2
 
 text:
-  ts_intro: "USDA's successive monthly WASDE projections of U.S. {commodity} {attr_label} for the then-current marketing year, across the trailing {n} monthly reports through {month} (ending with the {my} estimate): <ts></ts>"
+  # {channels} = human channel list (e.g. "beginning stocks, production, imports, domestic use, exports,
+  # and ending stocks"); the single <ts> carries all channels as one multivariate balance-sheet series.
+  ts_intro: "USDA's successive monthly WASDE balance-sheet projections for U.S. {commodity} — {channels} — for the then-current marketing year ({my}), across the trailing {n} monthly reports through {month}: <ts></ts>"
 
 output:
   output_path: output/wasde_cpt.jsonl
