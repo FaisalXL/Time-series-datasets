@@ -16,7 +16,14 @@ data:
 
   # USGS NWIS instantaneous values (00065 = gage height, ft). Deep sub-daily history.
   usgs_iv_template: "https://waterservices.usgs.gov/nwis/iv/?sites={usgs}&parameterCd=00065&startDT={start}&endDT={end}&format=json"
-  usgs_year_start: 2012           # first year of USGS iv history to pull (per gauge)
+  # Daily-values (dv) service — ONE cheap call per gauge to LOCATE flood crests, so we only
+  # pull 15-min iv for the windows around them (targeted harvest; see README "harvest cost").
+  # No statCd -> returns all daily stats; we prefer daily MAX, fall back to MEAN (only ~1/4 of
+  # gauges publish daily max, so mean-fallback is essential for coverage).
+  usgs_dv_template: "https://waterservices.usgs.gov/nwis/dv/?sites={usgs}&parameterCd={pc}&startDT={start}&endDT={end}&format=json"
+  event_window_buffer_days: 12    # fetch 15-min iv for crest_day +/- this many days
+  daily_scan_margin_ft: 2.0       # lower the daily-scan threshold by this (mean underestimates the peak)
+  usgs_year_start: 2012           # first year of USGS history to scan (per gauge)
   usgs_year_end: 2026
 
   # Seed of VERIFIED rich-impact flood gauges (lid -> USGS site id). Full national
