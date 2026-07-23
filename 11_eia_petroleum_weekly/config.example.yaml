@@ -1,18 +1,20 @@
 # EIA Weekly Petroleum Status Report (Highlights) + Weekly Supply Series → CPT JSONL
 #
-# One record = one weekly report: the WPSR "Highlights" narrative (which describes the
-# week's inventory / refinery / import figures) paired with a trailing 52-week window of
-# the exact national supply series it describes. The prose *describes* the series →
-# "describes". text_quality = "real"; a week whose report/series can't be assembled is
-# dropped.
+# One record = ONE TOPIC from one weekly report: the sentence(s) of the WPSR "Highlights"
+# narrative that describe a single supply series (e.g. the crude-oil-inventories sentences)
+# paired with a trailing window of THAT series up to the report's data week. So each weekly
+# report yields up to 6 tightly-aligned records (crude stocks, gasoline stocks, distillate
+# stocks, refinery inputs, refinery utilization, crude imports) — the text genuinely
+# describes the exact series attached to it. The prose *describes* the series → "describes".
+# text_quality = "real"; a topic whose sentence or series can't be assembled is dropped.
 #
 # License: EIA data AND report text are U.S. Government works → public domain. No gate.
 #
 # Quick start:
 #   pip install -r requirements.txt        # + poppler (pdftotext); see requirements.txt
 #   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
-#   python scripts/build_cpt_jsonl.py                                   # demo (50)
-#   python scripts/build_cpt_jsonl.py --set output.max_records=null     # full (~779)
+#   python scripts/build_cpt_jsonl.py                                   # demo
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null     # full (~6 x reports)
 
 data:
   # Report text — WPSR Highlights. The archive index lists every release date
@@ -24,30 +26,93 @@ data:
   # we keep the national weekly channels below. Period key = week-ending Friday YYYYMMDD.
   bulk_pet_url: "https://www.eia.gov/opendata/bulk/PET.zip"
 
-  # National weekly channels the Highlights narrative describes. series_id = bulk id.
-  # unit doubles as the channel label (SCHEMA §2.1: "label + unit"), so each is distinct
+  # National weekly channels + how to find the sentence(s) that describe each in the
+  # Highlights narrative. Each channel becomes its OWN record (one series, tightly aligned
+  # text). `match` = list of keyword GROUPS; a sentence belongs to this topic if it contains
+  # ALL words in ANY one group (AND within a group, OR across groups), case-insensitive.
   channels:
-    - {series_id: "PET.WCESTUS1.W", name: "crude_stocks_exspr",   unit: "crude_stocks_thousand_barrels"}
-    - {series_id: "PET.WGTSTUS1.W", name: "gasoline_stocks_total", unit: "gasoline_stocks_thousand_barrels"}
-    - {series_id: "PET.WDISTUS1.W", name: "distillate_stocks",     unit: "distillate_stocks_thousand_barrels"}
-    - {series_id: "PET.WCRRIUS2.W", name: "refinery_crude_inputs", unit: "refinery_crude_inputs_thousand_barrels_per_day"}
-    - {series_id: "PET.WPULEUS3.W", name: "refinery_utilization",  unit: "refinery_utilization_percent"}
-    - {series_id: "PET.WCEIMUS2.W", name: "crude_imports_exspr",   unit: "crude_imports_thousand_barrels_per_day"}
+    - series_id: "PET.WCESTUS1.W"
+      tag: "crude_stocks"
+      label: "commercial crude oil inventories"
+      unit: "thousand_barrels"
+      match: [["crude oil inventories"]]
+      # EIA rebenchmarked commercial crude stocks in early 2017; before then the current
+      # (revised) bulk series sits ~22-33M bbl below the level the contemporaneous reports
+      # quoted, so the text's stated "At X million barrels" no longer matches the series.
+      # Quarantine pre-2017 crude-stocks records (only crude was rebenchmarked — the other
+      # 5 topics align across all years). Changes/trajectory still track; it's the absolute
+      # level that drifts. Set null to include them.
+      min_data_year: 2017
+      description: >-
+        U.S. commercial crude oil inventories are the volume of crude oil held in commercial
+        storage nationwide, excluding the Strategic Petroleum Reserve, reported weekly by the
+        U.S. Energy Information Administration (EIA) in thousands of barrels as a barometer of
+        the balance between crude supply, imports, and refinery demand.
+    - series_id: "PET.WGTSTUS1.W"
+      tag: "gasoline_stocks"
+      label: "total motor gasoline inventories"
+      unit: "thousand_barrels"
+      match: [["gasoline", "inventor"]]
+      description: >-
+        U.S. total motor gasoline inventories are the volume of finished gasoline and blending
+        components held in storage nationwide, reported weekly by the EIA in thousands of
+        barrels; they signal the balance between refinery output, imports, and consumer demand
+        across the driving season.
+    - series_id: "PET.WDISTUS1.W"
+      tag: "distillate_stocks"
+      label: "distillate fuel inventories"
+      unit: "thousand_barrels"
+      match: [["distillate", "inventor"]]
+      description: >-
+        U.S. distillate fuel inventories cover diesel and heating oil held in storage
+        nationwide, reported weekly by the EIA in thousands of barrels; they are watched
+        closely as an indicator of freight, industrial, and winter heating demand.
+    - series_id: "PET.WCRRIUS2.W"
+      tag: "refinery_inputs"
+      label: "refinery crude oil inputs"
+      unit: "thousand_barrels_per_day"
+      match: [["refinery inputs"]]
+      description: >-
+        U.S. refinery crude oil inputs measure the volume of crude oil processed by refineries
+        each week, reported by the EIA in thousands of barrels per day as a gauge of how hard
+        the nation's refining system is running.
+    - series_id: "PET.WPULEUS3.W"
+      tag: "refinery_utilization"
+      label: "refinery utilization (percent of operable capacity)"
+      unit: "percent"
+      match: [["operable capacity"]]
+      description: >-
+        U.S. refinery utilization is the share of refineries' operable distillation capacity
+        actually in use, reported weekly by the EIA as a percent; it reflects how fully the
+        refining system is running relative to its maximum sustainable throughput.
+    - series_id: "PET.WCEIMUS2.W"
+      tag: "crude_imports"
+      label: "crude oil imports"
+      unit: "thousand_barrels_per_day"
+      match: [["crude oil imports"]]
+      description: >-
+        U.S. crude oil imports are the volume of crude oil brought into the country each week,
+        reported by the EIA in thousands of barrels per day; together with domestic production
+        and inventories they define the crude supply available to U.S. refiners.
 
-  window_weeks: 52          # trailing weeks ending at the report's data week; dropped if fewer
+  trailing_window_weeks: 260   # each record's series = this many most-recent weeks (~5yr,
+                               # the horizon the narrative's "five-year average" refers to)
+  min_points: 2               # need at least this many weekly points to emit a topic record
   cache_dir: ".cache"
   user_agent: "CPT-dataset-research faisal@usc.edu"
-  request_delay_s: 0.3      # be polite fetching per-week PDFs; cached per date
+  request_delay_s: 0.3        # be polite fetching per-week PDFs; cached per date
   timeout_s: 90
 
 text:
-  min_text_chars: 300
-  # Closing sentence carrying the single <ts></ts>. {n}=window, {week}=data week-ending.
-  ts_intro_sentence: "Weekly U.S. petroleum supply and inventories (crude / gasoline / distillate stocks, refinery inputs and utilization, crude imports), trailing {n} weeks through the week ending {week}: <ts></ts>"
+  min_snippet_chars: 40       # the matched narrative sentence(s) must be at least this long
+  # Framing prefix (real provenance context) + the ts-intro sentence carrying <ts></ts>.
+  # {week}=data week-ending; {label}/{unit_h}=per-channel; {n_weeks}=points in the window.
+  framing_template: "In its Weekly Petroleum Status Report for the week ending {week}, the U.S. Energy Information Administration reported: "
+  ts_intro_template: "Weekly U.S. {label}, the most recent {n_weeks} weeks of data through the week ending {week}: <ts></ts>"
 
 output:
   output_path: output/eia_petroleum_weekly_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
-  max_records: 50           # demo cap. null = full build (~779 weekly reports)
+  max_records: 60             # demo cap. null = full build (~6 records x weekly reports)
   indent: null
