@@ -43,7 +43,7 @@ data:
     - {col: "sa_svc_local_bus_cond_c", name: "local_business_conditions"}
     - {col: "sa_svc_capital_expnd_c",  name: "capital_expenditures"}
 
-  window_months: 24          # trailing months per record; dropped if fewer available
+  min_points: 2              # expanding window: full index history to the release month (>= this many points)
   min_text_year: 2017        # release PDFs only exist ~2018+; skip older months
   # canonical originating page (schema v1 `source` must be a URL)
   source_url: "https://www.richmondfed.org/region_communities/regional_data_analysis/surveys/service_sector"
@@ -54,7 +54,7 @@ data:
 
 text:
   min_text_chars: 200
-  ts_intro_sentence: "{bank} {survey_title} - monthly diffusion indices (revenues, demand, employment, wages, local business conditions, capital expenditures), trailing {n} months through {month}: <ts></ts>"
+  ts_intro_sentence: "{bank} {survey_title} - full monthly history of the diffusion indices (revenues, demand, employment, wages, local business conditions, capital expenditures) from {start} through {month}: <ts></ts>"
 
 output:
   output_path: output/richmond_nonmanufacturing_cpt.jsonl

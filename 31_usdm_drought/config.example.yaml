@@ -1,7 +1,9 @@
 # US Drought Monitor (USDM) → CPT world-knowledge JSONL
 #
-# Pairs the weekly USDM narrative PDF with a 12-week trailing window of
-# drought-category area percentages (D0-D4) from the USDM statistics API.
+# Pairs the weekly USDM narrative PDF with the FULL weekly history of
+# drought-category area percentages (D0-D4) from the USDM statistics API,
+# from the series' common start (~2000) through each release week (an
+# expanding window that grows one week per release).
 #
 # Quick start:
 #   pip install -r requirements.txt
@@ -18,6 +20,11 @@ data:
   start_date: "2021-05-04"
   end_date: null            # null = today
 
+  # Lower bound for the one-shot full-history TS fetch (the series begins ~2000).
+  # The expanding window is anchored at the common_start derived from the fetched
+  # history; this bound only needs to precede the series.
+  history_start_date: "2000-01-01"
+
   # Text: weekly narrative PDF. {date} = YYYYMMDD (the Tuesday valid date).
   narrative_url_template: "https://droughtmonitor.unl.edu/data/narrativepdf/{date}_nar_usdm.pdf"
 
@@ -31,8 +38,9 @@ data:
   # narrative's regional coverage) and "Total" (incl. territories). Keep one.
   area_of_interest: "CONUS"
 
-  # Trailing window length in weeks. Records dropped if the window is incomplete.
-  window_weeks: 12
+  # Expanding window: pair each release with the full weekly D0-D4 history from
+  # the common start through the release week. Require at least this many points.
+  min_points: 2
 
   pdf_cache_dir: ".cache/pdf"
   api_cache_dir: ".cache/api"
@@ -48,15 +56,16 @@ text:
   # Strip the trailing "Author(s) ..." credits block from the narrative.
   strip_authors: true
 
-  # Closing sentence holding exactly one <ts></ts>. {date} = YYYY-MM-DD valid date.
-  ts_intro_sentence: "US drought-category coverage (percent of CONUS area, D0 abnormally dry through D4 exceptional drought) for the 12 weeks ending {date}: <ts></ts>"
+  # Closing sentence holding exactly one <ts></ts>. {start} = series common start
+  # (YYYY-MM-DD), {date} = release/valid date (YYYY-MM-DD).
+  ts_intro_sentence: "US drought-category coverage (percent of CONUS area, D0 abnormally dry through D4 exceptional drought), full weekly history from {start} through {date}: <ts></ts>"
 
 output:
   output_path: output/usdm_drought_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
 
-  # Demo cap. null = full build (~269 weekly releases, 2021-05 → present).
+  # Demo cap. null = full build (~271 weekly releases, 2021-05 → present).
   max_records: 50
 
   # null = compact JSONL (one record/line); integer = pretty-printed JSON array.

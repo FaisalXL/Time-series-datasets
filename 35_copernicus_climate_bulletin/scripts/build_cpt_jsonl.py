@@ -2,15 +2,17 @@
 """Build CPT world-knowledge JSONL from the Copernicus C3S Monthly Climate Bulletin.
 
 Two record types (one per theme), one record per month per theme:
-  - temperature: the "Surface air temperature for {month}" narrative paired with a
-    12-month trailing window of global/European/pre-industrial anomalies (ERA5).
+  - temperature: the "Surface air temperature for {month}" narrative paired with the
+    EXPANDING full monthly history of global/European anomalies (ERA5) from the series
+    start through the release month (a growing window, not a fixed trailing slice).
   - sea_ice: the "Sea ice cover for {month}" narrative paired with Arctic + Antarctic
     extent anomalies for that calendar month across years (this-month-across-years,
-    which is exactly what the ranking prose describes).
+    full history to the report year — which is exactly what the ranking prose describes).
 
 Text is scraped from each bulletin page's HTML (analytical prose only — figure
 captions/nav stripped). Time-series CSVs are discovered from the page's own hrefs
-(robust to Copernicus filename/folder changes), then parsed and windowed.
+(robust to Copernicus filename/folder changes), then parsed. Both themes carry the
+full available history through each release rather than a fixed-length window.
 
 Examples:
   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=4
@@ -272,9 +274,11 @@ def _dl_text(url, cfg):
     return txt
 
 
-def temperature_series(csvs, cfg) -> Dict[str, Dict[str, float]]:
+def temperature_series(csvs, cfg) -> Dict[str, Dict[str, Optional[float]]]:
     """Return {ym 'YYYY-MM': {'global':v,'europe':v}} across current + mid (2021-24) eras.
-    Both use the 1991-2020 baseline; monthly continuous series."""
+    Both use the 1991-2020 baseline; monthly series. Values may be None where a channel
+    has a genuine gap (kept, not dropped, so the expanding window can null-fill interior
+    holes rather than fabricate or silently shorten one channel)."""
     # current era: Fig1b (global, named col ano_91-20) + Fig6b (Europe, ano_91-20)
     g_url = match_csv(csvs, ["global_allmonths", "1991-2020"])
     e_url = match_csv(csvs, ["Europe_allmonths", "1991-2020"])
@@ -283,11 +287,10 @@ def temperature_series(csvs, cfg) -> Dict[str, Dict[str, float]]:
         if gt and et:
             _, gd = parse_temp_csv(gt)
             _, ed = parse_temp_csv(et)
-            out = {}
-            for ym in gd:
-                gv, ev = gd[ym].get("ano_91-20"), ed.get(ym, {}).get("ano_91-20")
-                if gv is not None and ev is not None:
-                    out[ym] = {"global": gv, "europe": ev}
+            out: Dict[str, Dict[str, Optional[float]]] = {}
+            for ym in set(gd) | set(ed):
+                out[ym] = {"global": gd.get(ym, {}).get("ano_91-20"),
+                           "europe": ed.get(ym, {}).get("ano_91-20")}
             if out:
                 return out
     # mid era (~2021-2024): one ts_1month file, positional col1=YYYYMM, col2=global, col3=europe
@@ -305,31 +308,59 @@ def temperature_series(csvs, cfg) -> Dict[str, Dict[str, float]]:
                     gv, ev = float(cells[1]), float(cells[2])
                 except (ValueError, IndexError):
                     continue
-                if math.isnan(gv) or math.isnan(ev):
-                    continue
+                gv = None if math.isnan(gv) else gv
+                ev = None if math.isnan(ev) else ev
                 out[f"{m.group(1)}-{m.group(2)}"] = {"global": gv, "europe": ev}
             return out
     return {}
 
 
+def _month_grid(start_ym: str, end_ym: str) -> List[str]:
+    """Contiguous monthly grid ['YYYY-MM', ...] from start_ym through end_ym inclusive."""
+    sy, sm = int(start_ym[:4]), int(start_ym[5:7])
+    ey, em = int(end_ym[:4]), int(end_ym[5:7])
+    out: List[str] = []
+    y, m = sy, sm
+    while (y, m) <= (ey, em):
+        out.append(f"{y:04d}-{m:02d}")
+        m += 1
+        if m > 12:
+            m = 1; y += 1
+    return out
+
+
 def build_temperature_record(cfg, year, month, narrative, csvs, page_url):
-    win = int(cfg["data"]["window_months"])
     ym = f"{year:04d}-{month:02d}"
     series = temperature_series(csvs, cfg)
-    months = sorted(d for d in series if d <= ym)[-win:]
-    if len(months) < win:
-        return None, f"short/absent temp series ({len(months)}/{win})"
+    # Expanding window: pair this release with the FULL monthly history of the anomaly
+    # series up to (and including) its month, not a fixed trailing window. Anchor at the
+    # earliest month either channel has a value so both channels stay equal-length; walk a
+    # contiguous month grid to the release month, null-filling any interior gap (the schema
+    # allows null for genuine gaps — do not fabricate).
+    dates = [d for d in series if d <= ym and (series[d]["global"] is not None
+                                               or series[d]["europe"] is not None)]
+    if len(dates) < 2:
+        return None, f"short/absent temp series ({len(dates)} points)"
+    start_ym, end_ym = min(dates), max(dates)
+    months = _month_grid(start_ym, end_ym)
+    if len(months) < 2:
+        return None, f"short temp series ({len(months)} points)"
     channels = [
-        {"values": [round(series[m]["global"], 4) for m in months],
+        {"values": [None if series.get(m, {}).get("global") is None
+                    else round(series[m]["global"], 4) for m in months],
          "unit": "global_sat_anomaly_degc_1991_2020", "freq": "1m"},
-        {"values": [round(series[m]["europe"], 4) for m in months],
+        {"values": [None if series.get(m, {}).get("europe") is None
+                    else round(series[m]["europe"], 4) for m in months],
          "unit": "europe_sat_anomaly_degc_1991_2020", "freq": "1m"},
     ]
+    # channels share a freq (1m) -> must share length
+    assert len({len(c["values"]) for c in channels}) == 1, "temp channel length mismatch"
+    start_label = f"{start_ym}"
     intro = (f"Global and European monthly surface air temperature anomalies "
-             f"(ERA5, degrees C vs 1991-2020) for the 12 months ending {ym}")
+             f"(ERA5, degrees C vs 1991-2020) covering the full series from {start_label} "
+             f"through {ym}")
     text = f"{narrative}\n\n{intro}: <ts></ts>"
     # window is monthly-continuous; period spans the first to last month in it.
-    start_ym, end_ym = months[0], months[-1]
     period_start = f"{start_ym}-01"
     end_y, end_m = int(end_ym[:4]), int(end_ym[5:7])
     period_end = f"{end_ym}-{calendar.monthrange(end_y, end_m)[1]:02d}"
@@ -349,7 +380,8 @@ def build_temperature_record(cfg, year, month, narrative, csvs, page_url):
         meta={
             "theme": "temperature",
             "data_month": ym,
-            "window_months": win,
+            "series_start": start_ym,
+            "n_points": len(months),
             "report_url": page_url,
         },
     )

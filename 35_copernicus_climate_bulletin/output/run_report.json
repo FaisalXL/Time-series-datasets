@@ -1,22 +1,22 @@
 {
-  "generated_at": "2026-07-01T04:10:56Z",
+  "generated_at": "2026-07-22T05:50:05Z",
   "start_month": "2019-01",
-  "end_month": "2026-06",
+  "end_month": "2026-07",
   "themes": [
     "temperature",
     "sea_ice"
   ],
   "stats": {
-    "attempted": 180,
-    "emitted": 117,
+    "attempted": 182,
+    "emitted": 119,
     "skipped_no_page": 2,
     "skipped_short_text": 0,
     "skipped_ts": 61,
     "skipped_validation": 0
   },
   "per_theme": {
-    "temperature": 62,
-    "sea_ice": 55
+    "temperature": 63,
+    "sea_ice": 56
   },
   "validation_errors": [],
   "config_snapshot": {
@@ -28,7 +28,6 @@
         "temperature",
         "sea_ice"
       ],
-      "window_months": 12,
       "sea_ice_window_years": null,
       "html_cache_dir": ".cache/html",
       "csv_cache_dir": ".cache/csv",

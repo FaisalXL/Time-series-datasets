@@ -9,7 +9,7 @@
 
 *(Hydrological variables were evaluated and excluded — the prose there is mostly about precipitation & soil moisture, but only relative humidity is published as a downloadable series, so the text↔series alignment would be broken. See Key issues.)*
 
-**Scale:** 117 records span **2021 → present** (temperature from 2021-01, sea ice from 2021-06). Bulletins exist back to ~~2017, but only the **1991-2020-baseline** era (~~2021+) is included so anomalies are directly comparable across records; pre-2021 bulletins used a different baseline and file layout (see Key issues). ERA5 series behind them run to 1940/1979, so every record's window is complete.
+**Scale:** 117 records span **2021 → present** (temperature from 2021-01, sea ice from 2021-06). Bulletins exist back to ~~2017, but only the **1991-2020-baseline** era (~~2021+) is included so anomalies are directly comparable across records; pre-2021 bulletins used a different baseline and file layout (see Key issues). Each record carries the **full available history through its release** (an expanding window): the ERA5 temperature series run back to 1940/1979 and sea ice to 1979, so every record recites its series in full rather than a fixed trailing slice.
 
 ### 🔎 Examples
 
@@ -37,7 +37,7 @@
 |                   |                                                                                                                                                        |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **What / source** | Per-bulletin CSVs, discovered from each page's own hrefs (robust to Copernicus filename/folder changes). Built from ERA5 reanalysis.                   |
-| **Temperature**   | `freq 1m`, **12-month trailing window** (continuous monthly series)                                                                                    |
+| **Temperature**   | `freq 1m`, **expanding window** — the full continuous monthly series from its start through the release month                                          |
 | **Sea ice**       | `freq 1y`, **this-calendar-month-across-years** (e.g. every May 1979→report year) — matches the ranking prose ("ranked fourth lowest *for the month*") |
 
 
@@ -56,13 +56,13 @@
 
 ```json
 {
-  "text": "May 2026 was the second-warmest May globally. ... The global average temperature for May 2026 was 15.81°C, 0.55°C above the 1991-2020 average ... Global and European monthly surface air temperature anomalies (ERA5, degrees C vs 1991-2020) for the 12 months ending 2026-05: <ts></ts>",
+  "text": "May 2026 was the second-warmest May globally. ... The global average temperature for May 2026 was 15.81°C, 0.55°C above the 1991-2020 average ... Global and European monthly surface air temperature anomalies (ERA5, degrees C vs 1991-2020) covering the full series from 1940-01 through 2026-05: <ts></ts>",
   "timeseries": [
-    {"values": [0.4744, 0.4491, "...", 0.5503], "unit": "global_sat_anomaly_degc_1991_2020", "freq": "1m"},
-    {"values": [1.0966, 1.2979, "...", 0.5994], "unit": "europe_sat_anomaly_degc_1991_2020", "freq": "1m"}
+    {"values": [-0.9455, -0.8582, "...", 0.5503], "unit": "global_sat_anomaly_degc_1991_2020", "freq": "1m"},
+    {"values": [-6.873, -4.6792, "...", 0.5994], "unit": "europe_sat_anomaly_degc_1991_2020", "freq": "1m"}
   ],
   "task_type": "world_knowledge", "text_quality": "real",
-  "theme": "temperature", "data_month": "2026-05", "window_months": 12,
+  "theme": "temperature", "data_month": "2026-05", "series_start": "1940-01", "n_points": 1037,
   "report_url": "https://climate.copernicus.eu/surface-air-temperature-may-2026",
   "dataset": "copernicus_climate_bulletin", "source": "climate.copernicus.eu", "series_id": "c3s_temperature_2026-05"
 }
@@ -86,7 +86,7 @@
 
 **Key issues:**
 
-- **Two cadences by design:** temperature is monthly (`1m`, 12-step window); sea ice is annual (`1y`, this-month-across-years) because that's the only clean per-bulletin series *and* it's what the ranking prose describes.
+- **Two cadences by design:** temperature is monthly (`1m`, expanding full-history window); sea ice is annual (`1y`, this-month-across-years, full history to the report year) because that's the only clean per-bulletin series *and* it's what the ranking prose describes.
 - **Hydrological excluded** — precip/soil-moisture (the bulk of that theme's prose) are maps-only; only relative humidity is a downloadable series, so the pairing would be mismatched. Revisit only if precip/soil-moisture series are sourced from the Climate Data Store (heavier, separate pipeline).
 - **Mild leakage** — the prose states the latest anomaly values, which are the final TS points (standard text-describes-TS; flag for Charon if a stricter variant is wanted).
 - **Two file-naming eras handled; pre-2021 excluded on purpose** — Copernicus renamed its bulletin CSVs several times. The builder matches **both** current (`C3S_Bulletin_*_allmonths_DATA.csv` / `C3S_Bulletin_seaice_`*) and mid-era (`ts_1month_anomaly_Global_*_1991-2020`, `ts_{Month}_anomaly_{Arctic,Antarctic}_OSI-SAF_sie_*_1991-2020`) files, discovered from each page's own hrefs. **Pre-2021** bulletins used a **1981-2010 baseline** and different layout — excluded so all 117 records share one comparable 1991-2020 baseline (adding them would need per-record baseline tagging). Dropped the current-only pre-industrial channel so temperature is a uniform 2 channels across eras. `pdf`-free — HTML + CSV only.

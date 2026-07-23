@@ -4,12 +4,18 @@
 One record = one weekly USDM release (Tuesday "valid" date):
   - text: the official weekly narrative PDF (national summary + regional breakdown
           + "Looking Ahead" outlook), extracted with pdfplumber.
-  - timeseries: a 12-week trailing window of drought-category area percentages
-          (D0-D4, % of CONUS land area) from the USDM statistics API.
+  - timeseries: the FULL weekly history of drought-category area percentages
+          (D0-D4, % of CONUS land area) from the USDM statistics API, from the
+          series' common start (the earliest week where every D0-D4 channel has a
+          value, ~2000) through the release week. This is an EXPANDING window: it
+          grows one week per release, so recent releases carry ~1,300 weekly points.
 
 Text and TS are independent USDM products keyed on the same valid week, so the
 alignment is source-native (the narrative discusses the same period/categories the
 percentages quantify).
+
+The full CONUS history is fetched once (a single API call) and cached, then each
+release slices its expanding window in-memory (common_start -> release week).
 
 Examples:
   python scripts/build_cpt_jsonl.py --config config.example.yaml
@@ -170,44 +176,76 @@ def extract_narrative(pdf_path: Path, strip_authors: bool) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Time series: USDM area-percent API
+# Time series: USDM area-percent API (full weekly history, sliced per release)
 # ---------------------------------------------------------------------------
 
 
-def fetch_ts_window(
+def fetch_full_history(
     session: requests.Session,
     template: str,
-    valid_date: date,
-    window_weeks: int,
+    start: date,
+    end: date,
     stype: int,
     area: str,
     cache_file: Path,
     timeout: int,
-):
-    """Return (rows, from_cache). rows = list of dicts oldest->newest for `area`."""
-    start = valid_date - timedelta(weeks=window_weeks - 1)
+) -> Dict[date, Dict[str, float]]:
+    """Fetch the ENTIRE weekly history for `area` in one API call and return a
+    {valid_date -> {d0..d4}} map. Cached to a single file so re-runs are instant."""
     if cache_file.exists():
         payload = json.loads(cache_file.read_text())
-        from_cache = True
     else:
-        url = template.format(start=start.isoformat(), end=valid_date.isoformat(), stype=stype)
+        url = template.format(start=start.isoformat(), end=end.isoformat(), stype=stype)
         resp = session.get(url, timeout=timeout, headers={"Accept": "application/json"})
         resp.raise_for_status()
         payload = resp.json()
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         cache_file.write_text(json.dumps(payload))
-        from_cache = False
-    rows = [r for r in payload if r.get("areaOfInterest") == area]
-    rows.sort(key=lambda r: r["mapDate"])
-    return rows, from_cache
+    hist: Dict[date, Dict[str, float]] = {}
+    for r in payload:
+        if r.get("areaOfInterest") != area:
+            continue
+        vd = date.fromisoformat(r["mapDate"][:10])
+        hist[vd] = {key: float(r[key]) for key, _ in CATEGORY_UNITS if r.get(key) is not None}
+    return hist
 
 
-def build_timeseries(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def common_start_week(hist: Dict[date, Dict[str, float]]) -> Optional[date]:
+    """Earliest week where EVERY D0-D4 channel already has a value."""
+    keys = [key for key, _ in CATEGORY_UNITS]
+    for wk in sorted(hist):
+        if all(k in hist[wk] for k in keys):
+            return wk
+    return None
+
+
+def expanding_window(
+    hist: Dict[date, Dict[str, float]], common_start: date, valid_date: date
+) -> List[date]:
+    """All weekly (Tuesday) periods from common_start through valid_date, inclusive.
+
+    Weeks with no USDM row at all are still emitted (as null across every channel)
+    so the window is the full contiguous weekly history, not just observed rows."""
+    weeks: List[date] = []
+    cur = common_start
+    while cur <= valid_date:
+        weeks.append(cur)
+        cur += timedelta(weeks=1)
+    return weeks
+
+
+def build_timeseries(
+    hist: Dict[date, Dict[str, float]], weeks: List[date]
+) -> List[Dict[str, Any]]:
+    """One channel per D0-D4 category, each the value at every week in `weeks`
+    (missing -> None). All channels are equal length by construction."""
     series: List[Dict[str, Any]] = []
     for key, unit in CATEGORY_UNITS:
-        series.append(
-            {"values": [round(float(r[key]), 2) for r in rows], "unit": unit, "freq": "1w"}
-        )
+        values = [
+            round(hist[wk][key], 2) if wk in hist and key in hist[wk] else None
+            for wk in weeks
+        ]
+        series.append({"values": values, "unit": unit, "freq": "1w"})
     return series
 
 
@@ -219,17 +257,23 @@ def build_timeseries(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def build_record(
     valid_date: date,
     narrative: str,
-    rows: List[Dict[str, Any]],
+    hist: Dict[date, Dict[str, float]],
+    common_start: date,
+    weeks: List[date],
     pdf_url: str,
     cfg: Dict[str, Any],
 ) -> Dict[str, Any]:
     stype = int(cfg["data"]["statistics_type"])
-    intro = cfg["text"]["ts_intro_sentence"].format(date=valid_date.isoformat())
+    intro = cfg["text"]["ts_intro_sentence"].format(
+        start=common_start.isoformat(), date=valid_date.isoformat()
+    )
     text = f"{narrative}\n\n{intro}"
-    window_start = valid_date - timedelta(weeks=len(rows) - 1)
+    timeseries = build_timeseries(hist, weeks)
+    lengths = {len(ch["values"]) for ch in timeseries}
+    assert len(lengths) == 1, f"channel lengths differ: {sorted(lengths)}"
     return emit_record(
         text=text,
-        timeseries=build_timeseries(rows),
+        timeseries=timeseries,
         alignment="describes",
         license="unknown",
         text_source="first_party_official",
@@ -238,12 +282,13 @@ def build_record(
         series_id=f"usdm_{valid_date.isoformat()}",
         domain="climate",
         region="US",
-        period_start=window_start.isoformat(),
+        period_start=common_start.isoformat(),
         period_end=valid_date.isoformat(),
         meta={
             "data_week": valid_date.isoformat(),
             "release_date": valid_date.isoformat(),
-            "window_weeks": len(rows),
+            "series_start": common_start.isoformat(),
+            "n_points": len(weeks),
             "statistics_type": "cumulative" if stype == 1 else "marginal",
             "area_of_interest": cfg["data"]["area_of_interest"],
             "report_url": pdf_url,
@@ -278,7 +323,11 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
 
     start = parse_iso(data_cfg["start_date"])
     end = parse_iso(data_cfg["end_date"]) if data_cfg.get("end_date") else date.today()
-    window_weeks = int(data_cfg["window_weeks"])
+    # Lower bound for the full-history TS fetch (series begins ~2000). The
+    # expanding window is anchored at the common_start derived from the fetched
+    # history, not at this bound; it only needs to reach back before the series.
+    hist_start = parse_iso(data_cfg.get("history_start_date", "2000-01-01"))
+    min_points = int(data_cfg.get("min_points", 2))
     stype = int(data_cfg["statistics_type"])
     area = data_cfg["area_of_interest"]
     min_chars = int(text_cfg.get("min_text_chars", 200))
@@ -293,13 +342,25 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
     session = requests.Session()
     session.headers.update({"User-Agent": "CPTDatasetBuilder/1.0 (+research)"})
 
+    # Fetch the FULL weekly history once (single API call, cached) and anchor the
+    # expanding window at the earliest week where every D0-D4 channel has a value.
+    hist = fetch_full_history(
+        session, data_cfg["ts_api_template"], hist_start, end, stype, area,
+        api_cache / f"full_history_{area}.json", timeout,
+    )
+    common_start = common_start_week(hist)
+    if common_start is None:
+        raise SystemExit("No week has all D0-D4 channels present; cannot anchor window.")
+    print(f"Series common start: {common_start.isoformat()} ({len(hist)} weekly rows)",
+          file=sys.stderr)
+
     dates = tuesdays(start, end)
     stats = {
         "weeks_attempted": 0,
         "records_emitted": 0,
         "skipped_no_pdf": 0,
         "skipped_short_text": 0,
-        "skipped_incomplete_ts": 0,
+        "skipped_short_window": 0,
         "skipped_validation": 0,
     }
     records: List[Dict[str, Any]] = []
@@ -326,35 +387,28 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
             print(f"{label}: skipped (short text {len(narrative)} chars)")
             continue
 
-        try:
-            rows, ts_cached = fetch_ts_window(
-                session, data_cfg["ts_api_template"], vd, window_weeks,
-                stype, area, api_cache / f"{label}.json", timeout,
-            )
-        except requests.RequestException as exc:
-            stats["skipped_incomplete_ts"] += 1
-            print(f"{label}: skipped (TS fetch error: {exc})", file=sys.stderr)
+        if vd < common_start:
+            stats["skipped_short_window"] += 1
+            print(f"{label}: skipped (release before series common start)")
             continue
-
-        if len(rows) != window_weeks:
-            stats["skipped_incomplete_ts"] += 1
-            print(f"{label}: skipped (TS window {len(rows)}/{window_weeks})")
-            if not ts_cached:
-                time.sleep(delay)
+        weeks = expanding_window(hist, common_start, vd)
+        if len(weeks) < min_points:
+            stats["skipped_short_window"] += 1
+            print(f"{label}: skipped (window {len(weeks)} < min_points {min_points})")
             continue
 
         try:
-            record = build_record(vd, narrative, rows, pdf_url, cfg)
-        except ValueError as exc:
+            record = build_record(vd, narrative, hist, common_start, weeks, pdf_url, cfg)
+        except (ValueError, AssertionError) as exc:
             stats["skipped_validation"] += 1
             validation_errors.append(f"{label}: {exc}")
             continue
 
         records.append(record)
         stats["records_emitted"] += 1
-        print(f"{label}: emitted ({'cached' if pdf_cached else 'fetched'} pdf, {len(rows)}w TS)")
+        print(f"{label}: emitted ({'cached' if pdf_cached else 'fetched'} pdf, {len(weeks)}w TS)")
 
-        if not (pdf_cached and ts_cached):
+        if not pdf_cached:
             time.sleep(delay)
         if max_records is not None and len(records) >= int(max_records):
             break
@@ -363,7 +417,8 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
         "generated_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
-        "window_weeks": window_weeks,
+        "window": "expanding (full weekly D0-D4 history to each release week)",
+        "series_start": common_start.isoformat(),
         "statistics_type": "cumulative" if stype == 1 else "marginal",
         "area_of_interest": area,
         "stats": stats,
@@ -405,7 +460,7 @@ def main() -> None:
     print(
         f"\nDone: {s['records_emitted']} records "
         f"(no_pdf={s['skipped_no_pdf']}, short_text={s['skipped_short_text']}, "
-        f"incomplete_ts={s['skipped_incomplete_ts']}, invalid={s['skipped_validation']}).",
+        f"short_window={s['skipped_short_window']}, invalid={s['skipped_validation']}).",
         file=sys.stderr,
     )
 

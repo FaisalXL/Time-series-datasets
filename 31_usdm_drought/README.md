@@ -1,10 +1,10 @@
 # US Drought Monitor → CPT
 
-> **Status: Built** (demo: 50 records). Full build ~**269 weekly releases** (2021-05-04 → present). Run with `output.max_records=null`.
+> **Status: Built** (demo: 50 records). Full build ~**271 weekly releases** (2021-05-04 → present). Run with `output.max_records=null`.
 
-**What it is:** The weekly US Drought Monitor (USDM) release. One record = **one weekly map (Tuesday "valid" date)** — the official narrative PDF paired with a **12-week trailing window** of drought-category area coverage (D0–D4, % of contiguous-US land).
+**What it is:** The weekly US Drought Monitor (USDM) release. One record = **one weekly map (Tuesday "valid" date)** — the official narrative PDF paired with the **full weekly history** of drought-category area coverage (D0–D4, % of contiguous-US land) from the series' common start (2000-01-04) through the release week (an **expanding window** that grows one week per release).
 
-**Scale:** USDM publishes every Tuesday. Narrative PDFs exist from **2021-05-04** onward (~269 weeks to mid-2026); the statistics API goes back to 2000, so every narrative has a complete 12-week window. Demo emits 50; full build ~269.
+**Scale:** USDM publishes every Tuesday. Narrative PDFs exist from **2021-05-04** onward (~271 weeks to mid-2026); the statistics API goes back to 2000, so each release carries the complete weekly history to date (~1,110 points for the earliest release, ~1,385 for the latest). Demo emits 50; full build ~271.
 
 #### 📄 Text — weekly narrative PDF
 | | |
@@ -19,7 +19,7 @@
 |---|---|
 | **What** | % of CONUS land area in each drought category, weekly |
 | **Source** | `usdmdataservices.unl.edu/api/USStatistics/GetDroughtSeverityStatisticsByAreaPercent` (JSON; filtered to `areaOfInterest = CONUS`) |
-| **Window** | `1w`, **12 trailing weeks** ending the release date (oldest → newest) |
+| **Window** | `1w`, **full weekly history** from the common start (2000-01-04) through the release date (oldest → newest, expanding) |
 
 | Channel (`unit`) | Meaning |
 |---|---|
@@ -36,16 +36,16 @@ Values are **cumulative** (`statisticsType=1`: D0 ≥ D1 ≥ … ≥ D4, each in
 **Record shape:** (real record — 2021-05-04, arrays abbreviated)
 ```json
 {
-  "text": "National Drought Summary – May 4, 2021 ... US drought-category coverage (percent of CONUS area, D0 abnormally dry through D4 exceptional drought) for the 12 weeks ending 2021-05-04: <ts></ts>",
+  "text": "National Drought Summary – May 4, 2021 ... US drought-category coverage (percent of CONUS area, D0 abnormally dry through D4 exceptional drought), full weekly history from 2000-01-04 through 2021-05-04: <ts></ts>",
   "timeseries": [
-    {"values": [64.46, 63.90, 61.67, "...", 65.64], "unit": "pct_area_d0_abnormally_dry", "freq": "1w"},
-    {"values": [45.19, 45.56, 46.58, "...", 46.55], "unit": "pct_area_d1_moderate_drought", "freq": "1w"},
-    {"values": [30.17, 30.85, 30.93, "...", 32.24], "unit": "pct_area_d2_severe_drought", "freq": "1w"},
-    {"values": [19.02, 18.66, 18.62, "...", 22.56], "unit": "pct_area_d3_extreme_drought", "freq": "1w"},
-    {"values": [8.14, 8.44, 8.50, "...", 9.04], "unit": "pct_area_d4_exceptional_drought", "freq": "1w"}
+    {"values": [51.00, 61.80, 67.80, "...", 65.64], "unit": "pct_area_d0_abnormally_dry", "freq": "1w"},
+    {"values": [23.35, 24.93, 25.91, "...", 46.55], "unit": "pct_area_d1_moderate_drought", "freq": "1w"},
+    {"values": [9.45, 9.90, 10.38, "...", 32.24], "unit": "pct_area_d2_severe_drought", "freq": "1w"},
+    {"values": [0.00, 0.00, 0.00, "...", 22.56], "unit": "pct_area_d3_extreme_drought", "freq": "1w"},
+    {"values": [0.00, 0.00, 0.00, "...", 9.04], "unit": "pct_area_d4_exceptional_drought", "freq": "1w"}
   ],
   "task_type": "world_knowledge", "text_quality": "real",
-  "data_week": "2021-05-04", "release_date": "2021-05-04", "window_weeks": 12,
+  "data_week": "2021-05-04", "release_date": "2021-05-04", "series_start": "2000-01-04", "n_points": 1114,
   "statistics_type": "cumulative", "area_of_interest": "CONUS",
   "report_url": "https://droughtmonitor.unl.edu/data/narrativepdf/20210504_nar_usdm.pdf",
   "dataset": "usdm_drought", "source": "droughtmonitor.unl.edu", "series_id": "usdm_2021-05-04"
@@ -63,7 +63,7 @@ Values are **cumulative** (`statisticsType=1`: D0 ≥ D1 ≥ … ≥ D4, each in
 pip install -r requirements.txt
 python scripts/build_cpt_jsonl.py                          # demo (50 records)
 python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3   # smoke test
-python scripts/build_cpt_jsonl.py --set output.max_records=null          # full build (~269)
+python scripts/build_cpt_jsonl.py --set output.max_records=null          # full build (~271)
 ```
 
 **Output:** `output/usdm_drought_cpt.jsonl` + `output/run_report.json` (`samples/` is gitignored; `.cache/` holds downloaded PDFs + API JSON so reruns are free).

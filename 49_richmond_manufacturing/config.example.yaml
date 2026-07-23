@@ -1,8 +1,9 @@
 # Richmond Fed Fifth District Survey of Manufacturing Activity → CPT world-knowledge JSONL
 #
-# One record = one release month: the monthly release narrative (which recites the
-# diffusion-index readings) paired with a trailing window of those indices. The prose
-# *describes* the series → "describes" (value-reciting, EIA/BLS-tier). text_quality "real".
+# One record = one release month: the monthly release narrative (which states the latest
+# month's diffusion-index readings) paired with the FULL history of those indices up to the
+# release month (expanding window). The prose *describes* the trajectory → "describes"
+# (EIA/BLS-tier). text_quality "real".
 #
 # One of the Federal Reserve regional business surveys (see docs/fed_surveys_discovery.md).
 # Siblings: 47_philadelphia_mbos, 48_dallas_tmos; Richmond also runs a Non-Manufacturing
@@ -44,7 +45,7 @@ data:
     - {col: "sa_mfg_cap_util_c",   name: "capacity_utilization"}
     - {col: "sa_mfg_wage_c",       name: "wages"}
 
-  window_months: 24          # trailing months per record; dropped if fewer available
+  min_points: 2              # expanding window: full index history to the release month (>= this many points)
   min_text_year: 2017        # release PDFs only exist ~2018+; skip older months (avoid wasted probes)
   # canonical originating page (schema v1 `source` must be a URL)
   source_url: "https://www.richmondfed.org/research/regional_economy/surveys_of_business_conditions/manufacturing"
@@ -55,7 +56,7 @@ data:
 
 text:
   min_text_chars: 250
-  ts_intro_sentence: "{bank} {survey_title} - monthly diffusion indices (composite, shipments, new orders, employment, order backlog, capacity utilization, wages), trailing {n} months through {month}: <ts></ts>"
+  ts_intro_sentence: "{bank} {survey_title} - full monthly history of the diffusion indices (composite, shipments, new orders, employment, order backlog, capacity utilization, wages) from {start} through {month}: <ts></ts>"
 
 output:
   output_path: output/richmond_manufacturing_cpt.jsonl

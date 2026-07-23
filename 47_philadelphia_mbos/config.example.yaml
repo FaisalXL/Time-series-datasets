@@ -1,8 +1,9 @@
 # Philadelphia Fed Manufacturing Business Outlook Survey (MBOS) → CPT world-knowledge JSONL
 #
 # One record = one release month: the MBOS monthly release narrative (which recites the
-# diffusion-index readings) paired with a trailing window of those indices. The prose
-# *describes* the series → "describes" (value-reciting, EIA/BLS-tier). text_quality "real".
+# diffusion-index readings) paired with the FULL history of those indices up to that release
+# month (expanding window). The prose *describes* the series → "describes" (value-reciting,
+# EIA/BLS-tier). text_quality "real".
 #
 # One of the Federal Reserve regional business surveys (see docs/fed_surveys_discovery.md).
 # Sibling packages will cover the other surveys (NY Empire State, Richmond, Dallas TMOS,
@@ -40,7 +41,7 @@ data:
     - {col: "PRC", name: "prices_received"}
     - {col: "GAF", name: "future_general_activity"}
 
-  window_months: 24          # trailing months per record; dropped if fewer available
+  min_points: 2              # expanding window: full index history to the release month (>= this many points)
   # canonical originating page (schema v1 `source` must be a URL)
   source_url: "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/manufacturing-business-outlook-survey"
   cache_dir: ".cache"
@@ -50,7 +51,7 @@ data:
 
 text:
   min_text_chars: 200
-  ts_intro_sentence: "{bank} {survey_title} - monthly diffusion indices (current general activity, new orders, shipments, employment, prices paid/received; plus future general activity), trailing {n} months through {month}: <ts></ts>"
+  ts_intro_sentence: "{bank} {survey_title} - full monthly history of the diffusion indices (current general activity, new orders, shipments, employment, prices paid/received; plus future general activity) from {start} through {month}: <ts></ts>"
 
 output:
   output_path: output/philadelphia_mbos_cpt.jsonl

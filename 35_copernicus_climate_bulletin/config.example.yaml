@@ -1,10 +1,12 @@
 # Copernicus C3S Monthly Climate Bulletin → CPT world-knowledge JSONL
 #
 # Two record types (one per theme), one record per month per theme:
-#   - temperature: surface-air-temperature narrative + 3 channels (global/European/
-#     pre-industrial anomaly), 12-month trailing window (freq 1m).
+#   - temperature: surface-air-temperature narrative + 2 channels (global/European
+#     anomaly), EXPANDING window = the full monthly series from its start through the
+#     release month (freq 1m).
 #   - sea_ice: sea-ice-cover narrative + 2 channels (Arctic/Antarctic extent anomaly),
-#     this-calendar-month-across-years (freq 1y) — matches the ranking prose.
+#     this-calendar-month-across-years, full history to the report year (freq 1y) —
+#     matches the ranking prose.
 #
 # Quick start:
 #   pip install -r requirements.txt
@@ -25,10 +27,10 @@ data:
   # Which themes to emit. Each is its own record type.
   themes: ["temperature", "sea_ice"]
 
-  # temperature: trailing monthly window length
-  window_months: 12
+  # temperature: EXPANDING window — each release is paired with the full monthly
+  # anomaly series from its start through the release month (no fixed trailing slice).
   # sea_ice: number of trailing years for the this-month-across-years series
-  # (null = all available years, 1979 → report year)
+  # (null = all available years, 1979 → report year; already effectively full-history).
   sea_ice_window_years: null
 
   html_cache_dir: ".cache/html"

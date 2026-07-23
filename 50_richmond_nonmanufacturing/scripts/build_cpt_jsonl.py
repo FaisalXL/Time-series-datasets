@@ -271,14 +271,26 @@ def fetch_narrative(d: dict, ym: str, cache: Path) -> Optional[str]:
 def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
     d, t, out_cfg = cfg["data"], cfg["text"], cfg["output"]
     cache = rp(d["cache_dir"])
-    win = int(d["window_months"])
     chans = d["channels"]
     maxrec = out_cfg.get("max_records")
     min_year = int(d.get("min_text_year", 2017))
+    min_points = int(d.get("min_points", 2))
 
     series = load_series(d["data_xlsx_url"], cache, d["user_agent"], int(d["timeout_s"]))
     months = sorted(series)
     idx = {ym: i for i, ym in enumerate(months)}
+
+    # Expanding window: pair each release with the FULL history of the indices up to that
+    # month (source-native, not a fixed trailing window). Anchor the window at the earliest
+    # month where every channel has begun, so all channels stay equal-length; interior gaps
+    # become null (SCHEMA allows null for genuine gaps — do not fabricate).
+    def _first_idx(col: str) -> Optional[int]:
+        for j, m in enumerate(months):
+            if series[m].get(col) is not None:
+                return j
+        return None
+    firsts = [_first_idx(c["col"]) for c in chans]
+    common_start = None if any(f is None for f in firsts) else max(firsts)
 
     stat = {"months_with_window": 0, "emitted": 0, "no_text": 0, "short_text": 0,
             "short_window": 0, "invalid": 0}
@@ -290,20 +302,17 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
         if int(ym[:4]) < min_year:                  # text archive starts ~2018; skip older
             continue
         i = idx[ym]
-        if i + 1 < win:
+        if common_start is None or i - common_start + 1 < min_points:
             stat["short_window"] += 1
             continue
-        window_ms = months[i - win + 1: i + 1]
-        chan_vals, ok = [], True
+        window_ms = months[common_start: i + 1]     # expanding: common start -> this month
+        chan_vals = []
         for c in chans:
-            vals = [series[m].get(c["col"]) for m in window_ms]
-            if any(v is None for v in vals):
-                ok = False
-                break
-            chan_vals.append([round(v, 3) for v in vals])
-        if not ok:
-            stat["short_window"] += 1
-            continue
+            vals = []
+            for m in window_ms:
+                v = series[m].get(c["col"])
+                vals.append(round(v, 3) if v is not None else None)
+            chan_vals.append(vals)
         stat["months_with_window"] += 1
 
         narr = fetch_narrative(d, ym, cache)
@@ -316,8 +325,11 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
 
         yr, mon = ym.split("-")
         month_label = f"{_MONTH_NAME[int(mon)]} {yr}"
+        start_ym = window_ms[0]
+        start_label = f"{_MONTH_NAME[int(start_ym[5:7])]} {start_ym[:4]}"
         intro = t["ts_intro_sentence"].format(
-            bank=d["bank"], survey_title=d["survey_title"], n=win, month=month_label)
+            bank=d["bank"], survey_title=d["survey_title"],
+            start=start_label, month=month_label)
         text = f"{narr}\n\n{intro}"
         timeseries = [{"values": chan_vals[j], "unit": chans[j]["name"], "freq": "1M"}
                       for j in range(len(chans))]
@@ -326,14 +338,14 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
             rec = emit_record(
                 text=text,
                 timeseries=timeseries,
-                alignment="recites",
+                alignment="describes",
                 license="public-domain-us-gov",
                 source=d["source_url"],
                 dataset="richmond_nonmanufacturing",
                 series_id=f"rich_svc_{ym}",
                 domain="macro_econ",
                 region="US",
-                period_start=f"{window_ms[0]}-01",
+                period_start=f"{start_ym}-01",
                 period_end=f"{ym}-01",
                 meta={
                     "bank": d["bank"],
@@ -341,14 +353,15 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
                     "district": d.get("district"),
                     "sector": d["domain"],
                     "release_month": ym,
-                    "window_months": win,
+                    "series_start": start_ym,
+                    "n_points": len(window_ms),
                     "channels": [c["name"] for c in chans],
                 },
             )
         except ValueError:
             stat["invalid"] += 1
             continue
-        if validate(rec, win):          # extra business rule: window length == win
+        if validate(rec):
             stat["invalid"] += 1
             continue
         records.append(rec)
@@ -356,13 +369,13 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
     return records, stat
 
 
-def validate(rec: dict, win: int) -> List[str]:
+def validate(rec: dict) -> List[str]:
     e = []
     if rec["text"].count("<ts></ts>") != 1:
         e.append("ts token count")
     lens = {len(c["values"]) for c in rec["timeseries"]}
-    if len(lens) != 1 or next(iter(lens)) != win:
-        e.append(f"window {sorted(lens)} != {win}")
+    if len(lens) != 1:                         # all channels must share length (same freq)
+        e.append(f"channel lengths differ: {sorted(lens)}")
     return e
 
 
@@ -373,7 +386,7 @@ def run(cfg: Dict[str, Any], dry: bool) -> Dict[str, Any]:
     d, out_cfg = cfg["data"], cfg["output"]
     records, stats = build(cfg)
     report = {"survey": d["survey_title"], "bank": d["bank"],
-              "window_months": int(d["window_months"]),
+              "window": "expanding (full index history to each release month)",
               "channels": [c["name"] for c in d["channels"]],
               "stats": stats, "config_snapshot": cfg, "dry_run": dry}
 
