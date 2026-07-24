@@ -1,17 +1,27 @@
-# CDC FluView → CPT world-knowledge JSONL
+# CDC FluView → CPT world-knowledge JSONL (PER-TOPIC national records)
 #
-# Pairs weekly CDC FluView HTML reports with national surveillance CSVs.
+# Each weekly CDC FluView HTML report is split into up to FOUR topic records; each
+# pairs the report paragraph(s) about ONE surveillance topic with ONLY that topic's
+# national season-to-date series (expanding window, MMWR week 40 -> report week):
+#
+#   ili             ILINet outpatient illness           (local ILINet.csv)
+#   lab_composition NREVSS virus typing / positivity     (local NREVSS CSVs)
+#   hospitalization FluSurv-NET hospitalization rates     (Socrata kvib-3txy, cached)
+#   mortality       NCHS % of deaths due to influenza     (Socrata 4bc2-bbpq, cached)
+#
+# Text is REAL CDC narrative only; alignment = "recites". A topic is emitted only when
+# both its real paragraph AND its real series exist for that week, else it is dropped.
 #
 # Quick start:
 #   pip install -r requirements.txt
 #   python scripts/build_cpt_jsonl.py
 #
 # Override config:
-#   python scripts/build_cpt_jsonl.py --config config.example.yaml
+#   python scripts/build_cpt_jsonl.py --set data.seasons=[2024-2025]
 #   python scripts/build_cpt_jsonl.py --set output.max_records=null
 
 data:
-  # Directory containing ILINet.csv and NREVSS CSVs
+  # Directory containing ILINet.csv and NREVSS CSVs (national)
   csv_dir: "data/raw_csv"
 
   # Flu seasons to process (must match CSV + available HTML archive)
@@ -28,9 +38,8 @@ data:
     - "2024-2025"
     - "2025-2026"
 
-  # Drop records whose season-to-date window is shorter than this many weeks.
+  # Drop reports whose season-to-date window is shorter than this many weeks.
   # 1 = keep everything (incl. week-40 season openers, which are length-1).
-  # Raise to e.g. 4 to enforce a multi-step floor.
   min_window_weeks: 1
 
   # Cache downloaded weekly HTML reports here
@@ -39,25 +48,51 @@ data:
   # Polite delay between CDC HTTP requests (seconds)
   request_delay_s: 1.0
 
-  # HTTP timeout per request (seconds)
+  # HTTP timeout per CDC report request (seconds)
   timeout_s: 15
 
-text:
-  # Skip records with less than this many characters of extracted narrative
-  min_text_chars: 200
+  # --- FluSurv-NET (hospitalization topic) ---------------------------------
+  # Socrata resource kvib-3txy (Rates of Laboratory-Confirmed RESP-NET
+  # Hospitalizations). We filter surveillance_network=FluSurv-NET and the
+  # national all-demographics aggregate (state='Overall', sex='All', race='All');
+  # week-ending dates are MMWR Saturdays that align to the ILINet (year, week) grid.
+  # Rows are pulled once and cached to a local CSV so re-runs are offline.
+  flusurv_socrata_url: "https://data.cdc.gov/resource/kvib-3txy.json"
+  flusurv_cache: "data/raw_csv/flusurv_net_national.csv"
 
-  # Closing sentence appended before timeseries placeholder (exactly one <ts></ts>).
-  # Placeholders: {season}, {week}, {n_weeks}. The timeseries is a season-to-date
-  # trailing window (MMWR week 40 -> the report week), so every channel carries the
-  # full trajectory the report text discusses, not a single value.
-  ts_intro_sentence: "National influenza surveillance indicators for the {season} season, weekly from the season start (MMWR week 40) through week {week} ({n_weeks} weeks to date): <ts></ts>."
+  # --- NCHS mortality (mortality topic) ------------------------------------
+  # Socrata resource 4bc2-bbpq ('Provisional Percent of Deaths for COVID-19,
+  # Influenza, and RSV'), pathogen='Influenza'; national weekly percent of deaths
+  # due to influenza — the NCHS mortality-surveillance figure FluView recites.
+  # Coverage begins 2024-10-05, so the mortality topic emits only for seasons
+  # that overlap it (2024-2025 onward). Cached to a local CSV for offline re-runs.
+  nchs_mortality_socrata_url: "https://data.cdc.gov/resource/4bc2-bbpq.json"
+  nchs_mortality_cache: "data/raw_csv/nchs_mortality_influenza.csv"
+
+  socrata_user_agent: "CPT-dataset-research flnu@usc.edu"
+  socrata_timeout_s: 120
+
+text:
+  # A topic is dropped if its extracted narrative is shorter than this many chars.
+  min_topic_chars: 60
+
+  # Per-topic closing sentence appended before the timeseries placeholder. Each
+  # carries EXACTLY ONE <ts></ts> and names that topic's own channels. The series
+  # is a season-to-date expanding window (MMWR week 40 -> report week), so every
+  # channel carries the full trajectory the narrative discusses.
+  # Placeholders: {season}, {week}, {n_weeks}.
+  ts_intro_by_topic:
+    ili: "National ILINet outpatient influenza-like-illness indicators for the {season} season, weekly from the season start (MMWR week 40) through week {week} ({n_weeks} weeks to date) — percent of visits for ILI, total ILI visits, and ILI patient counts by age group (0-4, 5-24, 25-49, 50-64, 65+): <ts></ts>."
+    lab_composition: "National influenza laboratory indicators for the {season} season, weekly from the season start (MMWR week 40) through week {week} ({n_weeks} weeks to date) — clinical-laboratory percent positive and percent positive for influenza A and B, and public-health-laboratory positive counts by type/subtype (A(H1N1)pdm09, A(H3), B, B/Victoria, B/Yamagata, A(H5)): <ts></ts>."
+    hospitalization: "National FluSurv-NET laboratory-confirmed influenza-associated hospitalization rates per 100,000 population for the {season} season, weekly from the season start (MMWR week 40) through week {week} ({n_weeks} weeks to date) — overall weekly rate, overall cumulative rate, and cumulative rate by age group (0-4, 5-17, 18-49, 50-64, 65+): <ts></ts>."
+    mortality: "National NCHS mortality-surveillance percentage of all deaths that were due to influenza for the {season} season, weekly from the season start (MMWR week 40) through week {week} ({n_weeks} weeks to date): <ts></ts>."
 
 output:
   output_path: output/cdc_fluview_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
 
-  # Cap total records (demo). null = emit all weeks with HTML + CSV.
+  # Cap total records (demo). null = emit all topic records for all weeks.
   max_records: null
 
   # null = compact JSONL; integer = pretty-print array

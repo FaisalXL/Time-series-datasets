@@ -1,13 +1,29 @@
 #!/usr/bin/env python3
-"""Build CPT world-knowledge JSONL from CDC FluView weekly reports + surveillance CSVs.
+"""Build CPT world-knowledge JSONL from CDC FluView weekly reports + surveillance series.
 
-One record per epidemiological week: scraped CDC weekly HTML narrative paired with
-national ILINet / NREVSS clinical / public-health lab indicators for that week.
+PER-TOPIC national records. Each weekly FluView report is split into up to four
+topic records, each pairing the report paragraph(s) about ONE surveillance topic
+with ONLY that topic's national season-to-date time series (an expanding window
+from MMWR week 40 through the report week). So the text of every record tightly
+describes the exact series attached to it — not one national bundle re-sliced.
 
-Example:
+Topics
+  ili            outpatient influenza-like illness (ILINet)              -> local ILINet.csv
+  lab_composition virus typing / positivity (NREVSS clinical + PHL)      -> local NREVSS CSVs
+  hospitalization FluSurv-NET lab-confirmed hospitalization rates        -> Socrata kvib-3txy
+  mortality      NCHS % of deaths due to influenza                       -> Socrata 4bc2-bbpq
+
+Text is REAL CDC report narrative only — the paragraph/sentence(s) that describe
+each topic, extracted by keyword anchors. A topic record is emitted ONLY when BOTH
+the real narrative for that topic AND a real series for it are available; otherwise
+the topic is dropped for that week (and counted). Alignment = "describes" (text cites the
+week's as-published figures; series carry CDC's current revised values — minor drift).
+
+Examples:
   python scripts/build_cpt_jsonl.py
   python scripts/build_cpt_jsonl.py --config config.example.yaml
-  python scripts/build_cpt_jsonl.py --set output.max_records=10
+  python scripts/build_cpt_jsonl.py --set data.seasons=[2024-2025]
+  python scripts/build_cpt_jsonl.py --set output.max_records=null
 """
 
 from __future__ import annotations
@@ -16,8 +32,11 @@ import argparse
 import csv
 import json
 import re
+import ssl
 import sys
 import time
+import urllib.parse
+import urllib.request
 from datetime import UTC, date, datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
@@ -45,6 +64,12 @@ DEFAULT_CONFIG = ROOT / "config.example.yaml"
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
 from emit import emit_record  # noqa: E402
 
+# Socrata is fetched with urllib; some corporate/proxied hosts present certs that
+# fail strict verification, so mirror the sibling packages' relaxed SSL context.
+_SSL = ssl.create_default_context()
+_SSL.check_hostname = False
+_SSL.verify_mode = ssl.CERT_NONE
+
 PATTERN_A_SEASONS = {
     "2015-2016",
     "2016-2017",
@@ -61,23 +86,54 @@ CSV_FILES = {
     "public_health": "ICL_NREVSS_Public_Health_Labs.csv",
 }
 
-TIMESERIES_SPEC: Sequence[Tuple[str, str, str]] = (
+# --- per-topic channel specs ------------------------------------------------
+# Each topic becomes its OWN record carrying ONLY these channels over the
+# season-to-date window. Channel `unit` labels are snake_case and distinct
+# within a record (strict validation rejects repeated units).
+
+TOPIC_ILI = "ili"
+TOPIC_LAB = "lab_composition"
+TOPIC_HOSP = "hospitalization"
+TOPIC_MORT = "mortality"
+
+# ILINet outpatient illness: (csv_table, column, unit_label)
+ILI_SPEC: Sequence[Tuple[str, str, str]] = (
     ("ilin", "% WEIGHTED ILI", "ili_pct_weighted"),
     ("ilin", "ILITOTAL", "ili_total_visits"),
-    ("ilin", "AGE 0-4", "age_0_4"),
-    ("ilin", "AGE 5-24", "age_5_24"),
-    ("ilin", "AGE 25-49", "age_25_49"),
-    ("ilin", "AGE 50-64", "age_50_64"),
-    ("ilin", "AGE 65", "age_65_plus"),
+    ("ilin", "AGE 0-4", "ili_age_0_4"),
+    ("ilin", "AGE 5-24", "ili_age_5_24"),
+    ("ilin", "AGE 25-49", "ili_age_25_49"),
+    ("ilin", "AGE 50-64", "ili_age_50_64"),
+    ("ilin", "AGE 65", "ili_age_65_plus"),
+)
+
+# Virus typing / positivity: clinical-lab percentages + public-health-lab subtype counts
+LAB_SPEC: Sequence[Tuple[str, str, str]] = (
     ("clinical", "PERCENT POSITIVE", "clinical_pct_positive"),
     ("clinical", "PERCENT A", "clinical_pct_A"),
     ("clinical", "PERCENT B", "clinical_pct_B"),
-    ("public_health", "A (2009 H1N1)", "ph_H1N1"),
-    ("public_health", "A (H3)", "ph_H3"),
-    ("public_health", "B", "ph_B"),
-    ("public_health", "BVic", "ph_BVic"),
-    ("public_health", "BYam", "ph_BYam"),
+    ("public_health", "A (2009 H1N1)", "phl_A_H1N1pdm09_count"),
+    ("public_health", "A (H3)", "phl_A_H3_count"),
+    ("public_health", "B", "phl_B_count"),
+    ("public_health", "BVic", "phl_B_Victoria_count"),
+    ("public_health", "BYam", "phl_B_Yamagata_count"),
+    ("public_health", "A (H5)", "phl_A_H5_count"),
 )
+
+# FluSurv-NET hospitalization rates: (data_type, age_category, unit_label)
+HOSP_SPEC: Sequence[Tuple[str, str, str]] = (
+    ("Weekly Rate", "Overall", "flusurv_weekly_rate_per_100k"),
+    ("Cumulative Rate", "Overall", "flusurv_cumulative_rate_per_100k"),
+    ("Cumulative Rate", "0-4 yr", "flusurv_cum_rate_age_0_4"),
+    ("Cumulative Rate", "5-17 yr", "flusurv_cum_rate_age_5_17"),
+    ("Cumulative Rate", "18-49 yr", "flusurv_cum_rate_age_18_49"),
+    ("Cumulative Rate", "50-64 yr", "flusurv_cum_rate_age_50_64"),
+    ("Cumulative Rate", "65+ yr", "flusurv_cum_rate_age_65_plus"),
+)
+
+# NCHS mortality: single channel (percent of deaths due to influenza)
+MORT_PATHOGEN = "Influenza"
+MORT_LABEL = "nchs_pct_deaths_due_to_influenza"
 
 SKIP_PHRASES = (
     "view larger",
@@ -177,12 +233,20 @@ def season_for_week(year: int, week: int) -> str:
     return f"{start}-{start + 1}"
 
 
+def season_short(season: str) -> str:
+    """'2024-2025' -> '2024-25' (the form FluSurv-NET / RSV-NET Socrata use)."""
+    start = parse_season(season)
+    return f"{start}-{(start + 1) % 100:02d}"
+
+
 def mmwr_week_ending(year: int, week: int) -> str:
     """Saturday date on which MMWR (epidemiological) `week` of `year` ends.
 
     MMWR week 1 ends on the first Saturday of the year that has at least four
     days in January; weeks run Sunday–Saturday. Used to give the record real
-    ISO-8601 `period_start` / `period_end` dates for the season-to-date window.
+    ISO-8601 `period_start` / `period_end` dates for the season-to-date window,
+    and to align FluSurv-NET / NCHS week-ending dates (also MMWR Saturdays) to
+    the ILINet (year, week) grid.
     """
     jan1 = date(year, 1, 1)
     # Saturday of the week containing Jan 1 (weekday(): Mon=0 .. Sun=6).
@@ -195,7 +259,6 @@ def mmwr_week_ending(year: int, week: int) -> str:
 
 
 def weeks_for_season(season: str, available: set[Tuple[int, int]]) -> List[Tuple[int, int]]:
-    start_year = parse_season(season)
     weeks = [
         (year, week)
         for year, week in sorted(available)
@@ -224,7 +287,7 @@ def cache_path(cache_dir: Path, season: str, week: int) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# CSV loading
+# CSV loading (local national ILINet / NREVSS tables)
 # ---------------------------------------------------------------------------
 
 
@@ -278,22 +341,179 @@ def season_to_date_window(
     """All weeks in `season` from week 40 up to and including `key`.
 
     Returns chronologically-ordered (year, week) keys that are present in the
-    joined CSV tables — so every channel shares the same length and alignment.
+    joined CSV tables — so every local channel shares the same length/alignment.
     """
     return [wk for wk in weeks_for_season(season, available) if wk <= key]
 
 
-def build_timeseries(
+# ---------------------------------------------------------------------------
+# Socrata fetch (FluSurv-NET hospitalization, NCHS mortality) + local caching
+# ---------------------------------------------------------------------------
+
+
+def _socrata_get(base_url: str, params: Dict[str, str], ua: str, timeout: float) -> List[dict]:
+    url = base_url + "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"User-Agent": ua})
+    with urllib.request.urlopen(req, timeout=timeout, context=_SSL) as resp:
+        return json.loads(resp.read())
+
+
+def _socrata_fetch_all(
+    base_url: str,
+    where: str,
+    select: str,
+    ua: str,
+    timeout: float,
+    page: int = 50000,
+) -> List[dict]:
+    """Fetch every row matching `where`, paginating on $offset."""
+    out: List[dict] = []
+    offset = 0
+    while True:
+        rows = _socrata_get(
+            base_url,
+            {"$where": where, "$select": select, "$order": "date" if "date" in select else ":id",
+             "$limit": str(page), "$offset": str(offset)},
+            ua,
+            timeout,
+        )
+        out.extend(rows)
+        if len(rows) < page:
+            break
+        offset += page
+    return out
+
+
+def _iso_date(raw: str) -> str:
+    """Socrata floating timestamp 'YYYY-MM-DDT00:00:00.000' -> 'YYYY-MM-DD'."""
+    return str(raw)[:10]
+
+
+def load_flusurv_net(
+    base_url: str,
+    cache_file: Path,
+    ua: str,
+    timeout: float,
+) -> Dict[Tuple[str, str], Dict[str, float]]:
+    """National FluSurv-NET rates -> {(data_type, age_category): {week_ending_iso: rate}}.
+
+    National all-demographics aggregate = state='Overall', sex='All', race='All'
+    (rate_type is 'Observed' for every national row). Rows are cached to a local CSV
+    so re-runs are fully offline. FluSurv-NET week-ending dates are MMWR Saturdays,
+    so they align directly to the ILINet (year, week) grid via mmwr_week_ending().
+    """
+    if not cache_file.exists():
+        where = ("surveillance_network='FluSurv-NET' AND state='Overall' "
+                 "AND sex='All' AND race='All'")
+        select = "date,age_category,data_type,estimate,season"
+        rows = _socrata_fetch_all(base_url, where, select, ua, timeout)
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        with cache_file.open("w", encoding="utf-8", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["season", "week_ending", "age_category", "data_type", "estimate"])
+            for r in rows:
+                if r.get("estimate") in (None, ""):
+                    continue
+                w.writerow([r.get("season", ""), _iso_date(r.get("date", "")),
+                            r.get("age_category", ""), r.get("data_type", ""), r["estimate"]])
+        print(f"  fetched {len(rows)} FluSurv-NET national rows -> {cache_file.name}",
+              file=sys.stderr)
+
+    table: Dict[Tuple[str, str], Dict[str, float]] = {}
+    with cache_file.open(encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh):
+            try:
+                val = float(row["estimate"])
+            except (ValueError, KeyError):
+                continue
+            key = (row["data_type"], row["age_category"])
+            table.setdefault(key, {})[row["week_ending"]] = val
+    return table
+
+
+def load_nchs_mortality(
+    base_url: str,
+    cache_file: Path,
+    ua: str,
+    timeout: float,
+) -> Dict[str, float]:
+    """NCHS percent of deaths due to influenza -> {week_ending_iso: percent}.
+
+    Source: data.cdc.gov 4bc2-bbpq 'Provisional Percent of Deaths for COVID-19,
+    Influenza, and RSV' (national weekly). This is the NCHS mortality-surveillance
+    percent FluView recites ('X% of the deaths ... were due to influenza'); it is
+    NOT the COVID-19 death-count dataset. Cached locally for offline re-runs.
+    """
+    if not cache_file.exists():
+        rows = _socrata_get(
+            base_url,
+            {"$where": f"pathogen='{MORT_PATHOGEN}'", "$select": "week_end,percent_deaths",
+             "$order": "week_end", "$limit": "50000"},
+            ua,
+            timeout,
+        )
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        with cache_file.open("w", encoding="utf-8", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["week_ending", "pct_deaths_influenza"])
+            for r in rows:
+                if r.get("percent_deaths") in (None, ""):
+                    continue
+                w.writerow([_iso_date(r.get("week_end", "")), r["percent_deaths"]])
+        print(f"  fetched {len(rows)} NCHS mortality rows -> {cache_file.name}",
+              file=sys.stderr)
+
+    out: Dict[str, float] = {}
+    with cache_file.open(encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh):
+            try:
+                out[row["week_ending"]] = float(row["pct_deaths_influenza"])
+            except (ValueError, KeyError):
+                continue
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Channel builders (one bundle per topic, over the season-to-date window)
+# ---------------------------------------------------------------------------
+
+
+def build_local_channels(
+    spec: Sequence[Tuple[str, str, str]],
     tables: Mapping[str, Dict[Tuple[int, int], Dict[str, str]]],
     window: Sequence[Tuple[int, int]],
 ) -> List[Dict[str, Any]]:
-    """One channel per indicator; `values` is the season-to-date trailing window."""
     series: List[Dict[str, Any]] = []
-    for table_name, column, unit in TIMESERIES_SPEC:
+    for table_name, column, unit in spec:
         table = tables[table_name]
         values = [parse_csv_value(table[key].get(column, "")) for key in window]
         series.append({"values": values, "unit": unit, "freq": "1w"})
     return series
+
+
+def build_flusurv_channels(
+    flusurv: Mapping[Tuple[str, str], Dict[str, float]],
+    window: Sequence[Tuple[int, int]],
+) -> List[Dict[str, Any]]:
+    series: List[Dict[str, Any]] = []
+    for data_type, age, unit in HOSP_SPEC:
+        m = flusurv.get((data_type, age), {})
+        values = [m.get(mmwr_week_ending(y, w)) for (y, w) in window]
+        series.append({"values": values, "unit": unit, "freq": "1w"})
+    return series
+
+
+def build_mortality_channels(
+    nchs: Mapping[str, float],
+    window: Sequence[Tuple[int, int]],
+) -> List[Dict[str, Any]]:
+    values = [nchs.get(mmwr_week_ending(y, w)) for (y, w) in window]
+    return [{"values": values, "unit": MORT_LABEL, "freq": "1w"}]
+
+
+def _has_signal(channels: Sequence[Dict[str, Any]], report_idx: int) -> bool:
+    """True if any channel carries a non-null value at the report week (last idx)."""
+    return any(ch["values"][report_idx] is not None for ch in channels)
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +582,19 @@ def raw_paragraphs(text: str) -> List[str]:
     ]
 
 
+# Sentence splitter (guards "U.S." and "No." so they don't end a sentence;
+# decimals/percentages like 55.3% are safe — no space after the dot).
+_ABBR = "\x00"
+
+
+def split_sentences(text: str) -> List[str]:
+    flat = re.sub(r"\s+", " ", text).strip()
+    prot = flat.replace("U.S.", "U" + _ABBR + "S" + _ABBR)
+    prot = re.sub(r"\b([Nn]o)\.(\s)", r"\1" + _ABBR + r"\2", prot)
+    parts = re.split(r"(?<=[.!?])\s+", prot)
+    return [p.replace(_ABBR, ".").strip() for p in parts if p.strip()]
+
+
 def extract_key_points(text: str) -> str:
     matches = list(re.finditer(r"\bKey Points\b", text, re.IGNORECASE))
     if matches:
@@ -401,75 +634,87 @@ def first_paragraph_starting(paragraphs: Sequence[str], *prefixes: str) -> str:
     return ""
 
 
-def extract_virologic(paragraphs: Sequence[str]) -> str:
-    return first_paragraph_starting(
-        paragraphs,
-        "Nationally and in all ten HHS regions",
-        "Nationally, influenza",
-        "Nationally, the percentage of respiratory specimens",
-    )
-
-
 def extract_outpatient_ili(paragraphs: Sequence[str]) -> str:
-    return first_paragraph_starting(paragraphs, "Nationally, during Week")
+    """The outpatient-ILI paragraph, across report eras: modern prose ('Nationally, during
+    Week N, X% of patient visits ...') and the older 'Synopsis'-style national headline
+    ('...The proportion of outpatient visits for influenza-like illness (ILI) was X%, which
+    is above/below the national baseline ...'). We match the data sentence (proportion +
+    baseline) so we skip the section HEADER and the regional-range / map-footnote lines."""
+    p = first_paragraph_starting(paragraphs, "Nationally, during Week")
+    if p:
+        return p
+    for paragraph in paragraphs:
+        pl = paragraph.lower()
+        if ("proportion of outpatient visits for influenza-like illness" in pl
+                and "baseline" in pl):
+            return paragraph
+    return ""
+
+
+def extract_lab_composition(text: str) -> str:
+    """Virus-typing / positivity sentences describing the NREVSS lab channels.
+
+    Real report sentences only: the public-health-laboratory typing sentences
+    ('of the N viruses reported by public health laboratories ... A(H1N1)pdm09,
+    A(H3N2) ...') plus the national clinical-laboratory percent-positive sentence
+    when present. Preserves report order; de-duplicates.
+    """
+    sentences = split_sentences(text)
+    picked: List[str] = []
+
+    def add(s: str) -> None:
+        if s and s not in picked:
+            picked.append(s)
+
+    # National clinical-lab positivity (the % positive / % A / % B channels).
+    for s in sentences:
+        sl = s.lower()
+        if ("respiratory specimens" in sl and "positive for influenza" in sl
+                and sl.startswith("nationally")):
+            add(s)
+            break
+    # Public-health-lab counts + subtype breakdown (the PHL subtype-count channels).
+    for s in sentences:
+        sl = s.lower()
+        if "reported by public health laboratories" in sl or "viruses subtyped" in sl:
+            add(s)
+    return " ".join(picked)
 
 
 def extract_hospitalization(paragraphs: Sequence[str]) -> str:
+    """FluSurv-NET hospitalization paragraph(s): the 'A total of N ... hospitalizations'
+    paragraph plus the following 'When examining rates by age ...' paragraph."""
+    # The detailed hospitalization paragraph exists in every era and reads '... N
+    # laboratory-confirmed influenza-associated hospitalizations were reported ...':
+    # modern it starts 'A total of ...', older it starts 'Between <date> and <date>, ...'.
+    # Match the phrase (not the prefix) and, when present, append the modern by-age para.
     for idx, paragraph in enumerate(paragraphs):
-        if paragraph.startswith("A total of") and "hospitalizations were reported" in paragraph:
+        pl = paragraph.lower()
+        if ("laboratory-confirmed influenza-associated hospitalizations were reported" in pl):
             parts = [paragraph]
             for follow in paragraphs[idx + 1 : idx + 3]:
                 if follow.startswith("When examining rates by age"):
                     parts.append(follow)
                     break
             return "\n\n".join(parts)
-    return ""
+    # older 'Synopsis'-style one-liner fallback ('Influenza-associated Hospitalizations: A
+    # cumulative rate for the season of X ... per 100,000 ...').
+    p = first_paragraph_starting(paragraphs, "Influenza-associated Hospitalizations")
+    return p
 
 
 def extract_mortality(paragraphs: Sequence[str]) -> str:
+    """The NCHS mortality paragraph, across eras: modern ('Based on NCHS ... were due to
+    influenza') and the older 'Synopsis'-style section ('Pneumonia and Influenza Mortality:
+    The proportion of deaths attributed to pneumonia and influenza (P&I) ...')."""
     for paragraph in paragraphs:
         if paragraph.startswith("Based on NCHS") and "were due to influenza" in paragraph:
             return paragraph
-    return ""
-
-
-def extract_pediatric_deaths(paragraphs: Sequence[str]) -> str:
+    # older 'Synopsis'-style: match the data sentence (not a bare section header).
     for paragraph in paragraphs:
-        if "influenza-associated pediatric deaths were reported" in paragraph.lower():
+        if "attributed to pneumonia and influenza" in paragraph.lower():
             return paragraph
     return ""
-
-
-def extract_report_text(html: str) -> str:
-    text = html_to_text(html)
-    paragraphs = raw_paragraphs(text)
-    sections: List[str] = []
-
-    key_points = extract_key_points(text)
-    if key_points:
-        sections.append(key_points)
-
-    virologic = extract_virologic(paragraphs)
-    if virologic:
-        sections.append(virologic)
-
-    ili = extract_outpatient_ili(paragraphs)
-    if ili:
-        sections.append(ili)
-
-    hospitalization = extract_hospitalization(paragraphs)
-    if hospitalization:
-        sections.append(hospitalization)
-
-    mortality = extract_mortality(paragraphs)
-    if mortality:
-        sections.append(mortality)
-
-    pediatric = extract_pediatric_deaths(paragraphs)
-    if pediatric:
-        sections.append(pediatric)
-
-    return "\n\n".join(sections)
 
 
 def parse_week_ending_date(html: str, year: int, week: int) -> Optional[str]:
@@ -528,57 +773,142 @@ def fetch_html(
 
 
 # ---------------------------------------------------------------------------
-# Record construction
+# Record construction (per topic)
 # ---------------------------------------------------------------------------
 
 
-def build_record(
+def build_topic_records(
     season: str,
     year: int,
     week: int,
-    narrative: str,
-    ts_intro: str,
     html: str,
     url: str,
     tables: Mapping[str, Dict[Tuple[int, int], Dict[str, str]]],
     available: set[Tuple[int, int]],
-) -> Dict[str, Any]:
+    flusurv: Mapping[Tuple[str, str], Dict[str, float]],
+    nchs: Mapping[str, float],
+    ts_intros: Mapping[str, str],
+    min_topic_chars: int,
+) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """Split one weekly report into up to four per-topic records.
+
+    Returns (records, tally). tally counts, per topic, records emitted and the
+    reasons a topic was dropped (no narrative paragraph / no real series)."""
     key = (year, week)
     window = season_to_date_window(season, key, available)
     n_weeks = len(window)
-    intro = ts_intro.format(season=season, week=week, n_weeks=n_weeks)
-    text = f"{narrative}\n\n{intro}" if narrative else intro
+    report_idx = len(window) - 1  # index of the report week within the window
+
+    text_all = html_to_text(html)
+    paragraphs = raw_paragraphs(text_all)
     week_ending = parse_week_ending_date(html, year, week)
 
     start_key = window[0] if window else key
     period_start = mmwr_week_ending(start_key[0], start_key[1])
-    # Prefer the week-ending date parsed from the report HTML for the report week;
-    # fall back to the computed MMWR Saturday when the page did not carry it.
     period_end = week_ending or mmwr_week_ending(year, week)
 
-    return emit_record(
-        text=text,
-        timeseries=build_timeseries(tables, window),
-        alignment="recites",
-        license="public-domain-us-gov",
-        text_source="first_party_official",
-        source=url,
-        dataset="cdc_fluview",
-        series_id=f"cdc_fluview:{year}:w{week:02d}",
-        domain="public_health",
-        region="US",
-        period_start=period_start,
-        period_end=period_end,
-        meta={
-            "season": season,
-            "year": year,
-            "week": week,
-            "week_ending_date": week_ending,
-            "window_n_weeks": n_weeks,
-            "window_start_week": window[0][1] if window else week,
-            "report_url": url,
-        },
-    )
+    tally: Dict[str, int] = {}
+
+    def bump(name: str) -> None:
+        tally[name] = tally.get(name, 0) + 1
+
+    def make(topic: str, narrative: str, channels: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        intro = ts_intros[topic].format(season=season, week=week, n_weeks=n_weeks)
+        text = f"{narrative}\n\n{intro}"
+        try:
+            return emit_record(
+                text=text,
+                timeseries=channels,
+                # 'describes' not 'recites': the narrative cites each week's as-published
+                # figures, but the attached series carry CDC's current REVISED values
+                # (ILINet/FluSurv-NET/NCHS are revised over time; ~1-2% drift, no step
+                # changes), so the text narrates the indicator rather than stating its
+                # exact current values. Honest tier for a contemporaneous-text/revised-DB pair.
+                alignment="describes",
+                license="public-domain-us-gov",
+                text_source="first_party_official",
+                source=url,
+                dataset="cdc_fluview",
+                series_id=f"cdc_fluview:{topic}:{year}:w{week:02d}",
+                domain="public_health",
+                region="US",
+                period_start=period_start,
+                period_end=period_end,
+                meta={
+                    "topic": topic,
+                    "season": season,
+                    "year": year,
+                    "week": week,
+                    "week_ending_date": week_ending,
+                    "window_n_weeks": n_weeks,
+                    "window_start_week": window[0][1] if window else week,
+                    "report_url": url,
+                },
+            )
+        except ValueError as exc:
+            bump(f"{topic}:invalid")
+            print(f"    {topic}: validation failed: {exc}", file=sys.stderr)
+            return None
+
+    records: List[Dict[str, Any]] = []
+
+    # --- topic: ili ---------------------------------------------------------
+    ili_text = extract_outpatient_ili(paragraphs)
+    if len(ili_text) < min_topic_chars:
+        bump("ili:no_text")
+    else:
+        channels = build_local_channels(ILI_SPEC, tables, window)
+        if not _has_signal(channels, report_idx):
+            bump("ili:no_series")
+        else:
+            rec = make(TOPIC_ILI, ili_text, channels)
+            if rec:
+                records.append(rec)
+                bump("ili:emitted")
+
+    # --- topic: lab_composition --------------------------------------------
+    lab_text = extract_lab_composition(text_all)
+    if len(lab_text) < min_topic_chars:
+        bump("lab_composition:no_text")
+    else:
+        channels = build_local_channels(LAB_SPEC, tables, window)
+        if not _has_signal(channels, report_idx):
+            bump("lab_composition:no_series")
+        else:
+            rec = make(TOPIC_LAB, lab_text, channels)
+            if rec:
+                records.append(rec)
+                bump("lab_composition:emitted")
+
+    # --- topic: hospitalization (FluSurv-NET) ------------------------------
+    hosp_text = extract_hospitalization(paragraphs)
+    if len(hosp_text) < min_topic_chars:
+        bump("hospitalization:no_text")
+    else:
+        channels = build_flusurv_channels(flusurv, window)
+        if not _has_signal(channels, report_idx):
+            bump("hospitalization:no_series")
+        else:
+            rec = make(TOPIC_HOSP, hosp_text, channels)
+            if rec:
+                records.append(rec)
+                bump("hospitalization:emitted")
+
+    # --- topic: mortality (NCHS) -------------------------------------------
+    mort_text = extract_mortality(paragraphs)
+    if len(mort_text) < min_topic_chars:
+        bump("mortality:no_text")
+    else:
+        channels = build_mortality_channels(nchs, window)
+        if not _has_signal(channels, report_idx):
+            bump("mortality:no_series")
+        else:
+            rec = make(TOPIC_MORT, mort_text, channels)
+            if rec:
+                records.append(rec)
+                bump("mortality:emitted")
+
+    return records, tally
 
 
 # ---------------------------------------------------------------------------
@@ -598,7 +928,7 @@ def write_jsonl(records: List[Dict[str, Any]], path: Path, indent: Optional[int]
             fh.write("\n")
 
 
-def run_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
+def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     data_cfg = cfg["data"]
     text_cfg = cfg["text"]
     out_cfg = cfg["output"]
@@ -607,26 +937,33 @@ def run_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
     cache_dir = resolve_path(data_cfg.get("html_cache_dir", ".cache/html"))
     delay_s = float(data_cfg.get("request_delay_s", 1.0))
     timeout_s = float(data_cfg.get("timeout_s", 15))
-    min_text_chars = int(text_cfg.get("min_text_chars", 200))
+    min_topic_chars = int(text_cfg.get("min_topic_chars", 60))
     min_window_weeks = int(data_cfg.get("min_window_weeks", 1))
-    ts_intro = text_cfg["ts_intro_sentence"]
+    ts_intros = text_cfg["ts_intro_by_topic"]
     max_records = out_cfg.get("max_records")
+
+    socrata_ua = data_cfg.get("socrata_user_agent", "CPT-dataset-research flnu@usc.edu")
+    socrata_timeout = float(data_cfg.get("socrata_timeout_s", 120))
+    flusurv_url = data_cfg["flusurv_socrata_url"]
+    nchs_url = data_cfg["nchs_mortality_socrata_url"]
+    flusurv_cache = resolve_path(data_cfg.get("flusurv_cache", "data/raw_csv/flusurv_net_national.csv"))
+    nchs_cache = resolve_path(data_cfg.get("nchs_mortality_cache", "data/raw_csv/nchs_mortality_influenza.csv"))
 
     tables = load_csv_tables(csv_dir)
     available_weeks = joined_week_keys(tables)
+    flusurv = load_flusurv_net(flusurv_url, flusurv_cache, socrata_ua, socrata_timeout)
+    nchs = load_nchs_mortality(nchs_url, nchs_cache, socrata_ua, socrata_timeout)
 
-    stats = {
+    stats: Dict[str, Any] = {
         "weeks_attempted": 0,
         "weeks_with_html": 0,
         "weeks_with_csv": len(available_weeks),
-        "weeks_with_both": 0,
+        "reports_yielding_records": 0,
         "records_emitted": 0,
-        "records_skipped_no_html": 0,
-        "records_skipped_no_csv": 0,
-        "records_skipped_short_text": 0,
-        "records_skipped_short_window": 0,
-        "records_skipped_invalid": 0,
+        "reports_skipped_no_html": 0,
+        "reports_skipped_short_window": 0,
     }
+    topic_tally: Dict[str, int] = {}
 
     records: List[Dict[str, Any]] = []
     session = requests.Session()
@@ -647,27 +984,22 @@ def run_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
             stats["weeks_attempted"] += 1
             label = f"{year}-W{week:02d}"
 
-            if (year, week) not in available_weeks:
-                stats["records_skipped_no_csv"] += 1
-                print(f"Week {label}: skipped (no CSV join)")
-                continue
-
             urls = report_urls(season, year, week)
             cache_file = cache_path(cache_dir, season, week)
             html = None
             from_cache = False
             winning_url = urls[0]
             network_activity = False
-            for url in urls:
-                html, from_cache = fetch_html(session, url, cache_file, timeout_s)
+            for u in urls:
+                html, from_cache = fetch_html(session, u, cache_file, timeout_s)
                 if html is not None:
-                    winning_url = url
+                    winning_url = u
                     break
                 if not from_cache:
                     network_activity = True
 
             if html is None:
-                stats["records_skipped_no_html"] += 1
+                stats["reports_skipped_no_html"] += 1
                 print(f"Week {label}: skipped (no HTML)")
                 if network_activity:
                     time.sleep(delay_s)
@@ -675,77 +1007,65 @@ def run_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
             stats["weeks_with_html"] += 1
             cache_note = "from cache" if from_cache else "fetched HTML"
-            narrative = extract_report_text(html)
 
-            if len(narrative) < min_text_chars:
-                stats["records_skipped_short_text"] += 1
-                print(
-                    f"Week {label}: {cache_note}, joined CSV, "
-                    f"skipped (short text: {len(narrative)} chars)"
-                )
-                if not from_cache:
-                    time.sleep(delay_s)
-                continue
-
-            window_n_weeks = len(
-                season_to_date_window(season, (year, week), available_weeks)
-            )
+            window_n_weeks = len(season_to_date_window(season, (year, week), available_weeks))
             if window_n_weeks < min_window_weeks:
-                stats["records_skipped_short_window"] += 1
-                print(
-                    f"Week {label}: skipped (window {window_n_weeks} "
-                    f"< min_window_weeks {min_window_weeks})"
-                )
+                stats["reports_skipped_short_window"] += 1
+                print(f"Week {label}: skipped (window {window_n_weeks} < min {min_window_weeks})")
                 if not from_cache:
                     time.sleep(delay_s)
                 continue
 
-            # emit_record() self-validates against schema/validate.py --strict and
-            # raises ValueError on any violation; count those as validation failures.
-            try:
-                record = build_record(
-                    season=season,
-                    year=year,
-                    week=week,
-                    narrative=narrative,
-                    ts_intro=ts_intro,
-                    html=html,
-                    url=winning_url,
-                    tables=tables,
-                    available=available_weeks,
-                )
-            except ValueError as exc:
-                stats["records_skipped_invalid"] += 1
-                print(f"Week {label}: validation failed: {exc}", file=sys.stderr)
-                if not from_cache:
-                    time.sleep(delay_s)
-                continue
+            recs, tally = build_topic_records(
+                season=season,
+                year=year,
+                week=week,
+                html=html,
+                url=winning_url,
+                tables=tables,
+                available=available_weeks,
+                flusurv=flusurv,
+                nchs=nchs,
+                ts_intros=ts_intros,
+                min_topic_chars=min_topic_chars,
+            )
+            for k, v in tally.items():
+                topic_tally[k] = topic_tally.get(k, 0) + v
 
-            stats["weeks_with_both"] += 1
-            records.append(record)
-            stats["records_emitted"] += 1
-            print(f"Week {label}: {cache_note}, joined CSV, emitted record")
-
-            if max_records is not None and len(records) >= int(max_records):
-                if not from_cache:
-                    time.sleep(delay_s)
-                break
+            if recs:
+                stats["reports_yielding_records"] += 1
+                records.extend(recs)
+                stats["records_emitted"] += len(recs)
+            topics_here = ",".join(sorted(r["meta"]["topic"] for r in recs)) or "none"
+            print(f"Week {label}: {cache_note}, emitted {len(recs)} topic records ({topics_here})")
 
             if not from_cache:
                 time.sleep(delay_s)
 
+            if max_records is not None and len(records) >= int(max_records):
+                break
+
         if max_records is not None and len(records) >= int(max_records):
             break
+
+    if max_records is not None:
+        records = records[: int(max_records)]
+        stats["records_emitted"] = len(records)
+
+    stats["topic_breakdown"] = topic_tally
 
     output_path = resolve_path(out_cfg["output_path"])
     write_jsonl(records, output_path, out_cfg.get("indent"))
 
     samples_path = resolve_path(out_cfg["samples_path"])
-    write_jsonl(records[:3], samples_path, indent=2)
+    write_jsonl(records[:4], samples_path, indent=2)
 
     report = {
         "run_date": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "seasons_processed": seasons_processed,
+        "topics": [TOPIC_ILI, TOPIC_LAB, TOPIC_HOSP, TOPIC_MORT],
+        "flusurv_source": flusurv_url,
+        "nchs_mortality_source": nchs_url,
         **stats,
         "config_snapshot": cfg,
     }
@@ -765,7 +1085,7 @@ def run_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build CPT JSONL from CDC FluView weekly reports and CSVs.",
+        description="Build per-topic CPT JSONL from CDC FluView weekly reports and surveillance series.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
@@ -796,10 +1116,12 @@ def main() -> None:
     report, records = run_pipeline(cfg)
 
     print(
-        f"\nDone: emitted {report['records_emitted']} records "
+        f"\nDone: emitted {report['records_emitted']} topic records from "
+        f"{report['reports_yielding_records']} reports "
         f"({report['weeks_attempted']} weeks attempted).",
         file=sys.stderr,
     )
+    print(f"Per-topic: {json.dumps(report['topic_breakdown'])}", file=sys.stderr)
 
     if records:
         print("\n--- First record text field ---\n")
