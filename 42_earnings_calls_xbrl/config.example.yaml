@@ -38,7 +38,8 @@ text:
   # Transcripts are long (~40k chars); keep the leading portion (operator + prepared
   # remarks, where the figures are recited). null = keep full text.
   max_text_chars: 12000
-  ts_intro_sentence: "Trailing {n}-quarter fundamentals (revenue, net income USD; diluted EPS) through fiscal {quarter}: <ts></ts>"
+  # No templated ts_intro: <ts></ts> is appended directly to the real transcript excerpt,
+  # nothing is generated.
 
 output:
   output_path: output/earnings_calls_xbrl_cpt.jsonl

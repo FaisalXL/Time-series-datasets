@@ -29,10 +29,13 @@
 
 Extraction: quarterly-**duration** facts (80–100-day period), keyed by period-end, aligned on common ends ≤ the call date → a clean contiguous quarterly series (avoids the gappy CY-frame approach).
 
-**Record shape:** (real — Deere & Company, Q2 2025; revenue/net-income arrays in USD, abbreviated)
+**Record shape:** (real — Deere & Company, Q2 2025; revenue/net-income arrays in USD, abbreviated).
+The `<ts></ts>` tag is appended directly to the real transcript excerpt — **no framing/bridging
+sentence is generated**; every word before the tag is verbatim call transcript, truncated at
+`text.max_text_chars`:
 ```json
 {
-  "text": "Operator: Good morning, and welcome to Deere & Company's Second Quarter Earnings Conference Call... Trailing 12-quarter fundamentals (revenue, net income USD; diluted EPS) through fiscal Q2 2025: <ts></ts>",
+  "text": "Operator: Good morning, and welcome to Deere & Company's Second Quarter Earnings Conference Call...\n\n...Operating profit was down year-over-year at $379 million, r\n\n<ts></ts>",
   "timeseries": [
     {"values": [11500000000, 9600000000, "...", 12800000000], "unit": "revenue_usd", "freq": "1q"},
     {"values": [1700000000, 900000000, "...", 1800000000], "unit": "net_income_usd", "freq": "1q"},
@@ -46,6 +49,7 @@ Extraction: quarterly-**duration** facts (80–100-day period), keyed by period-
 ```
 
 **Key issues:**
+- **No generated text.** An earlier version of this build appended a templated closing sentence to introduce the revenue/net-income/EPS series before `<ts></ts>`. That sentence was not from the earnings call transcript — it was synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real transcript excerpt with nothing generated in between.
 - **⚠️ Overlap with the team's SEC EDGAR dataset — confirm before scaling.** The XBRL *fundamentals* side may duplicate that work; the *novel* element is the transcript↔fundamentals pairing. Get a quick "not redundant" sign-off from Charon before the full build.
 - **Alignment = describes (strongest we have)** — the exec states revenue/EPS = the XBRL numbers. Leakage of the reported quarter's value into the text is inherent and *the point*.
 - **Q4 / annual gap:** companies file Q4 inside the 10-K as a full-year figure, so there's **no standalone Q4 quarterly fact** — Q4-call windows end at Q3 (Q1–Q3 calls align exactly to the reported quarter). Optional fix: compute Q4 = annual − 9-month sum.

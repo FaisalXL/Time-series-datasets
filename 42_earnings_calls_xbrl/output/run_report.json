@@ -48,8 +48,7 @@
     },
     "text": {
       "min_text_chars": 200,
-      "max_text_chars": 12000,
-      "ts_intro_sentence": "Trailing {n}-quarter fundamentals (revenue, net income USD; diluted EPS) through fiscal {quarter}: <ts></ts>"
+      "max_text_chars": 12000
     },
     "output": {
       "output_path": "output/earnings_calls_xbrl_cpt.jsonl",

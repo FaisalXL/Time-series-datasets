@@ -180,8 +180,9 @@ def build_record(row: dict, cf: dict, cfg) -> Tuple[Optional[dict], Optional[str
         body = body[:int(maxc)].rstrip()
     if len(body) < int(t.get("min_text_chars", 200)):
         return None, "short text"
-    intro = t["ts_intro_sentence"].format(n=win, quarter=fq)
-    text = f"{body}\n\n{intro}"
+    # No generated/templated framing text: the <ts></ts> placeholder is appended
+    # directly to the real transcript excerpt, nothing else is added.
+    text = f"{body}\n\n<ts></ts>"
 
     rec = {
         "text": text,
