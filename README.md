@@ -2,16 +2,18 @@
 
 Per-dataset packages for instruction-free continued pre-training: natural text with a single `<ts></ts>` placeholder + aligned time series.
 
-**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage. **21 packages built.**
+**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage. **23 packages built.**
 
 ---
 
 ## ⚑ For review — non-canonical datasets (outside the Defu-30)
 
-> **Reviewer note.** The packages numbered **01–30** map to ranks in the Defu canonical-30 registry and are **out of scope** for this pass (already vetted). The **9 packages below are NOT in the Defu-30** — they were sourced independently and need alignment sign-off. Alignment = *does the text genuinely describe the paired series* (not merely co-located). Verified by script on the committed `output/` on **2026-07-14** (see per-dataset notes for method + hit-rate); #51 verified separately on 2026-07-23 (see its README).
+> **Reviewer note.** The packages numbered **01–30** map to ranks in the Defu canonical-30 registry and are **out of scope** for this pass (already vetted). The **11 packages below are NOT in the Defu-30** — they were sourced independently and need alignment sign-off. Alignment = *does the text genuinely describe the paired series* (not merely co-located). Verified by script on the committed `output/` on **2026-07-14** (see per-dataset notes for method + hit-rate); #51–53 verified separately on 2026-07-23/24 (see each README).
 
 | # | Dataset | Text ↔ series pairing | Alignment tier (verified) | License | Reviewer flag |
 |---|---------|-----------------------|---------------------------|---------|---------------|
+| 53 | [ABS Australia CPI](./53_abs_australia/) | CPI release narrative ↔ annual %-change (4 channels) | **Value-reciting — strong** (48/50 recites, 96%; the 2 `describes` are real revision-drift misses, not extraction failures) | CC BY 4.0 ✅ clean | small scale (69 total) — CPI is the anchor indicator, not a volume play |
+| 52 | [Statistics Canada "The Daily" CPI](./52_statcan_daily/) | "The Daily" bulletin ↔ NSA 12-mo %-change (5 channels) | **Value-reciting — strong** (50/50 recites, 100%) | ⚠️ license-enum gap — true license is StatCan Open Licence (confirmed permissive), tagged `cc-by-4.0` as closest schema fit | small scale (~135 full) — one indicator; GDP/LFS siblings needed for volume |
 | 51 | [ESPN US Majors (NBA/NFL/NHL)](./51_espn_us_majors/) | AP recap ↔ period-by-period score | **Describes — strong** (0/50 headline-vs-series mismatches after fixing a stale-snapshot + shootout edge case) | ⚠️ AP wire copy **copyrighted** | redistribution pending Charon sign-off (output committed as capped 50-record demo, not full build) |
 | 49 | [Richmond Fed Manufacturing](./49_richmond_manufacturing/) | release narrative ↔ 7 diffusion indices | **Value-reciting — strong** (92% of records recite an exact series value) | Public domain | chart-heavy PDF (best-effort); FRED overlap; text ~2018→ |
 | 50 | [Richmond Fed Service Sector](./50_richmond_nonmanufacturing/) | release narrative ↔ 6 diffusion indices | **Value-reciting — strong** (90%) | Public domain | FRED overlap; text ~2018→ |
@@ -54,6 +56,8 @@ Small-scale samples for format inspection and freeze. Open each folder for its R
 | 49 | [Richmond Fed Manufacturing](./49_richmond_manufacturing/) | 50 | 7 | `1M` | Fifth District Mfg release recites composite + sub-indices (24-mo window) · chart-heavy PDF, text ~2018→ · public domain |
 | 50 | [Richmond Fed Service Sector](./50_richmond_nonmanufacturing/) | 50 | 6 | `1M` | Fifth District Service-Sector (non-mfg) release recites revenues/demand/employment/wages (24-mo window) · service twin of #49 · public domain |
 | 51 | [ESPN US Majors (NBA/NFL/NHL)](./51_espn_us_majors/) | 50 | 2 | `1prd` | AP recap + period-by-period away/home cumulative score (17 NBA / 17 NFL / 16 NHL) · new domain-native `1prd` epoch · ⚠️ AP wire copy copyrighted, redistribution pending sign-off |
+| 52 | [Statistics Canada "The Daily" CPI](./52_statcan_daily/) | 50 | 5 | `1M` | "The Daily" bulletin recites NSA 12-mo %-change for all-items + gasoline/food/shelter/transportation (24-mo window) · WDS API, "Previous release" link-walk enumeration · Canadian analogue of #08 · license-enum gap (true license = StatCan Open Licence, tagged `cc-by-4.0` as closest fit) |
+| 53 | [ABS Australia CPI](./53_abs_australia/) | 50 | 4 | `1M` | ABS CPI release recites annual %-change for All-groups + Housing/Electricity/Food (24-mo window) · 3 real release tracks (quarterly/monthly-indicator/monthly-primary) stitched by verified cadence switch, not a guessed seam · CC BY 4.0 · Australian analogue of #08 |
 
 ## Record format (frozen for dev set)
 
@@ -94,8 +98,10 @@ Estimated **full-scale datapoints** = CPT records at `output.max_records=null` (
 | 48 | [Dallas Fed TMOS](./48_dallas_tmos/) | Built (demo 50) | **~195** monthly releases (2007–20 PDF + 2024→ HTML; ⚠️ 2021–23 gap); public domain; ⚠️ FRED-overlap sign-off |
 | 49 | [Richmond Fed Manufacturing](./49_richmond_manufacturing/) | Built (demo 50) | **~100** monthly releases (text ~2018→; series to 1993); public domain; ⚠️ chart-heavy PDF extraction + FRED-overlap sign-off |
 | 50 | [Richmond Fed Service Sector](./50_richmond_nonmanufacturing/) | Built (demo 50) | **~100** monthly releases (text ~2018→; series to 1993); public domain; service-sector twin of #49 (shared plumbing); ⚠️ FRED-overlap sign-off |
+| 52 | [Statistics Canada "The Daily" CPI](./52_statcan_daily/) | Built (demo 50) | **~135** monthly releases (2015→); CC-BY-equivalent (StatCan Open Licence); one indicator only — GDP/LFS siblings on the same WDS API are the path to more volume, not yet built |
+| 53 | [ABS Australia CPI](./53_abs_australia/) | Built (full, 69) | **69** releases (2019-Q3→2026-05, zero drops); CC BY 4.0; CPI is the anchor indicator, Labour Force is a natural next sibling |
 
-**Rough total ≈ 400k+ datapoints** across the built set (excluding license-gated Cricket), dominated by NOAA Storm Events (~150k), FNSPID (~146k), and the NWPS flood harvest (~10–40k); the remaining packages contribute ~80k combined.
+**Rough total ≈ 400k+ datapoints** across the built set (excluding license-gated Cricket), dominated by NOAA Storm Events (~150k), FNSPID (~146k), and the NWPS flood harvest (~10–40k); the remaining packages contribute ~80k combined. #52/#53 are small, clean additions (~200 combined) — genuinely `recites`-tier and cleanly licensed, but neither moves the scale needle; single-national-org "recites" sources have consistently plateaued in the hundreds-to-low-thousands (same pattern as the Fed-survey family and BLS CPI).
 
 Each README follows the same layout: what it is → scale → record shape → key issues → how to run. Packages with a `NOTION_PAGE.md` (e.g. 11, 45) carry the review write-up.
 
