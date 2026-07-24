@@ -14,7 +14,7 @@
 
 | | |
 |---|---|
-| **What** | The game recap (~300–500 words): an AP wire story. `text` = the cleaned recap + one framing sentence *"Score progression by period, away then home ({away} at {home}): `<ts></ts>`"*. |
+| **What** | The game recap (~300–500 words): an AP wire story. `text` = the cleaned recap with `<ts></ts>` appended directly — no generated/templated framing sentence. |
 | **Source** | `site.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={event_id}` → JSON `article.story` (HTML, stripped), plus `headline` / `source` / `published`. |
 | **`text_source`** | `"third_party"` — this is independent AP journalism about the game, not an official team/league statement (same reasoning that would apply to Cricket's ESPNcricinfo bylines, had it been tagged post-freeze). |
 | **`text_quality`** | `"real"`. Games with no usable recap are **dropped**, never synthesized. |
@@ -38,7 +38,7 @@
 **Record shape** (real — Nuggets @ Cavaliers, Jan 3 2026, event `401810333`):
 ```json
 {
-  "text": "CLEVELAND -- Donovan Mitchell scored 33 points... the Cavaliers beat the short-handed Denver Nuggets 113-108... who trailed 105-101 with 4:43 remaining before scoring 10 consecutive points...\n\nScore progression by period, away then home (Denver Nuggets at Cleveland Cavaliers): <ts></ts>",
+  "text": "CLEVELAND -- Donovan Mitchell scored 33 points... the Cavaliers beat the short-handed Denver Nuggets 113-108... who trailed 105-101 with 4:43 remaining before scoring 10 consecutive points...\n\n<ts></ts>",
   "timeseries": [
     {"values": [24, 59, 97, 108], "unit": "away_score_cumulative", "freq": "1prd"},
     {"values": [28, 62, 88, 113], "unit": "home_score_cumulative", "freq": "1prd"}
@@ -64,6 +64,7 @@
 
 ## Key issues
 
+- **No generated text.** An earlier version of this build appended a templated closing sentence to introduce the period-by-period score series before `<ts></ts>`. That sentence was not from the AP recap — it was synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real recap text with nothing generated in between.
 - **⚠️ License is the one open decision (for Charon, not self-cleared).** Recap text is AP wire copy — a *different* copyright holder than Cricket's ESPNcricinfo staff writers, and confirmed **stricter** in kind (wire services license redistribution far more tightly than most in-house sports journalism). The committed `output/`+`samples/` are a **50-record demo for internal inspection only**. This is the same open question already gating Cricket's ~44k records — see `../../docs/scouting_build_queue.md` for the combined ~157k-record scope across all 5 sports sources.
 - **Two real extraction bugs found and fixed during the build (not caveats to just document — actually fixed):**
   1. **ESPN's own play-by-play trails the true final scoring play with stale-score administrative events.** The literal last play in a period is often "End of the Nth Quarter" / "End of Game" — but these can carry a score snapshot **one score behind** the real final (observed live: last scoring play showed 113, the subsequent "End of Game" marker still read 112). Fix: `period_scores()` takes a **running max** per period, not the temporally-last play's value, since score is monotonically non-decreasing within a game.

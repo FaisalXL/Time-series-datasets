@@ -293,8 +293,9 @@ def build_record_for_event(event_id: str, league_cfg: dict, cfg: Dict[str, Any],
         return None, "score_mismatch"
 
     away_name, home_name = team_names(summary)
-    intro = t["ts_intro_sentence"].format(away=away_name or "the away team", home=home_name or "the home team")
-    text = f"{story}\n\n{intro}"
+    # No generated/templated framing text: the <ts></ts> placeholder is appended
+    # directly to the real AP recap prose, nothing else is added.
+    text = f"{story}\n\n<ts></ts>"
 
     timeseries = [
         {"values": away_scores, "unit": "away_score_cumulative", "freq": "1play"},
