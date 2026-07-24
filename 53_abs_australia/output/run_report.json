@@ -1,0 +1,112 @@
+{
+  "dataset": "abs_australia",
+  "stats": {
+    "candidate_periods": 74,
+    "pages_fetched": 69,
+    "pages_missing": 0,
+    "emitted": 69,
+    "recites": 63,
+    "describes": 6,
+    "channels_emitted": 276,
+    "no_prose": 0,
+    "short_text": 0,
+    "short_series": 0,
+    "no_value": 5,
+    "invalid": 0,
+    "by_track": {
+      "quarterly": 25,
+      "monthly_indicator": 36,
+      "monthly_primary": 8
+    },
+    "quarterly_series_points": {
+      "10001": 307,
+      "20003": 211,
+      "40055": 179,
+      "20001": 211
+    },
+    "monthly_series_points": {
+      "10001": 93,
+      "20003": 93,
+      "40055": 93,
+      "20001": 93
+    }
+  },
+  "config_snapshot": {
+    "data": {
+      "user_agent": "CPT-dataset-research (research; flnu@usc.edu)",
+      "timeout_s": 60,
+      "request_delay_s": 0.4,
+      "cache_dir": ".cache",
+      "api_base": "https://data.api.abs.gov.au/rest/data",
+      "quarterly_dataflow": "ABS,CPI,2.0.0",
+      "monthly_dataflow": "ABS,CPI_M,1.2.0",
+      "monthly_primary_dataflow": "ABS,CPI,2.0.0",
+      "region_code": "50",
+      "tsest_code": "10",
+      "indexes": [
+        {
+          "code": "10001",
+          "unit": "cpi_all_groups_annual_pct",
+          "human": "All groups CPI"
+        },
+        {
+          "code": "20003",
+          "unit": "cpi_housing_annual_pct",
+          "human": "Housing"
+        },
+        {
+          "code": "40055",
+          "unit": "cpi_electricity_annual_pct",
+          "human": "Electricity"
+        },
+        {
+          "code": "20001",
+          "unit": "cpi_food_annual_pct",
+          "human": "Food and non-alcoholic beverages"
+        }
+      ],
+      "anchor_code": "10001",
+      "window_max": 24,
+      "min_series": 6,
+      "quarterly": {
+        "topic_base": "https://www.abs.gov.au/statistics/economy/price-indexes-and-inflation/consumer-price-index-australia",
+        "start_year": 2019,
+        "start_quarter": 3,
+        "end_year": 2025,
+        "end_quarter": 3,
+        "slug_patterns": [
+          "{mon}-{year}",
+          "{mon}-quarter-{year}"
+        ]
+      },
+      "monthly_indicator": {
+        "topic_base": "https://www.abs.gov.au/statistics/economy/price-indexes-and-inflation/monthly-consumer-price-index-indicator",
+        "start_ym": "2022-10",
+        "end_ym": "2025-09",
+        "slug_pattern": "{mon}-{year}"
+      },
+      "monthly_primary": {
+        "topic_base": "https://www.abs.gov.au/statistics/economy/price-indexes-and-inflation/consumer-price-index-australia",
+        "start_ym": "2025-10",
+        "end_ym": null,
+        "slug_pattern": "{mon}-{year}",
+        "max_lookahead_months": 3
+      }
+    },
+    "text": {
+      "min_text_chars": 200,
+      "max_items": 7,
+      "max_chars": 1600
+    },
+    "output": {
+      "output_path": "output/abs_australia_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": null,
+      "indent": null
+    },
+    "source_url": "https://www.abs.gov.au/statistics/economy/price-indexes-and-inflation/consumer-price-index-australia",
+    "license_url": "https://www.abs.gov.au/website-privacy-copyright-and-disclaimer"
+  },
+  "dry_run": false
+}

@@ -1,0 +1,8 @@
+pyyaml>=6.0
+# PyYAML is the only pip dependency (reads config.example.yaml).
+# Series: the ABS Data API (SDMX-JSON) is fetched with the standard library
+#   (urllib.request) -- no pandas/requests/sdmx client needed.
+# Text: release pages are plain HTML, parsed with the standard library (re + html.unescape) --
+#   no bs4/lxml, no pdftotext (unlike the Fed-survey / WASDE packages, ABS releases are HTML,
+#   not PDF).
+# No API key required -- the ABS Data API (data.api.abs.gov.au) is public/keyless.

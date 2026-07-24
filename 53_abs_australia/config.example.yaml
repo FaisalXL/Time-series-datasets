@@ -1,0 +1,102 @@
+# Australian Bureau of Statistics (ABS) Consumer Price Index -> CPT world-knowledge JSONL
+#
+# One record = one CPI release (the release's own narrative: intro + "Key statistics" bullets)
+# paired with a trailing window of the annual (through-the-year) percentage change for the
+# headline All-groups CPI plus 3 major components (Housing, Electricity, Food and
+# non-alcoholic beverages), all under a single <ts> (multi-channel, WASDE-style).
+#
+# Three real, distinct release tracks (confirmed live, not assumed from a stale date guess):
+#   1. quarterly       - .../consumer-price-index-australia/{slug}            2019-Q3 -> 2025-Q3
+#   2. monthly_indicator - .../monthly-consumer-price-index-indicator/{slug}  2022-10 -> 2025-09
+#   3. monthly_primary  - .../consumer-price-index-australia/{slug}          2025-10 -> present
+#      (monthly CPI became the PRIMARY release from the Oct-2025 reference month; the
+#      quarterly-cadence release and the separate monthly-indicator release both ended then)
+#
+# Series: live ABS Data API (SDMX-JSON), data.api.abs.gov.au (the api.data.abs.gov.au host is
+# DEAD -- do not use it). Quarterly index numbers from dataflow ABS,CPI,2.0.0 (annual % change
+# is NOT published there for these indexes -- we derive it ourselves from real index numbers,
+# 4-quarter lag, verified against a known release: computed 2024-Q1 = 3.6% matches the release's
+# own stated "3.6%"). Monthly annual % change IS published directly in ABS,CPI_M,1.2.0
+# (measure=3), used as-is.
+#
+# REGION-CODE TRAP (real, verified): an unqualified/wildcarded REGION dimension returns EVERY
+# capital city plus Australia bundled together (Sydney, Melbourne, ... , Australia) -- silently
+# picking "the first series key" would grab a city, not the nation. We always pass REGION=50
+# (Australia) explicitly in the SDMX key AND assert_national() checks the response's own REGION
+# dimension metadata contains exactly {"50"} before accepting any series.
+#
+# License: CC BY 4.0 (ABS copyright/licensing terms - see README).
+
+data:
+  user_agent: "CPT-dataset-research (research; flnu@usc.edu)"
+  timeout_s: 60
+  request_delay_s: 0.4
+  cache_dir: ".cache"
+
+  # --- ABS Data API (SDMX-JSON) ---
+  api_base: "https://data.api.abs.gov.au/rest/data"
+  quarterly_dataflow: "ABS,CPI,2.0.0"      # FREQ=Q; annual %chg NOT published -> derived from index numbers
+  # Monthly annual %chg (measure=3) is published directly, but lives in TWO dataflows across
+  # time: the legacy standalone "monthly CPI indicator" dataflow (2018-09 -> 2025-09 back-series,
+  # confirmed live) and the unified "CPI" dataflow's FREQ=M slice (2025-04 -> present, confirmed
+  # live) once monthly became the primary release. Both are fetched and merged (primary wins on
+  # the small overlap) so the monthly_indicator and monthly_primary tracks share one time axis.
+  monthly_dataflow: "ABS,CPI_M,1.2.0"
+  monthly_primary_dataflow: "ABS,CPI,2.0.0"
+  region_code: "50"                        # Australia (national) -- CL_CPI_REGION. NOT "AUS".
+  tsest_code: "10"                         # Original (CL_TSEST) -- headline through-the-year measure
+
+  # CPI "INDEX" dimension codes (CL_CPI_INDEX / CL_CPI_INDEX_17) actually confirmed live.
+  indexes:
+    - {code: "10001", unit: "cpi_all_groups_annual_pct", human: "All groups CPI"}
+    - {code: "20003", unit: "cpi_housing_annual_pct",     human: "Housing"}
+    - {code: "40055", unit: "cpi_electricity_annual_pct", human: "Electricity"}
+    - {code: "20001", unit: "cpi_food_annual_pct",        human: "Food and non-alcoholic beverages"}
+  anchor_code: "10001"     # window is anchored on headline All-groups CPI
+
+  window_max: 24           # trailing periods per record (config knob; widen toward 32 on request)
+  min_series: 6            # minimum trailing points required to emit a record
+
+  # --- Track 1: quarterly CPI release (statistics topic page) ---
+  quarterly:
+    topic_base: "https://www.abs.gov.au/statistics/economy/price-indexes-and-inflation/consumer-price-index-australia"
+    start_year: 2019
+    start_quarter: 3        # Sep quarter 2019 -- confirmed earliest working modern release page
+                             # (2018 releases 404 on this URL scheme; pre-2019 needs the legacy
+                             # AUSSTATS domain, out of scope per the scouting brief)
+    end_year: 2025
+    end_quarter: 3           # Sep quarter 2025 -- last quarterly-cadence release before the
+                             # Nov-2025 switch to monthly-as-primary
+    slug_patterns: ["{mon}-{year}", "{mon}-quarter-{year}"]   # URL scheme changed twice; try both
+
+  # --- Track 2: monthly CPI indicator (separate topic, ran alongside quarterly) ---
+  monthly_indicator:
+    topic_base: "https://www.abs.gov.au/statistics/economy/price-indexes-and-inflation/monthly-consumer-price-index-indicator"
+    start_ym: "2022-10"      # first monthly CPI indicator release (Oct 2022 reference month)
+    end_ym: "2025-09"        # final monthly-indicator release before the Nov-2025 merge
+    slug_pattern: "{mon}-{year}"
+
+  # --- Track 3: monthly CPI, now the primary release ---
+  monthly_primary:
+    topic_base: "https://www.abs.gov.au/statistics/economy/price-indexes-and-inflation/consumer-price-index-australia"
+    start_ym: "2025-10"       # first month published as the primary monthly CPI
+    end_ym: null              # null = probe forward from start_ym until a 404 (bounded by max_lookahead_months)
+    slug_pattern: "{mon}-{year}"
+    max_lookahead_months: 3
+
+text:
+  min_text_chars: 200
+  max_items: 7              # cap on prose bullets/paragraphs kept (avoids drifting into unlabeled sub-sections)
+  max_chars: 1600
+  # No templated ts_intro: <ts></ts> is appended directly to the real scraped prose,
+  # nothing is generated.
+
+output:
+  output_path: output/abs_australia_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 50            # demo cap. null = full build (~70-75 releases, 2019-Q3 -> present)
+  indent: null
+
+source_url: "https://www.abs.gov.au/statistics/economy/price-indexes-and-inflation/consumer-price-index-australia"
+license_url: "https://www.abs.gov.au/website-privacy-copyright-and-disclaimer"
