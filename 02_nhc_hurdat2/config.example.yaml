@@ -1,8 +1,10 @@
 # NHC HURDAT2 → CPT world-knowledge JSONL
 #
-# One record per tropical cyclone: real NHC public advisory text plus five
-# 6-hourly time series over the storm's qualifying tropical/subtropical life.
-# Storms without retrievable advisory text are dropped — no synthetic fallback.
+# One record per tropical cyclone (Atlantic + East Pacific): real NHC text —
+# the post-storm Tropical Cyclone Report (TCR) and/or public advisories — plus
+# a 9-channel 6-hourly time series over the storm's qualifying tropical/
+# subtropical life. Storms without any retrievable real text are dropped — no
+# synthetic fallback.
 #
 # Quick start:
 #   pip install -r requirements.txt
@@ -19,7 +21,7 @@ data:
   source: download
 
   # atlantic | east_pacific | both
-  basin: atlantic
+  basin: both
 
   atlantic_url: "https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2023-051124.txt"
   east_pacific_url: "https://www.nhc.noaa.gov/data/hurdat/hurdat2-nepac-1949-2023-042624.txt"
@@ -27,7 +29,8 @@ data:
   # Local HURDAT2 .txt when source=local
   local_path: null
 
-  season_start: 2000
+  # 1998 is the earliest year with recoverable public-advisory archives.
+  season_start: 1998
   season_end: 2023
 
   # Minimum TD/TS/HU/SS/SD observations per storm
@@ -37,21 +40,41 @@ data:
   storm_filter: []
 
 advisories:
-  # When false, no advisory fetch is attempted and all storms are dropped.
+  # When false, no advisory fetch is attempted (TCR may still supply text).
   enabled: true
 
-  # Max advisory files concatenated per storm (first, last, peak-adjacent).
-  max_per_storm: 3
+  # Max advisory files concatenated per storm, spread evenly across the storm's
+  # life (formation -> peak -> landfall -> dissipation), always incl. first/last.
+  max_per_storm: 6
 
   # Character limit per individual advisory before concatenation.
-  char_limit_per_advisory: 1500
+  char_limit_per_advisory: 3000
 
   # HTTP timeout per advisory/index request (seconds).
   timeout_seconds: 10
 
+tcr:
+  # NHC post-storm Tropical Cyclone Report (definitive PDF narrative).
+  # Best-effort: fetched, pdftotext'd, and prepended when available; storms
+  # with neither a TCR nor advisories are dropped.
+  enabled: true
+
+  # {storm_id} = HURDAT2 id (e.g. AL122005); {name} = Title-case storm name.
+  tcr_url_template: "https://www.nhc.noaa.gov/data/tcr/{storm_id}_{name}.pdf"
+
+  # Max characters of TCR narrative kept per record.
+  tcr_char_limit: 6000
+
+  # HTTP timeout for the TCR PDF download (seconds).
+  timeout_seconds: 30
+
 text:
-  # Closing sentence appended after advisory text. Must contain exactly one <ts></ts>.
-  ts_intro_sentence: "Six-hourly observations across the storm's lifetime — maximum sustained wind (kt), minimum central pressure (mb), track latitude, track longitude, and maximum 34-kt wind radius (nm): <ts></ts>."
+  # Labels leading each real-text block within the record.
+  tcr_label: "NOAA National Hurricane Center — Tropical Cyclone Report:"
+  advisory_label: "NHC Public Advisories:"
+
+  # Closing sentence appended after the text. Must contain exactly one <ts></ts>.
+  ts_intro_sentence: "Six-hourly observations across the storm's lifetime — maximum sustained wind (kt), minimum central pressure (mb), track latitude, track longitude, maximum 34-kt wind radius (nm), maximum 50-kt wind radius (nm), maximum 64-kt wind radius (nm), forward translation speed (kt), and heading (degrees): <ts></ts>."
 
 output:
   output_path: output/nhc_hurdat2_cpt.jsonl

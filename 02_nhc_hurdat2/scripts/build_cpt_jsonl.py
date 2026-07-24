@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Build CPT world-knowledge JSONL from NHC HURDAT2 + public advisory text.
+"""Build CPT world-knowledge JSONL from NHC HURDAT2 + public advisory/report text.
 
-One record per tropical cyclone with real NHC public advisory prose and five
-6-hourly time series over the storm's qualifying tropical/subtropical life.
-Storms without retrievable advisory text are dropped — no synthetic fallback.
+One record per tropical cyclone (Atlantic + East Pacific) pairing real NHC text
+— the post-storm Tropical Cyclone Report (TCR) and/or public advisories — with a
+9-channel 6-hourly time series over the storm's qualifying tropical/subtropical
+life. Storms without any retrievable real text are dropped — no synthetic
+fallback.
 
 Example:
   python scripts/build_cpt_jsonl.py --config config.example.yaml
@@ -15,7 +17,9 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import math
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -347,13 +351,80 @@ def peak_observation(qtrack: List[TrackPoint]) -> TrackPoint:
     return max(qtrack, key=lambda p: p.max_wind_kt)
 
 
-def r34_max_nm(point: TrackPoint) -> Optional[int]:
-    """Max 34-kt wind radius across quadrants; null if all missing."""
-    radii = point.wind_radii[:4]
-    valid = [r for r in radii if r != -999]
+# Wind-radii missing codes: -999 (standard) and -99 (some radii fields).
+_RADII_MISSING = frozenset({-999, -99})
+
+# Mean Earth radius in nautical miles (for great-circle distance).
+_EARTH_RADIUS_NM = 3440.065
+
+
+def _max_radius(point: TrackPoint, start: int) -> Optional[int]:
+    """Max wind radius across the four quadrants starting at index `start`;
+    null if all quadrants are missing. Radii exist only for storms 2004+."""
+    valid = [r for r in point.wind_radii[start : start + 4] if r not in _RADII_MISSING]
     if not valid:
         return None
     return max(valid)
+
+
+def r34_max_nm(point: TrackPoint) -> Optional[int]:
+    """Max 34-kt wind radius across quadrants; null if all missing."""
+    return _max_radius(point, 0)
+
+
+def r50_max_nm(point: TrackPoint) -> Optional[int]:
+    """Max 50-kt wind radius across quadrants; null if all missing."""
+    return _max_radius(point, 4)
+
+
+def r64_max_nm(point: TrackPoint) -> Optional[int]:
+    """Max 64-kt wind radius across quadrants; null if all missing."""
+    return _max_radius(point, 8)
+
+
+def _great_circle_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance between two lat/lon points, in nautical miles."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlmb / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return _EARTH_RADIUS_NM * c
+
+
+def _initial_bearing_deg(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Initial great-circle bearing from point 1 to point 2, in degrees (0–360)."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dlmb = math.radians(lon2 - lon1)
+    y = math.sin(dlmb) * math.cos(phi2)
+    x = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(dlmb)
+    theta = math.atan2(y, x)
+    return (math.degrees(theta) + 360.0) % 360.0
+
+
+def translation_speeds_kt(qtrack: List[TrackPoint]) -> List[Optional[float]]:
+    """Forward speed (kt) between consecutive fixes; first fix is null."""
+    speeds: List[Optional[float]] = [None]
+    for prev, cur in zip(qtrack, qtrack[1:]):
+        hours = (cur.timestamp - prev.timestamp).total_seconds() / 3600.0
+        if hours <= 0:
+            speeds.append(None)
+            continue
+        dist = _great_circle_nm(prev.lat, prev.lon, cur.lat, cur.lon)
+        speeds.append(round(dist / hours, 1))
+    return speeds
+
+
+def headings_deg(qtrack: List[TrackPoint]) -> List[Optional[float]]:
+    """Initial bearing (deg) from each fix to the next; last fix is null."""
+    headings: List[Optional[float]] = []
+    for cur, nxt in zip(qtrack, qtrack[1:]):
+        if cur.lat == nxt.lat and cur.lon == nxt.lon:
+            headings.append(None)
+        else:
+            headings.append(round(_initial_bearing_deg(cur.lat, cur.lon, nxt.lat, nxt.lon), 1))
+    headings.append(None)
+    return headings
 
 
 def build_timeseries(qtrack: List[TrackPoint]) -> List[Dict[str, Any]]:
@@ -369,6 +440,10 @@ def build_timeseries(qtrack: List[TrackPoint]) -> List[Dict[str, Any]]:
         {"values": [p.lat for p in qtrack], "unit": "lat", "freq": "6h"},
         {"values": [p.lon for p in qtrack], "unit": "lon", "freq": "6h"},
         {"values": [r34_max_nm(p) for p in qtrack], "unit": "r34_max_nm", "freq": "6h"},
+        {"values": [r50_max_nm(p) for p in qtrack], "unit": "r50_max_nm", "freq": "6h"},
+        {"values": [r64_max_nm(p) for p in qtrack], "unit": "r64_max_nm", "freq": "6h"},
+        {"values": translation_speeds_kt(qtrack), "unit": "translation_speed_kt", "freq": "6h"},
+        {"values": headings_deg(qtrack), "unit": "heading_deg", "freq": "6h"},
     ]
 
 
@@ -403,19 +478,66 @@ def list_public_advisory_numbers(index_html: str, storm_id_lower: str) -> List[i
 def select_advisory_numbers(
     numbers: List[int], qtrack: List[TrackPoint], max_per_storm: int
 ) -> List[int]:
-    """Pick first, last, and (if >4 advisories) one closest to peak intensity."""
-    if not numbers:
+    """Spread up to `max_per_storm` advisories evenly across the storm's life.
+
+    Advisories are numbered 1..final with no gaps, so evenly spacing by list
+    index covers formation -> peak -> landfall -> dissipation. Always includes
+    the first and last advisory. `qtrack` is unused but kept for call-site
+    compatibility."""
+    del qtrack  # selection is now purely by advisory-number spacing
+    if not numbers or max_per_storm <= 0:
         return []
-    selected = {numbers[0], numbers[-1]}
-    if len(numbers) > 4 and qtrack:
-        peak = peak_observation(qtrack)
-        peak_idx = qtrack.index(peak)
-        fraction = peak_idx / max(len(qtrack) - 1, 1)
-        target = round(fraction * (numbers[-1] - numbers[0])) + numbers[0]
-        closest = min(numbers, key=lambda n: abs(n - target))
-        selected.add(closest)
-    ordered = sorted(selected)
-    return ordered[:max_per_storm]
+    n = len(numbers)
+    if n <= max_per_storm:
+        return list(numbers)
+    if max_per_storm == 1:
+        return [numbers[-1]]
+    idxs = sorted({round(i * (n - 1) / (max_per_storm - 1)) for i in range(max_per_storm)})
+    return [numbers[i] for i in idxs]
+
+
+def probe_old_advisories(
+    storm_id_lower: str, base_url: str, timeout: int, max_probe: int = 150
+) -> Dict[int, str]:
+    """OLD-layout (~1998–2005) fallback: probe /pub/{id}.public.{NNN}.shtml
+    sequentially from 001, stopping at the first miss. Returns {number: page}."""
+    pages: Dict[int, str] = {}
+    for n in range(1, max_probe + 1):
+        url = f"{base_url}{storm_id_lower}.public.{n:03d}.shtml"
+        page = fetch_url(url, timeout)
+        if page is None:
+            break
+        pages[n] = page
+    return pages
+
+
+def discover_advisories(
+    storm: Storm, timeout: int
+) -> Tuple[List[int], str, Dict[int, str]]:
+    """Locate a storm's public advisories.
+
+    Tries the NEW archive layout (index at /archive/{year}/{slug}/) first; if
+    that 404s or lists no advisories, falls back to OLD-layout /pub/ probing.
+    Returns (advisory_numbers, base_url_for_new_layout, prefetched_old_pages).
+    For the NEW layout, pages are fetched on demand from base_url; for the OLD
+    layout, base_url is "" and pages are returned prefetched by number."""
+    year, slug = storm_archive_path(storm.storm_id)
+    storm_id_lower = storm.storm_id.lower()
+
+    index_url = f"{NHC_ARCHIVE_BASE}/{year}/{slug}/"
+    index_html = fetch_url(index_url, timeout)
+    if index_html:
+        numbers = list_public_advisory_numbers(index_html, storm_id_lower)
+        if numbers:
+            return numbers, index_url, {}
+
+    # OLD-layout fallback.
+    base_url = f"{NHC_ARCHIVE_BASE}/{year}/pub/"
+    pages = probe_old_advisories(storm_id_lower, base_url, timeout)
+    if pages:
+        return sorted(pages), "", pages
+
+    return [], "", {}
 
 
 def strip_advisory_html(page_html: str) -> str:
@@ -456,6 +578,10 @@ def truncate_advisory(text: str, limit: int) -> str:
 def fetch_advisory_text(
     storm: Storm, qtrack: List[TrackPoint], cfg: Dict[str, Any]
 ) -> Optional[str]:
+    """Return concatenated advisory prose (no ts-intro), or None if none found.
+
+    Handles both the NEW (~2006+) and OLD (~1998–2005) archive layouts via
+    discover_advisories()."""
     adv_cfg = cfg.get("advisories", {})
     if not adv_cfg.get("enabled", True):
         return None
@@ -463,24 +589,20 @@ def fetch_advisory_text(
     timeout = int(adv_cfg.get("timeout_seconds", 10))
     char_limit = int(adv_cfg.get("char_limit_per_advisory", 1500))
     max_per_storm = int(adv_cfg.get("max_per_storm", 3))
-    ts_intro = cfg["text"]["ts_intro_sentence"]
 
-    year, slug = storm_archive_path(storm.storm_id)
-    index_url = f"{NHC_ARCHIVE_BASE}/{year}/{slug}/"
-    index_html = fetch_url(index_url, timeout)
-    if not index_html:
-        return None
-
-    storm_id_lower = storm.storm_id.lower()
-    numbers = list_public_advisory_numbers(index_html, storm_id_lower)
+    numbers, base_url, old_pages = discover_advisories(storm, timeout)
     if not numbers:
         return None
 
+    storm_id_lower = storm.storm_id.lower()
     selected = select_advisory_numbers(numbers, qtrack, max_per_storm)
     chunks: List[str] = []
     for num in selected:
-        filename = f"{storm_id_lower}.public.{num:03d}.shtml"
-        page = fetch_url(f"{index_url}{filename}", timeout)
+        if base_url:  # NEW layout: fetch on demand
+            filename = f"{storm_id_lower}.public.{num:03d}.shtml"
+            page = fetch_url(f"{base_url}{filename}", timeout)
+        else:  # OLD layout: page already prefetched during probing
+            page = old_pages.get(num)
         if not page:
             continue
         cleaned = strip_advisory_html(page)
@@ -491,9 +613,115 @@ def fetch_advisory_text(
         return None
 
     body = "\n\n---\n\n".join(chunks)
-    if not body.strip():
+    return body.strip() or None
+
+
+# ---------------------------------------------------------------------------
+# NHC Tropical Cyclone Report (TCR) acquisition
+# ---------------------------------------------------------------------------
+
+
+def fetch_bytes(url: str, timeout: int) -> Optional[Tuple[bytes, str]]:
+    """Fetch raw bytes + content-type for a URL, or None on any failure."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "CPT-dataset-builder/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read()
+            ctype = resp.headers.get_content_type()
+            return data, ctype
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
         return None
-    return f"{body}\n\n{ts_intro}"
+
+
+def clean_tcr_text(raw: str) -> str:
+    """Normalize pdftotext output: drop page-breaks, collapse whitespace."""
+    text = raw.replace("\x0c", "\n")
+    text = html.unescape(text)
+    lines = [line.rstrip() for line in text.splitlines()]
+    cleaned = "\n".join(lines)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def fetch_tcr_text(storm: Storm, cfg: Dict[str, Any]) -> Optional[str]:
+    """Best-effort fetch of the storm's post-storm Tropical Cyclone Report PDF,
+    converted to text via pdftotext. Returns cleaned/truncated text or None."""
+    tcr_cfg = cfg.get("tcr", {})
+    if not tcr_cfg.get("enabled", False):
+        return None
+
+    template = tcr_cfg.get(
+        "tcr_url_template", "https://www.nhc.noaa.gov/data/tcr/{storm_id}_{name}.pdf"
+    )
+    char_limit = int(tcr_cfg.get("tcr_char_limit", 6000))
+    timeout = int(
+        tcr_cfg.get("timeout_seconds", cfg.get("advisories", {}).get("timeout_seconds", 30))
+    )
+
+    cache_dir = ROOT / ".cache" / "tcr"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = cache_dir / f"{storm.storm_id}.pdf"
+
+    if cache_path.exists():
+        pdf_bytes = cache_path.read_bytes()
+    else:
+        url = template.format(storm_id=storm.storm_id, name=storm.name)
+        result = fetch_bytes(url, timeout)
+        if result is None:
+            return None
+        data, ctype = result
+        if "pdf" not in ctype.lower() or not data[:5].startswith(b"%PDF"):
+            return None
+        cache_path.write_bytes(data)
+        pdf_bytes = data
+
+    try:
+        proc = subprocess.run(
+            ["pdftotext", "-layout", "-", "-"],
+            input=pdf_bytes,
+            capture_output=True,
+            timeout=120,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+
+    text = clean_tcr_text(proc.stdout.decode("utf-8", errors="replace"))
+    if not text:
+        return None
+    return truncate_advisory(text, char_limit)
+
+
+def assemble_record_text(
+    tcr_text: Optional[str], advisory_body: Optional[str], cfg: Dict[str, Any]
+) -> Tuple[Optional[str], Optional[str]]:
+    """Compose the final record text and a text_source_product label.
+
+    Order: TCR narrative (definitive post-storm report), then advisories, then
+    the ts-intro sentence carrying the single <ts></ts> token. Returns
+    (text, product) or (None, None) if there is no real text."""
+    text_cfg = cfg["text"]
+    ts_intro = text_cfg["ts_intro_sentence"]
+    tcr_label = text_cfg.get(
+        "tcr_label", "NOAA National Hurricane Center — Tropical Cyclone Report:"
+    )
+    advisory_label = text_cfg.get("advisory_label", "NHC Public Advisories:")
+
+    parts: List[str] = []
+    products: List[str] = []
+    if tcr_text:
+        parts.append(f"{tcr_label}\n\n{tcr_text}")
+        products.append("tcr")
+    if advisory_body:
+        parts.append(f"{advisory_label}\n\n{advisory_body}")
+        products.append("advisory")
+    if not parts:
+        return None, None
+
+    parts.append(ts_intro)
+    return "\n\n".join(parts), "+".join(products)
 
 
 # ---------------------------------------------------------------------------
@@ -513,7 +741,9 @@ def basin_metadata(basin: str) -> Tuple[str, str]:
     )
 
 
-def storm_to_record(storm: Storm, advisory_text: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
+def storm_to_record(
+    storm: Storm, record_text: str, text_product: str, cfg: Dict[str, Any]
+) -> Dict[str, Any]:
     qtrack = qualifying_track(storm)
     peak = peak_observation(qtrack)
     peak_cat = saffir_simpson_category(peak.max_wind_kt, peak.status)
@@ -525,7 +755,7 @@ def storm_to_record(storm: Storm, advisory_text: str, cfg: Dict[str, Any]) -> Di
     timestamps = [format_datetime_iso(p.timestamp) for p in qtrack]
 
     return emit_record(
-        text=advisory_text,
+        text=record_text,
         timeseries=build_timeseries(qtrack),
         alignment="describes",
         license="public-domain-us-gov",
@@ -546,7 +776,7 @@ def storm_to_record(storm: Storm, advisory_text: str, cfg: Dict[str, Any]) -> Di
             "peak_wind_kt": peak.max_wind_kt,
             "peak_category": peak_cat,
             "made_landfall": bool(landfall_points(storm)),
-            "text_source_product": "nhc_advisory",
+            "text_source_product": text_product,
             "track_date_range": [
                 format_datetime_iso(qtrack[0].timestamp),
                 format_datetime_iso(qtrack[-1].timestamp),
@@ -594,7 +824,7 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
     skipped: Dict[str, int] = {}
     records: List[Dict[str, Any]] = []
     validation_errors: List[str] = []
-    storms_with_advisory = 0
+    storms_with_text = 0
     max_records = cfg["output"].get("max_records")
 
     if not cfg.get("advisories", {}).get("enabled", True):
@@ -610,14 +840,16 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
             continue
 
         qtrack = qualifying_track(storm)
-        advisory_text = fetch_advisory_text(storm, qtrack, cfg)
-        if not advisory_text:
-            skipped["no_advisory_text"] = skipped.get("no_advisory_text", 0) + 1
+        tcr_text = fetch_tcr_text(storm, cfg)
+        advisory_body = fetch_advisory_text(storm, qtrack, cfg)
+        record_text, text_product = assemble_record_text(tcr_text, advisory_body, cfg)
+        if not record_text:
+            skipped["no_text"] = skipped.get("no_text", 0) + 1
             continue
 
-        storms_with_advisory += 1
+        storms_with_text += 1
         try:
-            record = storm_to_record(storm, advisory_text, cfg)
+            record = storm_to_record(storm, record_text, text_product, cfg)
         except ValueError as exc:
             skipped["validation_error"] = skipped.get("validation_error", 0) + 1
             validation_errors.append(f"{storm.storm_id}: {exc}")
@@ -634,7 +866,7 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
     report = {
         "storms_seen": len(storms),
         "storms_qualifying": qualifying_count,
-        "storms_with_advisory": storms_with_advisory,
+        "storms_with_text": storms_with_text,
         "storms_skipped": dict(sorted(skipped.items())),
         "records_written": len(records),
         "validation_errors": validation_errors[:20],
@@ -673,7 +905,7 @@ def main() -> None:
             f"Wrote {report['records_written']} records "
             f"({report['storms_seen']} storms seen, "
             f"{report['storms_qualifying']} qualifying, "
-            f"{report['storms_with_advisory']} with advisory, "
+            f"{report['storms_with_text']} with text, "
             f"{sum(report['storms_skipped'].values())} skipped).",
             file=sys.stderr,
         )
