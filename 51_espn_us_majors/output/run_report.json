@@ -62,10 +62,11 @@
       "cache_dir": ".cache",
       "user_agent": "CPT-dataset-research faisal@usc.edu",
       "timeout_s": 90,
-      "min_periods": 3
+      "min_periods": 3,
+      "min_plays": 20
     },
     "text": {
-      "ts_intro_sentence": "Score progression by period, away then home ({away} at {home}): <ts></ts>",
+      "ts_intro_sentence": "Play-by-play score progression, away then home ({away} at {home}): <ts></ts>",
       "min_report_chars": 400
     },
     "output": {

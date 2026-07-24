@@ -176,44 +176,41 @@ def _flatten_plays(summary: dict, sport: str) -> List[dict]:
     return out
 
 
-def period_scores(plays: List[dict]) -> Tuple[List[int], List[int], int]:
-    """Score at the end of each period, in order. Returns (away, home, n_periods).
+def play_scores(plays: List[dict]) -> Tuple[List[int], List[int], int, int]:
+    """Running score at EVERY play, in order. Returns (away, home, n_plays, n_periods).
 
-    NOT simply "the last play's score per period": ESPN's own play-by-play often
-    trails the true final scoring play with non-scoring administrative events
-    ("End of the 4th Quarter", "End of Game") that carry a STALE score snapshot
-    (observed live: last scoring play = 113, but the subsequent "End of Game"
-    marker still reads 112 -- one free throw behind). Since score is monotonically
-    non-decreasing within a game, take the running MAX seen up to and including
-    each period, not the literal temporally-last value.
+    One point per play -- the source's actual finest native granularity (more
+    native than period boundaries, which are a broadcast convention we would
+    otherwise be imposing on top of the raw feed). Score is held constant across
+    non-scoring plays (a rebound, a timeout, a penalty) -- this is the real
+    signal, not filler: it is exactly how NOAA SWPC's quiet-vs-active days are
+    kept in that package, and the *contrast* between flat stretches and jumps is
+    what the model has to learn from a play-by-play trace.
+
+    Uses a running MAX rather than each play's literal score field: ESPN's own
+    feed trails the true final scoring play with non-scoring administrative
+    events ("End of the 4th Quarter", "End of Game") that can carry a STALE
+    snapshot (observed live: last scoring play = 113, but the subsequent
+    "End of Game" marker still read 112 -- one free throw behind). A running
+    max self-corrects this at every position, not just the final one.
     """
-    max_by_period: Dict[int, Tuple[int, int]] = {}
+    away, home, periods_seen = [], [], set()
     running_away, running_home = 0, 0
     for p in plays:
-        pn = (p.get("period") or {}).get("number")
-        if pn is None:
-            continue
         aw, hm = p.get("awayScore"), p.get("homeScore")
         if aw is None or hm is None:
+            if away:
+                away.append(running_away); home.append(running_home)
             continue
         running_away = max(running_away, int(aw))
         running_home = max(running_home, int(hm))
-        pn = int(pn)
-        cur = max_by_period.get(pn, (0, 0))
-        max_by_period[pn] = (max(cur[0], running_away), max(cur[1], running_home))
-    if not max_by_period:
-        return [], [], 0
-    n = max(max_by_period)
-    # Fill any period gaps by carrying the previous period's score forward (score
-    # cannot decrease), so a period with no scoring plays still gets a value.
-    away, home = [], []
-    prev_a, prev_h = 0, 0
-    for i in range(1, n + 1):
-        a, h = max_by_period.get(i, (prev_a, prev_h))
-        a, h = max(a, prev_a), max(h, prev_h)
-        away.append(a); home.append(h)
-        prev_a, prev_h = a, h
-    return away, home, len(away)
+        away.append(running_away)
+        home.append(running_home)
+        pn = (p.get("period") or {}).get("number")
+        if pn is not None:
+            periods_seen.add(int(pn))
+    n_periods = max(periods_seen) if periods_seen else 0
+    return away, home, len(away), n_periods
 
 
 def official_scores(summary: dict) -> Tuple[Optional[int], Optional[int]]:
@@ -283,8 +280,8 @@ def build_record_for_event(event_id: str, league_cfg: dict, cfg: Dict[str, Any],
         return None, "no_report"
 
     plays = _flatten_plays(summary, sport)
-    away_scores, home_scores, n_periods = period_scores(plays)
-    if n_periods < int(d.get("min_periods", 3)):
+    away_scores, home_scores, n_plays, n_periods = play_scores(plays)
+    if n_periods < int(d.get("min_periods", 3)) or n_plays < int(d.get("min_plays", 20)):
         return None, "short_game"
 
     off_away, off_home = official_scores(summary)
@@ -300,8 +297,8 @@ def build_record_for_event(event_id: str, league_cfg: dict, cfg: Dict[str, Any],
     text = f"{story}\n\n{intro}"
 
     timeseries = [
-        {"values": away_scores, "unit": "away_score_cumulative", "freq": "1prd"},
-        {"values": home_scores, "unit": "home_score_cumulative", "freq": "1prd"},
+        {"values": away_scores, "unit": "away_score_cumulative", "freq": "1play"},
+        {"values": home_scores, "unit": "home_score_cumulative", "freq": "1play"},
     ]
 
     gdate = game_date(summary)
@@ -319,6 +316,7 @@ def build_record_for_event(event_id: str, league_cfg: dict, cfg: Dict[str, Any],
         "home_team": home_name,
         "game_date": gdate,
         "n_periods": n_periods,
+        "n_plays": n_plays,
         "final_away_score": away_scores[-1] if away_scores else None,
         "final_home_score": home_scores[-1] if home_scores else None,
         "report_url": report_url,
@@ -349,8 +347,8 @@ def validate(rec: dict) -> List[str]:
     lens = {len(c["values"]) for c in ts}
     if len(lens) != 1:
         e.append(f"channel length mismatch {sorted(lens)}")
-    if lens and next(iter(lens)) != rec["n_periods"]:
-        e.append("length != n_periods")
+    if lens and next(iter(lens)) != rec["n_plays"]:
+        e.append("length != n_plays")
     return e
 
 

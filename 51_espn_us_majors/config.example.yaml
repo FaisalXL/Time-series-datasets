@@ -1,10 +1,14 @@
 # ESPN US Majors (NBA + NFL + NHL) Game Recaps + Score-Progression Series → CPT
 #
 # One record = one FINISHED GAME: the real AP wire recap (served via ESPN's API)
-# paired with the game's period-by-period running score (away/home cumulative).
-# The recap *describes* the shape of the game the series quantifies (comeback,
-# blowout, lead held throughout) → "describes". text_quality is always "real";
-# games with no usable recap are dropped (no synthetic fallback).
+# paired with the game's PLAY-BY-PLAY running score (away/home cumulative, one
+# point per play -- not per period/quarter; period-level was tried first and
+# found far too short, 3-4 points, especially for NFL/NHL where scoring events
+# are rare -- play-level is the source's actual finest native granularity and
+# gives ~100-500 points depending on league). The recap *describes* the shape
+# of the game the series quantifies (comeback, blowout, lead held throughout)
+# → "describes". text_quality is always "real"; games with no usable recap are
+# dropped (no synthetic fallback).
 #
 # ⚠️ LICENSE: the recap prose is Associated Press wire copy (article.source == "AP"
 #    on every game checked across all 3 leagues) served through ESPN's API — a
@@ -47,10 +51,11 @@ data:
 
   min_periods: 3              # drop games with fewer than this many periods of play data
                                # (NHL regulation=3, NBA/NFL regulation=4; OT adds more)
+  min_plays: 20                # drop games with a suspiciously thin play-by-play feed
 
 text:
   # Closing sentence carrying the single <ts></ts> placeholder.
-  ts_intro_sentence: "Score progression by period, away then home ({away} at {home}): <ts></ts>"
+  ts_intro_sentence: "Play-by-play score progression, away then home ({away} at {home}): <ts></ts>"
   min_report_chars: 400   # drop games whose recap is missing or too short
 
 output:
