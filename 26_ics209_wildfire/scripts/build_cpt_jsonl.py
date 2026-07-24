@@ -192,9 +192,9 @@ def build_record(rows: List[Dict[str, str]], cfg) -> Tuple[Optional[dict], Optio
     cause_map = {"H": "Human", "L": "Natural (lightning)", "U": "Undetermined", "O": "Other"}
     cause = (a.get("CAUSE") or "").strip()
     cause = cause_map.get(cause, cause) or None
-    intro = t["ts_intro_sentence"].format(name=name, state=state,
-                                          n=len(window), date=anchor["date"])
-    text = f"{anchor['narr']}\n\n{intro}"
+    # No templated ts_intro: <ts></ts> is appended directly to the real situation-report
+    # narrative, nothing is generated.
+    text = f"{anchor['narr']}\n\n<ts></ts>"
 
     rec = emit_record(
         text=text,

@@ -41,7 +41,7 @@
 **Record shape** (real — Donnelly Flats, AK 1999; arrays/text abbreviated):
 ```json
 {
-  "text": "the fire made a major run to the north late sunday, forcing the evacuation of fort greely and part of delta junction... the fire jumped the richardson highway and destroyed a residential structure...\n\nDaily situation-report values — acres burned, percent contained, and total personnel — for the Donnelly Flats Fire (AK) across 4 reporting days through 1999-06-14: <ts></ts>",
+  "text": "the fire made a major run to the north late sunday, forcing the evacuation of fort greely and part of delta junction... the fire jumped the richardson highway and destroyed a residential structure...\n\n<ts></ts>",
   "timeseries": [
     {"values": [150.0, 1500.0, 3200.0, 6000.0], "unit": "acres", "freq": "1d"},
     {"values": [0.0, 0.0, 0.0, 0.0], "unit": "percent", "freq": "1d"},
@@ -65,6 +65,7 @@
 - **Terminal-value leakage is inherent and intended** (as with BLS CPI / EIA): the anchor report's own metrics = the series' terminal point. The window ends at the anchor — no future values.
 - **Complexes / sub-fire merges** (e.g. three fires merging into a "complex") can make early `ACRES` non-monotonic. This v1 doesn't special-case them; `ics209-plus-wf_complex_associations_1999to2020.csv` (in the bundle) can resolve them if needed.
 - **Volume:** demo yields ~19% of incidents (dropped: too-few-points, short-narrative); full build ≈ 7–10k records across 1999–2020. Demo (capped 50) covers only 1999 due to file ordering; full build spans all years.
+- **No generated text.** An earlier version of this build appended a templated closing sentence to introduce the daily arc series before `<ts></ts>`. That sentence was not from the ICS-209 report — it was synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real situation-report narrative with nothing generated in between.
 
 **Run:**
 ```bash

@@ -44,8 +44,8 @@ data:
 
 text:
   min_text_chars: 300      # anchor report narrative must be at least this long
-  # Framing sentence carrying the single <ts></ts>. {name}/{state}/{n}/{date} filled in.
-  ts_intro_sentence: "Daily situation-report values — acres burned, percent contained, and total personnel — for the {name} Fire ({state}) across {n} reporting days through {date}: <ts></ts>"
+  # No templated ts_intro: <ts></ts> is appended directly to the real situation-report
+  # narrative, nothing is generated.
 
 output:
   output_path: output/ics209_wildfire_cpt.jsonl

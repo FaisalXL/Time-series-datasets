@@ -50,8 +50,7 @@
       "timeout_s": 180
     },
     "text": {
-      "min_text_chars": 300,
-      "ts_intro_sentence": "Daily situation-report values — acres burned, percent contained, and total personnel — for the {name} Fire ({state}) across {n} reporting days through {date}: <ts></ts>"
+      "min_text_chars": 300
     },
     "output": {
       "output_path": "output/ics209_wildfire_cpt.jsonl",
