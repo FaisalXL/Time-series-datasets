@@ -9,11 +9,11 @@
     "run_rate"
   ],
   "stats": {
-    "matches_scanned": 32,
-    "innings_seen": 64,
+    "matches_scanned": 28,
+    "innings_seen": 56,
     "emitted": 50,
     "short_innings": 1,
-    "no_report": 12,
+    "no_report": 4,
     "invalid": 0,
     "no_info": 0
   },
@@ -36,7 +36,6 @@
       "timeout_s": 90
     },
     "text": {
-      "ts_intro_sentence": "Per-over progression of the {team} innings: <ts></ts>",
       "min_report_chars": 400
     },
     "output": {

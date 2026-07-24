@@ -190,8 +190,9 @@ def build_records_for_match(match_id: str, deliveries_csv: bytes, info_csv: byte
             continue
 
         report_url = d["espn_report_url_template"].format(match_id=match_id)
-        intro = t["ts_intro_sentence"].format(team=batting)
-        text = f"{report_text}\n\n{intro}"
+        # No generated/templated framing text: the <ts></ts> placeholder is appended directly
+        # to the real ESPNcricinfo report, nothing else is added.
+        text = f"{report_text}\n\n<ts></ts>"
 
         timeseries = [
             {"values": chans["runs_per_over"], "unit": "runs_per_over", "freq": "1over"},
@@ -255,7 +256,7 @@ def fetch_report(match_id: str, d: dict, cache: Path) -> Tuple[Optional[str], di
     (clean_report_text | None, article_meta). Cached per match_id.
 
     NOTE: `article.story` is the whole-MATCH report, so both innings of a match share
-    the same prose (localized by the per-innings <ts></ts> framing sentence).
+    the exact same prose (only the paired timeseries + innings-level fields differ).
     """
     fp = cache / "espn" / f"{match_id}.json"
     if fp.exists():

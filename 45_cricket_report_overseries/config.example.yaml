@@ -46,9 +46,8 @@ data:
   timeout_s: 90
 
 text:
-  # Closing sentence that carries the single <ts></ts> placeholder. {team} = batting side.
-  ts_intro_sentence: "Per-over progression of the {team} innings: <ts></ts>"
-
+  # No templated ts_intro: <ts></ts> is appended directly to the real ESPNcricinfo report,
+  # nothing is generated.
   min_report_chars: 400   # drop innings whose match report is missing or too short
 
 output:

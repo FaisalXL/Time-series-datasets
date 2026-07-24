@@ -14,7 +14,7 @@
 
 | | |
 |---|---|
-| **What** | The match report (~850–1,200 words): an editor's over-by-over recap. `text` = the cleaned report + one framing sentence *"Per-over progression of the {team} innings: `<ts></ts>`"*. |
+| **What** | The match report (~850–1,200 words): an editor's over-by-over recap. `text` = the cleaned report with `<ts></ts>` appended directly — nothing generated in between. |
 | **Source** | ESPN **parent** sports API `site.api.espn.com/apis/site/v2/sports/cricket/{league}/summary?event={match_id}` → JSON `article.story` (HTML, stripped in-script), plus `headline` / `byline` / `published`. |
 | **Why this host** | `www.espncricinfo.com` and `hs-consumer-api` `403` bots; `site.api.espn.com` does not, and **resolves purely by `event`** = the Cricsheet `match_id` (the `{league}` segment is just a required carrier — any valid cricket league id works for any match, all formats). |
 | **`text_quality`** | `"real"` (real journalist prose — bylines like Sidharth Monga, Karthik Krishnaswamy). Innings with no usable recap are **dropped**, never synthesized. |
@@ -40,7 +40,7 @@ Aggregation: bucket deliveries by over index `int(float(ball))`, sum runs, count
 **Record shape** (real — IPL 2024 final, SRH innings; report text + arrays abbreviated):
 ```json
 {
-  "text": "…SRH were bowled out for the lowest total in an IPL final, 113, which KKR chased down with 57 balls to spare… Arora went for 17 in the final powerplay over, taking SRH up to 40 for 3…\n\nPer-over progression of the Sunrisers Hyderabad innings: <ts></ts>",
+  "text": "…SRH were bowled out for the lowest total in an IPL final, 113, which KKR chased down with 57 balls to spare… Arora went for 17 in the final powerplay over, taking SRH up to 40 for 3…\n\n<ts></ts>",
   "timeseries": [
     {"values": [3, 3, 9, "...", 0], "unit": "runs_per_over", "freq": "1over"},
     {"values": [1, 1, 0, "...", 1], "unit": "wickets_per_over", "freq": "1over"},
@@ -91,11 +91,12 @@ Source: `https://cricsheet.org/downloads/ipl_male_csv2.zip` → `1426312.csv`, f
 
 - **⚠️ License is the one open decision (for the lead, not self-cleared).** Cricsheet is **ODC-BY 1.0** — fine with attribution. The **ESPNcricinfo report prose is copyrighted / ToS-restricted**; publishing/scaling it is a legal/policy call. The write-up + exact question is in **[NOTION_PAGE.md](NOTION_PAGE.md)**. The committed `output/`+`samples/` are a **50-record demo for internal inspection only** — do not run a full build or publish until it's cleared.
 - **Alignment = describes (strong).** The recap narrates the same match the series quantifies — powerplay total, the collapse, when wickets fell, run-rate. See the worked example: report "40 for 3" ↔ `cumulative_runs[5]=40`, "bowled out for 113" ↔ `cumulative_runs[-1]=113` / 10 wickets.
-- **Whole-match report, per-innings series:** `article.story` covers the full match, so a match's two innings-records share the same report text (localized by the `<ts></ts>` framing sentence). Mild text reuse; acceptable for CPT. (If undesirable, restrict to `innings == 1` or split the report — easy config/code change.)
+- **Whole-match report, per-innings series:** `article.story` covers the full match, so a match's two innings-records share the exact same `text` (only the paired timeseries + innings-level fields differ). Mild text reuse; acceptable for CPT. (If undesirable, restrict to `innings == 1` or split the report — easy config/code change.)
 - **Report coverage caps volume:** ~74% of IPL matches have a recap; the rest are dropped (`no_report`). IPL archive = 1,243 matches → 2,514 innings; after the ~74% coverage and the 12-over `min_overs` floor (~3.2%), ≈ **1.9k IPL innings**. Point `data.cricsheet_zip_url` at `tests_male_csv2.zip`, `odis_male_csv2.zip`, `t20s_male_csv2.zip`, etc. for the full **~30k+-innings** universe.
 - **`freq: 1over`** is an intra-match cadence (over count, not wall-clock) — same game-clock caveat class as the intra-day sports candidates.
 - **Etiquette:** report fetch is rate-limited (`request_delay_s`, ~2–3 req/s) and **cached per `match_id`** under `.cache/espn/`, so reruns don't re-hit ESPN.
 - **Environment:** stdlib only for the core (works on any Python 3.9+); PyYAML only to read config. The 6.8 MB zip is cached under `.cache/` so reruns are free.
+- **No generated text.** An earlier version of this build appended a templated closing sentence to introduce the per-over series before `<ts></ts>`. That sentence was not from the ESPNcricinfo report — it was synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real match report with nothing generated in between.
 
 ## Run
 
