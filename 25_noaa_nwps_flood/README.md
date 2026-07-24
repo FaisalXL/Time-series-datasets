@@ -31,7 +31,7 @@ stage **means** in the real world.
 **Record shape** (real — Ohio River at Cincinnati, April 2025; arrays abbreviated):
 ```json
 {
-  "text": "Ohio River at Cincinnati (OH) crested at 60.94 ft on April 7, 2025, reaching moderate flood stage. Defined flood stages here: action flood stage 40 ft, minor flood stage 52 ft, moderate flood stage 56 ft, major flood stage 65 ft.\n\nNational Weather Service flood-impact statements for this location:\n- At 59 ft: Some of Route 52 is flooded from Cincinnati to New Richmond...\n- At 60 ft: Significant flooding in East End, California and New Richmond...\n\nHourly river stage (gage height, ft, aligned to the NWS gauge datum) over the 20-day window around the crest at Ohio River at Cincinnati (OH): <ts></ts>",
+  "text": "Ohio River at Cincinnati (OH) crested at 60.94 ft on April 7, 2025, reaching moderate flood stage. Defined flood stages here: action flood stage 40 ft, minor flood stage 52 ft, moderate flood stage 56 ft, major flood stage 65 ft.\n\nNational Weather Service flood-impact statements for this location:\n- At 59 ft: Some of Route 52 is flooded from Cincinnati to New Richmond...\n- At 60 ft: Significant flooding in East End, California and New Richmond...\n\n<ts></ts>",
   "timeseries": [{"values": [27.86, "...", 60.94, "..."], "unit": "stage_ft", "freq": "1h"}],
   "timestamps": ["2025-03-28T21:00:00Z", "..."],
   "task_type": "world_knowledge", "text_quality": "real",
@@ -55,6 +55,7 @@ stage **means** in the real world.
 - **⚠️ Irregular cadence.** River data is sub-daily but gappy (sensor outages). We resample to an hourly grid and **omit empty buckets** (no imputation), carrying explicit `timestamps[]`. Ties directly to the team sparse-data thread (`../../docs/sparse_data_problem.md`, flavour B).
 - **⚠️ Datum offset.** NWPS "stage" and USGS "gage height" share a datum for most river gauges (offset < 0.1 ft here) but not universally; we compute and store a per-gauge `datum_offset_ft`. Gauges with no NWPS/USGS overlap default to offset 0 (documented).
 - **⚠️ Coverage / enumeration.** The NWPS `/gauges` list endpoint is flaky (intermittent 504s) and its bbox/wfo filters are ignored server-side; the full list (~13 MB, 12,756 gauges) *is* fetchable on retry but carries no impact fields — impact coverage requires per-gauge detail. The demo uses a verified seed; full enumeration = fetch the list once, then per-gauge detail to filter to impact-bearing gauges.
+- **No generated text.** An earlier version of this build appended a templated closing sentence to introduce the hydrograph series before `<ts></ts>`. That sentence was not from NWPS/NWS — it was synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real impact-statement text with nothing generated in between.
 
 **Run:**
 ```bash

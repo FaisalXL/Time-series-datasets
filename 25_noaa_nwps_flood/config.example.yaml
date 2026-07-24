@@ -56,9 +56,8 @@ data:
 
 text:
   min_text_chars: 120             # need at least one usable impact statement
-  ts_intro_sentence: >-
-    Hourly river stage (gage height, ft, aligned to the NWS gauge datum) over the
-    {window_days}-day window around the crest at {gauge} ({state}): <ts></ts>
+  # No templated ts_intro: <ts></ts> is appended directly to the real NWS flood-category/
+  # impact-statement text, nothing is generated.
 
 output:
   output_path: output/noaa_nwps_flood_cpt.jsonl

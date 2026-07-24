@@ -4,9 +4,9 @@
   "window_hours": 481,
   "event_threshold": "minor",
   "stats": {
-    "gauges": 9,
-    "gauges_ok": 8,
-    "events_found": 124,
+    "gauges": 8,
+    "gauges_ok": 7,
+    "events_found": 126,
     "emitted": 50,
     "no_impacts": 0,
     "no_series": 1,
@@ -24,6 +24,9 @@
       "nwps_gauge_template": "https://api.water.noaa.gov/nwps/v1/gauges/{lid}",
       "nwps_stageflow_template": "https://api.water.noaa.gov/nwps/v1/gauges/{lid}/stageflow",
       "usgs_iv_template": "https://waterservices.usgs.gov/nwis/iv/?sites={usgs}&parameterCd=00065&startDT={start}&endDT={end}&format=json",
+      "usgs_dv_template": "https://waterservices.usgs.gov/nwis/dv/?sites={usgs}&parameterCd={pc}&startDT={start}&endDT={end}&format=json",
+      "event_window_buffer_days": 12,
+      "daily_scan_margin_ft": 2.0,
       "usgs_year_start": 2012,
       "usgs_year_end": 2026,
       "gauges": [
@@ -76,8 +79,7 @@
       "source": "NOAA National Water Prediction Service (NWPS) flood impacts + USGS NWIS gage height"
     },
     "text": {
-      "min_text_chars": 120,
-      "ts_intro_sentence": "Hourly river stage (gage height, ft, aligned to the NWS gauge datum) over the {window_days}-day window around the crest at {gauge} ({state}): <ts></ts>"
+      "min_text_chars": 120
     },
     "output": {
       "output_path": "output/noaa_nwps_flood_cpt.jsonl",

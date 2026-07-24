@@ -399,8 +399,8 @@ def match_impacts(crest: float, impacts: List[Dict[str, Any]], band: float, k: i
 
 
 def build_text(gauge_name: str, state: str, river: str, crest: float, crest_time: dt.datetime,
-               cats: Dict[str, float], cat: Optional[str], impacts: List[Dict[str, Any]],
-               intro: str, window_days: int) -> Optional[str]:
+               cats: Dict[str, float], cat: Optional[str],
+               impacts: List[Dict[str, Any]]) -> Optional[str]:
     if not impacts:
         return None
     stage_defs = ", ".join(f"{c} flood stage {cats[c]:g} ft" for c in _CAT_ORDER if c in cats)
@@ -411,7 +411,9 @@ def build_text(gauge_name: str, state: str, river: str, crest: float, crest_time
              f"Defined flood stages here: {stage_defs}.")
     lines = "\n".join(f"- At {im['stage']:g} ft: {im['statement']}" for im in impacts)
     body = (f"{frame}\n\nNational Weather Service flood-impact statements for this location:\n{lines}")
-    return f"{body}\n\n{intro}"
+    # No templated ts_intro: <ts></ts> is appended directly to the real NWS impact-statement
+    # text, nothing is generated in between.
+    return f"{body}\n\n<ts></ts>"
 
 
 # --- pipeline --------------------------------------------------------------
@@ -422,7 +424,6 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
     ua, timeout, delay = d["user_agent"], int(d["timeout_s"]), float(d["request_delay_s"])
     maxrec = out_cfg.get("max_records")
     wb, wa = int(d["window_before_hours"]), int(d["window_after_hours"])
-    window_days = round((wb + wa) / 24)
 
     stat = {"gauges": 0, "gauges_ok": 0, "events_found": 0, "emitted": 0,
             "no_impacts": 0, "no_series": 0, "no_threshold": 0, "short_text": 0,
@@ -506,10 +507,7 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
             if not matched:
                 stat["no_matched_impact"] += 1
                 continue
-            intro = t["ts_intro_sentence"].format(window_days=window_days,
-                                                  gauge=gauge_name, state=state)
-            text = build_text(gauge_name, state, river, cval, ctime, cats, cat,
-                              matched, intro, window_days)
+            text = build_text(gauge_name, state, river, cval, ctime, cats, cat, matched)
             if not text or len(text) < int(t["min_text_chars"]):
                 stat["short_text"] += 1
                 continue

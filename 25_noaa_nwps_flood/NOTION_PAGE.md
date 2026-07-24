@@ -45,6 +45,7 @@ flowchart LR
 3. **Irregular cadence** — sub-daily + gappy; we resample hourly and **omit empty buckets (no imputation)**, carrying explicit `timestamps[]`. This is the sparse-data thread's flavour B in the wild (`docs/sparse_data_problem.md`).
 4. **Datum** — NWPS stage vs USGS gage height; offset computed per gauge (< 0.1 ft here), stored as `datum_offset_ft`.
 5. **Coverage / enumeration** — NWPS `/gauges` list is flaky (504s) and its filters are ignored server-side; full list fetchable on retry but has no impact fields → per-gauge detail needed to filter. Demo = seed; full enumeration documented.
+6. **No generated text.** An earlier version of this build appended a templated closing sentence to introduce the hydrograph series before `<ts></ts>`. That sentence was not from NWPS/NWS — it was synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real impact-statement text with nothing generated in between.
 
 ## Open questions (for discussion)
 - **Alignment tier in-scope?** (headline — see above).
