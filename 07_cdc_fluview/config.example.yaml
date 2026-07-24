@@ -40,7 +40,7 @@ data:
 
   # Drop reports whose season-to-date window is shorter than this many weeks.
   # 1 = keep everything (incl. week-40 season openers, which are length-1).
-  min_window_weeks: 1
+  min_window_weeks: 13
 
   # Cache downloaded weekly HTML reports here
   html_cache_dir: ".cache/html"
