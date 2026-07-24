@@ -62,10 +62,10 @@ sampling:
   random_seed: 42
 
 text:
-  # Max characters of concatenated article text per record (before the ts sentence).
+  # Max characters of concatenated article text per record.
   max_chars: 3000
-  # Closing sentence carrying the single <ts></ts>. {ticker}, {n}, {last_date} are filled.
-  ts_intro_sentence: "Daily open, high, low, close, adjusted-close prices (USD) and share volume for {ticker} over the {n} trading days ending {last_date}: <ts></ts>."
+  # No templated intro/closing sentence is used: <ts></ts> is appended directly
+  # to the real concatenated article text, nothing else is generated.
 
 # Optional post-build stage: LLM relevance filter (scripts/filter_news_relevance.py).
 # Uses a local model as a JUDGE (keeps the real text, drops off-topic broad-market

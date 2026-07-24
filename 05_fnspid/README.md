@@ -1,25 +1,28 @@
 # FNSPID → CPT
 
 > **Status: Built** — full-scale HuggingFace pipeline. Latest build: **5,000 records**
-> (capped sample) across **2,849 tickers**, 2010–2023, from 15.5M scanned news rows
-> (145,836 valid candidates before down-sampling). Raise `output.max_records` to scale.
+> (capped sample) across **2,948 tickers**, 2009–2023, from 15.5M scanned news rows
+> (153,999 valid candidates before down-sampling). Raise `output.max_records` to scale.
 >
-> **Optional relevance filter run:** Gemma4-31b judge kept **2,723 / 5,000 (54.5%)**,
-> dropping ~46% as broad-market noise → `output/fnspid_cpt_filtered.jsonl` (avg
-> judge confidence 0.99). Real text preserved; per-record decision in `relevance`.
+> **Optional relevance filter run (stale, pre-dates the 2026-07-24 text fix below):**
+> Gemma4-31b judge kept **2,723 / 5,000 (54.5%)** of the *previous* build, dropping ~46%
+> as broad-market noise → `output/fnspid_cpt_filtered.jsonl` (avg judge confidence
+> 0.99). Real text preserved; per-record decision in `relevance`. Re-run
+> `scripts/filter_news_relevance.py` to refresh it against the current
+> `output/fnspid_cpt.jsonl`.
 
 **What it is:** Daily stock **OHLCV** prices + same-day financial news. One record =
 **one `(ticker, news_date)`** where a real news article exists.
 
 **Scale:** Full HF news file (`nasdaq_exteral_data.csv`) ≈ **15.5M rows**, of which
-**~3.74M (24%) carry a full article body**. After symbol/sampling filters → **145,836**
+**~3.74M (24%) carry a full article body**. After symbol/sampling filters → **153,999**
 valid `(ticker, date)` candidates at the default caps; the build emits a seeded random
 sample of those (default 5,000).
 
 **Record shape (multivariate + explicit trading dates):**
 ```json
 {
-  "text": "AAL, 2023-03-30. We believe that American Airlines stock (NASDAQ: AAL)... Daily open, high, low, close, adjusted-close prices (USD) and share volume for AAL over the 30 trading days ending 2023-03-29: <ts></ts>.",
+  "text": "We believe that American Airlines stock (NASDAQ: AAL)...\n\n<ts></ts>",
   "timeseries": [
     {"values": [/* open  */], "unit": "open_price_usd",      "freq": "1d"},
     {"values": [/* high  */], "unit": "high_price_usd",      "freq": "1d"},
@@ -46,6 +49,11 @@ sample of those (default 5,000).
 - **No lookahead** — the price window ends the trading day *before* `news_date`.
 - **Deliberate, logged sampling** — per-ticker / per-month caps + seeded down-sample;
   every drop reason is recorded in `output/run_report.json`.
+- **No generated text.** An earlier version of this build prepended a `ticker, date.`
+  header and appended a templated closing sentence before `<ts></ts>`. Neither was from
+  the source article — both were synthesized by the build script. Fixed 2026-07-24:
+  `<ts></ts>` is now appended directly to the real article text with nothing generated
+  before or after.
 
 ## Source data (HuggingFace `Zihan1004/FNSPID`)
 

@@ -1,17 +1,17 @@
 {
-  "run_date": "2026-06-28T23:04:54Z",
+  "run_date": "2026-07-24T19:14:44Z",
   "news_rows_scanned": 15549299,
   "groups_retained": 155529,
   "candidate_records": null,
   "records_written": 5000,
   "down_sampled_to_max_records": true,
-  "unique_tickers": 2849,
+  "unique_tickers": 2948,
   "date_range": {
-    "min": "2010-01-12",
-    "max": "2023-12-30"
+    "min": "2009-04-08",
+    "max": "2023-12-16"
   },
-  "avg_history_days": 29.99,
-  "avg_articles_per_record": 2.04,
+  "avg_history_days": 30.0,
+  "avg_articles_per_record": 1.81,
   "channels": [
     "open",
     "high",
@@ -24,8 +24,8 @@
     "cap_per_ticker": 1509277,
     "cap_per_ticker_month": 613582,
     "empty_article": 11809209,
-    "insufficient_history": 607,
-    "no_price_csv": 9085,
+    "insufficient_history": 615,
+    "no_price_csv": 914,
     "no_symbol": 1248312,
     "short_text": 1
   },
@@ -60,8 +60,30 @@
       "random_seed": 42
     },
     "text": {
-      "max_chars": 3000,
-      "ts_intro_sentence": "Daily open, high, low, close, adjusted-close prices (USD) and share volume for {ticker} over the {n} trading days ending {last_date}: <ts></ts>."
+      "max_chars": 3000
+    },
+    "relevance": {
+      "base_url": "http://ds-serv10.ucsd.edu:8004/v1",
+      "base_urls": [
+        "http://ds-serv10.ucsd.edu:8004/v1",
+        "http://ds-serv10.ucsd.edu:8005/v1",
+        "http://ds-serv10.ucsd.edu:8006/v1",
+        "http://ds-serv10.ucsd.edu:8007/v1"
+      ],
+      "api_key": "EMPTY",
+      "model": "gemma4-31b-it",
+      "system_role": false,
+      "enable_thinking": null,
+      "concurrency": 8,
+      "timeout_s": 60,
+      "max_retries": 3,
+      "temperature": 0.0,
+      "max_chars": 2500,
+      "min_confidence": 0.5,
+      "keep_on_parse_error": true,
+      "input_path": "output/fnspid_cpt.jsonl",
+      "output_path": "output/fnspid_cpt_filtered.jsonl",
+      "report_path": "output/relevance_report.json"
     },
     "output": {
       "output_path": "output/fnspid_cpt.jsonl",

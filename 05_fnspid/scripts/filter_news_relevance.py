@@ -53,9 +53,6 @@ except ImportError as exc:
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
 
-# Marker that begins the templated time-series sentence; everything before it
-# (after the "TICKER, DATE. " prefix) is the real article block.
-TS_SENTENCE_MARKER = "Daily open, high, low,"
 
 SYSTEM_PROMPT = (
     "You are a financial news classifier. Given a news article and a stock ticker, "
@@ -130,14 +127,13 @@ def resolve_path(path_str: str) -> Path:
 
 
 def extract_article(rec: Dict[str, Any]) -> str:
-    """Recover the real article block from a record's text (drop ts sentence)."""
+    """Recover the real article block from a record's text (drop the <ts></ts> tag).
+
+    build_text() appends "\\n\\n<ts></ts>" directly to the real article text with
+    nothing else generated, so recovering the article is just removing the tag.
+    """
     text = rec.get("text", "")
-    marker = text.rfind(TS_SENTENCE_MARKER)
-    body = text[:marker].rstrip() if marker != -1 else text
-    prefix = f"{rec.get('ticker', '')}, {rec.get('news_date', '')}. "
-    if body.startswith(prefix):
-        body = body[len(prefix):]
-    return body.strip()
+    return text.replace("<ts></ts>", "").strip()
 
 
 def build_messages(cfg_r: Dict[str, Any], ticker: str, article: str) -> List[Dict[str, str]]:

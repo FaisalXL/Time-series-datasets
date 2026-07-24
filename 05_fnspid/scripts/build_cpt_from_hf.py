@@ -329,10 +329,10 @@ def stream_news_groups(
 # ---------------------------------------------------------------------------
 
 
-def build_text(ticker: str, news_date: str, article_block: str, n: int,
-               last_date: str, ts_sentence: str) -> str:
-    ts = ts_sentence.format(ticker=ticker, n=n, last_date=last_date)
-    return f"{ticker}, {news_date}. {article_block} {ts}"
+def build_text(article_block: str) -> str:
+    # No generated/templated framing text: the <ts></ts> placeholder is appended
+    # directly to the real concatenated article text, nothing else is added.
+    return f"{article_block}\n\n<ts></ts>"
 
 
 def build_timeseries(channels: List[str], csv_cols: List[str],
@@ -389,7 +389,6 @@ def pair_groups_to_records(
     min_history = int(dcfg["min_history_days"])
     min_article_chars = int(fcfg.get("min_article_chars", 200))
     text_cap = int(tcfg.get("max_chars", 3000))
-    ts_sentence = tcfg["ts_intro_sentence"]
 
     # Group keys by ticker so each price CSV is read once.
     by_ticker: Dict[str, List[str]] = defaultdict(list)
@@ -418,8 +417,7 @@ def pair_groups_to_records(
 
             n_shown = len(grp.texts)
             rec = {
-                "text": build_text(ticker, news_date, article_block,
-                                   len(win_dates), win_dates[-1], ts_sentence),
+                "text": build_text(article_block),
                 "timeseries": build_timeseries(channels, csv_cols, win_vals),
                 "task_type": "world_knowledge",
                 "text_quality": "real",
