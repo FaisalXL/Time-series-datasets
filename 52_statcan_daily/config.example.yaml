@@ -1,0 +1,104 @@
+# Statistics Canada "The Daily" — Consumer Price Index → CPT world-knowledge JSONL
+#
+# One record = one CPI release (one data month): the release's own lead + major-component
+# narrative paragraphs (real prose, published every month at 08:30 ET) paired, under a single
+# <ts>, with a trailing 24-month window of the NOT-SEASONALLY-ADJUSTED 12-month (year-over-year)
+# percentage change for the all-items index + 4 major components. text_quality "real".
+#
+# TEXT SOURCE: "The Daily" bulletin HTML, e.g.
+#   https://www150.statcan.gc.ca/n1/daily-quotidien/260622/dq260622a-eng.htm
+# ENUMERATION: dates/URL letter-suffixes are NOT guessable (multiple unrelated Daily articles can
+# share a date; suffix letters are not stable per subject). Instead, every release page links its
+# own "Previous release" (the prior month's CPI article specifically) — the build starts at a
+# configured seed URL (a real, recently-verified CPI release) and walks that link BACKWARD,
+# discovering every earlier release URL from the page itself. No date/letter guessing, no
+# robots-disallowed paths touched (/n1/daily-quotidien/ is allowed; crawl-delay 2s honored).
+#
+# SERIES SOURCE: StatCan Web Data Service (WDS) REST API, keyless, JSON:
+#   https://www150.statcan.gc.ca/t1/wds/rest/getDataFromVectorByReferencePeriodRange
+# Table 18-10-0004 "Consumer Price Index, monthly, not seasonally adjusted" (NSA), Canada
+# geography, back to 1914. We fetch each channel's own StatCan "vector" (a stable per-series ID
+# resolved once via getSeriesInfoFromCubePidCoord — see NOTION_PAGE.md for how the 5 vector IDs
+# below were looked up) as raw monthly INDEX LEVELS, then compute the 12-month % change ourselves.
+#
+# WHY %-CHANGE, NOT RAW INDEX LEVELS: the CPI reference base has been rebased multiple times
+# historically (1986=100 -> 1992=100 -> 2002=100 ...), so a raw index level from an old release is
+# on a different base than a recent one. 12-month/1-month %-changes are base-invariant AND are
+# literally the number the release prose itself states — so building on %-change sidesteps the
+# rebasing problem entirely rather than papering over it. (Verified: our computed YoY% from raw
+# WDS index levels reproduces the release's own stated % to 1 decimal, e.g. All-items May 2026
+# 3.2% / April 2026 2.8%, Gasoline May 2026 33.2% / April 2026 28.6% — exact matches.)
+#
+# NSA vs SA: a single Daily paragraph can cite BOTH an NSA %-change (table 18-10-0004, the one we
+# use) and a seasonally-adjusted monthly %-change (table 18-10-0006, only back to 1992). We anchor
+# on NSA 12-month change only (deepest history, and the number that leads almost every release) and
+# do not attempt to also track the SA figure, to avoid ambiguity about which table a given number in
+# the text belongs to.
+#
+# SCOPE: min_release_date defaults to 2015-01-01 (modern era) per team guidance, even though the
+# %-change design is already base-invariant — this keeps the initial build in the most
+# well-documented/least-drift era. Widen by lowering min_release_date (archive is machine-readable
+# HTML back to at least 1998; "The Daily" has posted online since June 1995).
+#
+# LICENSE: Statistics Canada Open Licence (https://www.statcan.gc.ca/en/reference/licence) —
+# free to reproduce/redistribute/adapt, commercial use allowed, attribution required. This is NOT
+# literally one of the 5 schema license-enum values, so we record the CLOSEST functional fit,
+# "cc-by-4.0" (attribution + commercial reuse allowed, matching in spirit), and keep the real
+# licence name/URL in meta.true_license / meta.true_license_url. Flagged as an open question in
+# NOTION_PAGE.md — a real Canadian-government enum value may be worth adding schema-side.
+
+data:
+  # A real, recently-verified CPI release (confirmed live). The build walks this page's own
+  # "Previous release" link backward to discover every earlier release — refresh this to a more
+  # recent URL occasionally so the walk starts closer to "now" (not required for correctness,
+  # since the walk just starts one release later than it could).
+  seed_release_url: "https://www150.statcan.gc.ca/n1/daily-quotidien/260622/dq260622a-eng.htm"
+  min_release_date: "2015-01-01"   # walk-back floor (modern era; see note above)
+  max_hops: 1000                    # hard safety cap on "Previous release" hops (loop protection)
+
+  wds_base: "https://www150.statcan.gc.ca/t1/wds/rest"
+  cpi_product_id: 18100004          # "Consumer Price Index, monthly, not seasonally adjusted" (NSA)
+  vector_fetch_start: "2000-01-01"  # WDS fetch floor per vector (comfortably before min_release_date - 12mo)
+
+  window_months: 24                 # trailing window length (config knob; widen toward 32 later)
+  min_window_months: 24             # require a full window (drops nothing in the modern era; 1914-> history)
+
+  # Channels: the all-items anchor + 4 major components that "The Daily" narrates almost every
+  # month (gasoline as the most common lead driver; food/shelter/transportation are the 3 other
+  # components StatCan itself highlights in every release's own indicator dashboard).
+  # vector_id resolved live via WDS getSeriesInfoFromCubePidCoord(productId=18100004,
+  # coordinate="2.<productMemberId>.0.0.0.0.0.0.0.0") — geography 2 = Canada.
+  channels:
+    - {name: "cpi_all_items_yoy_pct",         human: "the All-items CPI",              vector_id: 41690973, product_member_id: 2}
+    - {name: "cpi_gasoline_yoy_pct",           human: "gasoline",                       vector_id: 41691136, product_member_id: 184}
+    - {name: "cpi_food_from_stores_yoy_pct",   human: "food purchased from stores",     vector_id: 41690975, product_member_id: 4}
+    - {name: "cpi_shelter_yoy_pct",            human: "shelter",                        vector_id: 41691050, product_member_id: 79}
+    - {name: "cpi_transportation_yoy_pct",     human: "transportation",                 vector_id: 41691128, product_member_id: 176}
+  anchor_channel: "cpi_all_items_yoy_pct"
+
+  cache_dir: ".cache"
+  user_agent: "cpt-dataset-research/1.0 (flnu@usc.edu)"
+  request_delay_s: 2.0               # robots.txt "Crawl-delay: 2" for www150.statcan.gc.ca
+  timeout_s: 60
+
+text:
+  min_text_chars: 200
+  # Block-level (<p>/<h2>/<h3>) content is kept in document order starting right after the
+  # "Released: YYYY-MM-DD" line, until the FIRST block whose text starts with one of these
+  # (boilerplate / off-topic from here on: regional breakdown, methodology notes, contact info).
+  stop_markers:
+    - "Explore the Consumer Price Index tools"
+    - "Regional highlights"
+    - "Note to readers"
+    - "Definitions, data sources and methods"
+    - "Products"
+    - "Contact information"
+  # No templated ts_intro: <ts></ts> is appended directly to the real scraped narrative,
+  # nothing is generated.
+
+output:
+  output_path: output/statcan_daily_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 50            # demo cap. null = full build back to min_release_date (~2015-present)
+  indent: null

@@ -1,0 +1,5 @@
+pyyaml>=6.0
+# PyYAML is the only pip dependency (reads config.example.yaml).
+# Text: "The Daily" bulletin HTML, parsed with the standard library (re + html.unescape) — no
+#   bs4/lxml. Series: Statistics Canada Web Data Service (WDS) REST JSON API, fetched with the
+#   standard library (urllib.request) — no requests/pandas. No API key, no external binaries.

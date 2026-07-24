@@ -1,0 +1,86 @@
+{
+  "dataset": "statcan_daily",
+  "stats": {
+    "hops": 51,
+    "candidates": 50,
+    "emitted": 50,
+    "recites": 50,
+    "describes": 0,
+    "no_title_match": 0,
+    "no_narrative": 0,
+    "short_text": 0,
+    "short_window": 0,
+    "invalid": 0,
+    "stopped_min_date": false,
+    "stopped_max_hops": false,
+    "stopped_no_prev_link": false
+  },
+  "config_snapshot": {
+    "data": {
+      "seed_release_url": "https://www150.statcan.gc.ca/n1/daily-quotidien/260622/dq260622a-eng.htm",
+      "min_release_date": "2015-01-01",
+      "max_hops": 1000,
+      "wds_base": "https://www150.statcan.gc.ca/t1/wds/rest",
+      "cpi_product_id": 18100004,
+      "vector_fetch_start": "2000-01-01",
+      "window_months": 24,
+      "min_window_months": 24,
+      "channels": [
+        {
+          "name": "cpi_all_items_yoy_pct",
+          "human": "the All-items CPI",
+          "vector_id": 41690973,
+          "product_member_id": 2
+        },
+        {
+          "name": "cpi_gasoline_yoy_pct",
+          "human": "gasoline",
+          "vector_id": 41691136,
+          "product_member_id": 184
+        },
+        {
+          "name": "cpi_food_from_stores_yoy_pct",
+          "human": "food purchased from stores",
+          "vector_id": 41690975,
+          "product_member_id": 4
+        },
+        {
+          "name": "cpi_shelter_yoy_pct",
+          "human": "shelter",
+          "vector_id": 41691050,
+          "product_member_id": 79
+        },
+        {
+          "name": "cpi_transportation_yoy_pct",
+          "human": "transportation",
+          "vector_id": 41691128,
+          "product_member_id": 176
+        }
+      ],
+      "anchor_channel": "cpi_all_items_yoy_pct",
+      "cache_dir": ".cache",
+      "user_agent": "cpt-dataset-research/1.0 (flnu@usc.edu)",
+      "request_delay_s": 2.0,
+      "timeout_s": 60
+    },
+    "text": {
+      "min_text_chars": 200,
+      "stop_markers": [
+        "Explore the Consumer Price Index tools",
+        "Regional highlights",
+        "Note to readers",
+        "Definitions, data sources and methods",
+        "Products",
+        "Contact information"
+      ]
+    },
+    "output": {
+      "output_path": "output/statcan_daily_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "dry_run": false
+}
