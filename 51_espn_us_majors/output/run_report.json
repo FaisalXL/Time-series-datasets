@@ -1,0 +1,80 @@
+{
+  "leagues": [
+    "NBA",
+    "NFL",
+    "NHL"
+  ],
+  "discovery_window": [
+    "20260101",
+    "20260320"
+  ],
+  "report_source": "site.api.espn.com (article.source == AP on every game checked)",
+  "stats": {
+    "events_discovered": 1055,
+    "fetch_failed": 0,
+    "no_report": 2,
+    "short_game": 0,
+    "invalid": 0,
+    "emitted": 50,
+    "by_league": {
+      "NBA": {
+        "discovered": 558,
+        "emitted": 17
+      },
+      "NFL": {
+        "discovered": 30,
+        "emitted": 17
+      },
+      "NHL": {
+        "discovered": 467,
+        "emitted": 16
+      }
+    },
+    "score_mismatch": 1
+  },
+  "config_snapshot": {
+    "data": {
+      "leagues": [
+        {
+          "sport": "basketball",
+          "league": "nba",
+          "label": "NBA"
+        },
+        {
+          "sport": "football",
+          "league": "nfl",
+          "label": "NFL"
+        },
+        {
+          "sport": "hockey",
+          "league": "nhl",
+          "label": "NHL"
+        }
+      ],
+      "scoreboard_url": "https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}",
+      "summary_url": "https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={event_id}",
+      "discovery": {
+        "start_date": "20260101",
+        "end_date": "20260320",
+        "step_days": 1
+      },
+      "request_delay_s": 0.4,
+      "cache_dir": ".cache",
+      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "timeout_s": 90,
+      "min_periods": 3
+    },
+    "text": {
+      "ts_intro_sentence": "Score progression by period, away then home ({away} at {home}): <ts></ts>",
+      "min_report_chars": 400
+    },
+    "output": {
+      "output_path": "output/espn_us_majors_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "dry_run": false
+}

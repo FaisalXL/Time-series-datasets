@@ -1,0 +1,4 @@
+pyyaml>=6.0
+# ESPN scoreboard/summary retrieval + HTML-stripping uses ONLY the standard library
+# (urllib / json / re) — no requests, no pandas. PyYAML is used only to read
+# config.example.yaml. Works on stock Python 3.9+.

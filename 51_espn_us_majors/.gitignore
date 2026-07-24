@@ -1,0 +1,12 @@
+.cache/
+__pycache__/
+scratch_*
+
+# NOTE: output/ + samples/ hold real AP wire-service recap prose (served via ESPN's
+# API, article.source == "AP" on every game checked across NBA/NFL/NHL). They ARE
+# committed here as a capped 50-record DEMO for the lead to inspect -- this is
+# internal review, NOT distribution. Do NOT scale/publish until redistribution is
+# cleared with Charon (same open question as datasets/45_cricket_report_overseries,
+# except this is AP wire copy, not ESPNcricinfo's own staff writers -- a different,
+# likely stricter copyright chain). Keep output.max_records small; never commit a
+# full build.

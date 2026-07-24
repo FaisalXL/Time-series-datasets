@@ -1,0 +1,61 @@
+# ESPN US Majors (NBA + NFL + NHL) Game Recaps + Score-Progression Series → CPT
+#
+# One record = one FINISHED GAME: the real AP wire recap (served via ESPN's API)
+# paired with the game's period-by-period running score (away/home cumulative).
+# The recap *describes* the shape of the game the series quantifies (comeback,
+# blowout, lead held throughout) → "describes". text_quality is always "real";
+# games with no usable recap are dropped (no synthetic fallback).
+#
+# ⚠️ LICENSE: the recap prose is Associated Press wire copy (article.source == "AP"
+#    on every game checked across all 3 leagues) served through ESPN's API — a
+#    DIFFERENT and likely STRICTER copyright chain than ESPNcricinfo's own staff
+#    writers (compare datasets/45_cricket_report_overseries). The committed
+#    output/ + samples/ are a capped 50-record demo for the lead to inspect
+#    (internal review, not distribution) — see the README. Keep output.max_records
+#    small; do not run/commit a full build or publish until redistribution is
+#    cleared with Charon.
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=5
+#   python scripts/build_cpt_jsonl.py
+
+data:
+  # ESPN's own site API (not a bulk archive — no equivalent of Cricsheet's zip).
+  # Same parent host Cricket already uses (site.api.espn.com); each sport is its
+  # own path segment. Scoreboard resolves by date; summary resolves by event id.
+  leagues:
+    - {sport: "basketball", league: "nba", label: "NBA"}
+    - {sport: "football", league: "nfl", label: "NFL"}
+    - {sport: "hockey", league: "nhl", label: "NHL"}
+
+  scoreboard_url: "https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}"
+  summary_url: "https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={event_id}"
+
+  # Date-range to WALK for event discovery (demo: a short recent window is enough
+  # to fill max_records across 3 leagues; the full ~29k-record universe needs
+  # 2014-15-season -> present per league — see README "Scaling up").
+  discovery:
+    start_date: "20260101"   # YYYYMMDD, inclusive -- Jan covers NFL playoffs too
+    end_date: "20260320"     # YYYYMMDD, inclusive -- through mid NBA/NHL season
+    step_days: 1
+
+  request_delay_s: 0.4       # be polite: ~2-3 req/s, cached per event_id
+  cache_dir: ".cache"
+  user_agent: "CPT-dataset-research faisal@usc.edu"
+  timeout_s: 90
+
+  min_periods: 3              # drop games with fewer than this many periods of play data
+                               # (NHL regulation=3, NBA/NFL regulation=4; OT adds more)
+
+text:
+  # Closing sentence carrying the single <ts></ts> placeholder.
+  ts_intro_sentence: "Score progression by period, away then home ({away} at {home}): <ts></ts>"
+  min_report_chars: 400   # drop games whose recap is missing or too short
+
+output:
+  output_path: output/espn_us_majors_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 50         # demo cap — see LICENSE note above. null = uncapped (do not use pre-clearance).
+  indent: null
