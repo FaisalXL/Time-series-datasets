@@ -44,7 +44,7 @@ the 2026/27 new-crop reset (762), revised to the prose-recited **722**.
 **Record shape** (real, abridged — one multi-channel record):
 ```json
 {
-  "text": "Supplies are reduced 22 million bushels... Projected 2026/27 ending stocks are reduced 22 million bushels to 722 million...\n\nUSDA's successive monthly WASDE balance-sheet projections for U.S. wheat — beginning stocks, production, imports, domestic use, exports, and ending stocks — for the then-current marketing year (2026/27), across the trailing 24 monthly reports through 2026-07: <ts></ts>",
+  "text": "WHEAT: The outlook for 2026/27 U.S. wheat this month is for lower supplies... Projected 2026/27 ending stocks are reduced 22 million bushels to 722 million and are down 22 percent from last year... Projected 2026/27 global ending stocks are lowered 2.6 million tons to 272.8 million, primarily on reductions for the United States, India, Argentina, and Canada.\n\n<ts></ts>",
   "timeseries": [
     {"values": ["…24…", 920.0], "unit": "wheat_beginning_stocks_mil_bu", "freq": "1m"},
     {"values": ["…24…", 1536.0], "unit": "wheat_production_mil_bu", "freq": "1m"},
@@ -65,6 +65,14 @@ the 2026/27 new-crop reset (762), revised to the prose-recited **722**.
 *(Single `<ts>`, 6 index-aligned channels — the whole wheat balance sheet as one multivariate series.)*
 
 **Key issues / caveats:**
+- **No generated text.** An earlier version of this build appended a templated closing sentence
+  (e.g. "USDA's successive monthly WASDE balance-sheet projections for U.S. wheat — beginning
+  stocks, production, imports, domestic use, exports, and ending stocks — for the then-current
+  marketing year (2026/27), across the trailing 24 monthly reports through 2026-07:") to introduce
+  the multi-channel series before the `<ts></ts>` tag. That sentence was **not** from USDA — it was
+  synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the
+  real scraped/extracted narrative with nothing generated in between. Every character of `text`
+  before the tag is verbatim USDA prose.
 - **⚠️ Forecast, not measured (the core caveat).** The series tracks USDA *revising its own projection*
   month to month — a forecast-revision trajectory, not a physical measurement. This is the opposite of the
   "measured signal" preference. The measured cousin is USDA **NASS Crop Production / Quick Stats**

@@ -416,13 +416,6 @@ def _expand_specs(commodities) -> List[dict]:
     return specs
 
 
-def _humanize_channels(humans: List[str]) -> str:
-    """['beginning stocks','production','exports'] -> 'beginning stocks, production, and exports'."""
-    if len(humans) == 1:
-        return humans[0]
-    return ", ".join(humans[:-1]) + ", and " + humans[-1]
-
-
 def build(cfg) -> Tuple[List[dict], Dict[str, Any]]:
     d, t, out_cfg = cfg["data"], cfg["text"], cfg["output"]
     maxrec = out_cfg.get("max_records")
@@ -540,9 +533,9 @@ def build(cfg) -> Tuple[List[dict], Dict[str, Any]]:
             stat["recites" if align == "recites" else "describes"] += 1
             stat["channels_emitted"] += len(ts)
 
-            intro = t["ts_intro"].format(commodity=commodity, channels=_humanize_channels(used_humans),
-                                         my=amy, n=len(win_months), month=ym)
-            text = f"{prose}\n\n{intro}"
+            # No generated/templated framing text: the <ts></ts> placeholder is appended directly
+            # to the real scraped/extracted commodity narrative, nothing else is added.
+            text = f"{prose}\n\n<ts></ts>"
             try:
                 rec = emit_record(
                     text=text,

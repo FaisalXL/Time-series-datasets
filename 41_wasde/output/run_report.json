@@ -301,9 +301,7 @@
       "min_series": 24,
       "request_delay_s": 0.2
     },
-    "text": {
-      "ts_intro": "USDA's successive monthly WASDE balance-sheet projections for U.S. {commodity} — {channels} — for the then-current marketing year ({my}), across the trailing {n} monthly reports through {month}: <ts></ts>"
-    },
+    "text": null,
     "output": {
       "output_path": "output/wasde_cpt.jsonl",
       "report_path": "output/run_report.json",
