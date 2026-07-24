@@ -41,8 +41,8 @@ data:
 text:
   # Drop records with fewer than this many narrative characters.
   min_text_chars: 200
-  # Closing sentence holding exactly one <ts></ts>. {intro} filled per theme/date.
-  ts_intro_sentence: "{intro}: <ts></ts>"
+  # No templated ts_intro: <ts></ts> is appended directly to the real scraped narrative,
+  # nothing is generated.
 
 output:
   output_path: output/copernicus_climate_bulletin_cpt.jsonl

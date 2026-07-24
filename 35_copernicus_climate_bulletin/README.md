@@ -52,11 +52,13 @@
 
 > **Note:** for each theme the narrative directly describes its own series (rankings, anomaly values) — tight, source-native alignment.
 
-**Record shape — temperature** (real, May 2026; arrays abbreviated):
+**Record shape — temperature** (real, May 2026; arrays abbreviated). The `<ts></ts>` tag is
+appended directly to the real scraped narrative — **no framing/bridging sentence is generated**;
+every word before the tag is verbatim C3S/ECMWF prose:
 
 ```json
 {
-  "text": "May 2026 was the second-warmest May globally. ... The global average temperature for May 2026 was 15.81°C, 0.55°C above the 1991-2020 average ... Global and European monthly surface air temperature anomalies (ERA5, degrees C vs 1991-2020) covering the full series from 1940-01 through 2026-05: <ts></ts>",
+  "text": "May 2026 was the second-warmest May globally. ... The global average temperature for May 2026 was 15.81°C, 0.55°C above the 1991-2020 average ... <ts></ts>",
   "timeseries": [
     {"values": [-0.9455, -0.8582, "...", 0.5503], "unit": "global_sat_anomaly_degc_1991_2020", "freq": "1m"},
     {"values": [-6.873, -4.6792, "...", 0.5994], "unit": "europe_sat_anomaly_degc_1991_2020", "freq": "1m"}
@@ -68,11 +70,13 @@
 }
 ```
 
-**Record shape — sea ice** (real, May 2026; arrays abbreviated, annual):
+**Record shape — sea ice** (real, May 2026; arrays abbreviated, annual). The `<ts></ts>` tag is
+appended directly to the real scraped narrative — **no framing/bridging sentence is generated**;
+every word before the tag is verbatim C3S/ECMWF prose:
 
 ```json
 {
-  "text": "Arctic sea ice extent ranked fourth lowest for May ... Antarctic sea ice extent ranked seventh lowest for May ... Arctic and Antarctic May sea-ice extent anomalies (million sq km, vs 1991-2020) for each May through 2026: <ts></ts>",
+  "text": "Arctic sea ice extent ranked fourth lowest for May ... Antarctic sea ice extent ranked seventh lowest for May ... <ts></ts>",
   "timeseries": [
     {"values": ["...", -0.1212, -0.2797, -0.5754], "unit": "arctic_sie_anomaly_mkm2_1991_2020", "freq": "1y"},
     {"values": ["...", -0.9000, -0.9946, -0.9238], "unit": "antarctic_sie_anomaly_mkm2_1991_2020", "freq": "1y"}
@@ -86,6 +90,11 @@
 
 **Key issues:**
 
+- **No generated text.** An earlier version of this build appended a templated closing sentence
+  (for both the temperature and sea-ice record types) to introduce the series before `<ts></ts>`.
+  That sentence was not from the Copernicus/C3S bulletin — it was synthesized by the build script.
+  Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real bulletin narrative with
+  nothing generated in between.
 - **Two cadences by design:** temperature is monthly (`1m`, expanding full-history window); sea ice is annual (`1y`, this-month-across-years, full history to the report year) because that's the only clean per-bulletin series *and* it's what the ranking prose describes.
 - **Hydrological excluded** — precip/soil-moisture (the bulk of that theme's prose) are maps-only; only relative humidity is a downloadable series, so the pairing would be mismatched. Revisit only if precip/soil-moisture series are sourced from the Climate Data Store (heavier, separate pipeline).
 - **Mild leakage** — the prose states the latest anomaly values, which are the final TS points (standard text-describes-TS; flag for Charon if a stricter variant is wanted).

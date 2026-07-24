@@ -355,11 +355,9 @@ def build_temperature_record(cfg, year, month, narrative, csvs, page_url):
     ]
     # channels share a freq (1m) -> must share length
     assert len({len(c["values"]) for c in channels}) == 1, "temp channel length mismatch"
-    start_label = f"{start_ym}"
-    intro = (f"Global and European monthly surface air temperature anomalies "
-             f"(ERA5, degrees C vs 1991-2020) covering the full series from {start_label} "
-             f"through {ym}")
-    text = f"{narrative}\n\n{intro}: <ts></ts>"
+    # No generated/templated framing text: the <ts></ts> placeholder is appended directly
+    # to the real scraped narrative, nothing else is added.
+    text = f"{narrative}\n\n<ts></ts>"
     # window is monthly-continuous; period spans the first to last month in it.
     period_start = f"{start_ym}-01"
     end_y, end_m = int(end_ym[:4]), int(end_ym[5:7])
@@ -419,9 +417,9 @@ def build_sea_ice_record(cfg, year, month, narrative, csvs, page_url):
         {"values": [round(antarctic[y], 4) for y in common],
          "unit": "antarctic_sie_anomaly_mkm2_1991_2020", "freq": "1y"},
     ]
-    intro = (f"Arctic and Antarctic {monthname} sea-ice extent anomalies (million sq km, "
-             f"vs 1991-2020) for each {monthname} through {year}")
-    text = f"{narrative}\n\n{intro}: <ts></ts>"
+    # No generated/templated framing text: the <ts></ts> placeholder is appended directly
+    # to the real scraped narrative, nothing else is added.
+    text = f"{narrative}\n\n<ts></ts>"
     # this-calendar-month-across-years: span that month in the first year → the last.
     first_year, last_year = common[0], common[-1]
     period_start = f"{first_year:04d}-{month:02d}-01"

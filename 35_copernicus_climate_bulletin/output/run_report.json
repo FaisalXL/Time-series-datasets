@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-22T05:50:05Z",
+  "generated_at": "2026-07-24T19:04:24Z",
   "start_month": "2019-01",
   "end_month": "2026-07",
   "themes": [
@@ -35,8 +35,7 @@
       "timeout_s": 30
     },
     "text": {
-      "min_text_chars": 200,
-      "ts_intro_sentence": "{intro}: <ts></ts>"
+      "min_text_chars": 200
     },
     "output": {
       "output_path": "output/copernicus_climate_bulletin_cpt.jsonl",
