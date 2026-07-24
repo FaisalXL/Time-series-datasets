@@ -341,7 +341,6 @@ def build_daily_arrays(
 def assemble_text(
     rows: List[EventRow],
     cfg: Dict[str, Any],
-    intro: str,
     episode_limit: Optional[int] = None,
 ) -> str:
     text_cfg = cfg["text"]
@@ -349,7 +348,6 @@ def assemble_text(
     event_limit = int(text_cfg.get("event_narrative_char_limit", 400))
     if episode_limit is None:
         episode_limit = int(text_cfg.get("episode_narrative_char_limit", 1200))
-    ts_intro = intro
 
     # Episode narrative is usually identical across rows — keep unique non-empty texts.
     episode_parts: List[str] = []
@@ -375,13 +373,13 @@ def assemble_text(
             break
 
     segments = [part for part in [body, *event_parts] if part]
-    prose = " ".join(segments)
-    if prose and not prose.endswith((".", "!", "?")):
-        prose += "."
-    if prose:
-        prose += " "
-    prose += ts_intro
-    return prose
+    narrative = " ".join(segments)
+    if narrative and not narrative.endswith((".", "!", "?")):
+        narrative += "."
+
+    # No generated/templated framing text: the <ts></ts> placeholder is appended directly
+    # to the real scraped narrative, nothing else is added.
+    return f"{narrative}\n\n<ts></ts>"
 
 
 def make_series_id(episode_id: str, state: str, rows: List[EventRow]) -> str:
@@ -405,10 +403,7 @@ def episode_to_record(group: EpisodeGroup, cfg: Dict[str, Any]) -> Dict[str, Any
     injuries, damage, events = build_daily_arrays(rows, first_date, last_date)
 
     event_types = sorted({r.event_type for r in rows if r.event_type})
-    intro = cfg["text"].get(
-        "ts_intro_sentence", "Daily impact metrics for this episode: <ts></ts>."
-    ).format(geography=group.state)
-    text = assemble_text(rows, cfg, intro)
+    text = assemble_text(rows, cfg)
 
     return emit_record(
         text=text,
@@ -459,16 +454,10 @@ def state_month_to_record(group: StateMonthGroup, cfg: Dict[str, Any]) -> Dict[s
     event_types = sorted({r.event_type for r in rows if r.event_type})
     n_episodes = len({r.episode_id for r in rows if r.episode_id})
     month_label = f"{group.year}-{group.month:02d}"
-    month_name = f"{calendar.month_name[group.month]} {group.year}"
 
     text_cfg = cfg["text"]
-    intro = text_cfg.get(
-        "ts_intro_sentence_month",
-        "Daily storm injuries, property damage (USD), and event counts across "
-        "{geography} during {month}: <ts></ts>.",
-    ).format(geography=group.state.title(), month=month_name)
     month_limit = int(text_cfg.get("month_narrative_char_limit", 2500))
-    text = assemble_text(rows, cfg, intro, episode_limit=month_limit)
+    text = assemble_text(rows, cfg, episode_limit=month_limit)
 
     return emit_record(
         text=text,

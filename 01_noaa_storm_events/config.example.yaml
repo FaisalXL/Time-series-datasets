@@ -71,12 +71,8 @@ text:
   # (a month can span many episodes, so this is larger).
   month_narrative_char_limit: 2500
 
-  # Closing sentence introducing the time series. Exactly one <ts></ts>.
-  # {geography} is substituted. Used by episode grouping.
-  ts_intro_sentence: "Daily impact metrics for this {geography} episode: <ts></ts>."
-
-  # Closing sentence for state_month grouping. {geography} and {month} substituted.
-  ts_intro_sentence_month: "Daily storm injuries, property damage (USD), and event counts across {geography} during {month}: <ts></ts>."
+  # No templated ts_intro: <ts></ts> is appended directly to the real scraped narrative,
+  # nothing is generated.
 
 output:
   # JSONL output path (one JSON object per line when indent is null).

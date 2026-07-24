@@ -25,9 +25,7 @@
       "max_event_narratives": 3,
       "event_narrative_char_limit": 400,
       "episode_narrative_char_limit": 1200,
-      "month_narrative_char_limit": 2500,
-      "ts_intro_sentence": "Daily impact metrics for this {geography} episode: <ts></ts>.",
-      "ts_intro_sentence_month": "Daily storm injuries, property damage (USD), and event counts across {geography} during {month}: <ts></ts>."
+      "month_narrative_char_limit": 2500
     },
     "output": {
       "output_path": "output/noaa_storm_events_cpt.jsonl",
@@ -36,6 +34,6 @@
       "indent": null
     }
   },
-  "generated_at": "2026-06-28T01:42:44Z",
+  "generated_at": "2026-07-24T19:03:39Z",
   "dry_run": false
 }
