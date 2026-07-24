@@ -1,7 +1,7 @@
 {
   "survey": "Texas Manufacturing Outlook Survey",
   "bank": "Federal Reserve Bank of Dallas",
-  "window_months": 24,
+  "window": "expanding (full index history to each release month)",
   "channels": [
     "general_business_activity",
     "production",
@@ -28,6 +28,7 @@
       "data_xlsx_url": "https://www.dallasfed.org/~/media/Documents/research/surveys/tmos/documents/index_sa.xls",
       "pdf_url_template": "https://www.dallasfed.org/-/media/Documents/research/surveys/tmos/{year}/tmos{yymm}.pdf",
       "html_url_template": "https://www.dallasfed.org/research/surveys/tmos/{year}/{yymm}",
+      "source_url": "https://www.dallasfed.org/research/surveys/tmos",
       "channels": [
         {
           "col": "Bact",
@@ -58,15 +59,14 @@
           "name": "company_outlook"
         }
       ],
-      "window_months": 24,
+      "min_points": 2,
       "cache_dir": ".cache",
       "user_agent": "CPT-dataset-research faisal@usc.edu",
       "request_delay_s": 0.3,
       "timeout_s": 60
     },
     "text": {
-      "min_text_chars": 250,
-      "ts_intro_sentence": "{bank} {survey_title} - monthly diffusion indices (general business activity, production, new orders, shipments, employment, raw materials prices, company outlook), trailing {n} months through {month}: <ts></ts>"
+      "min_text_chars": 250
     },
     "output": {
       "output_path": "output/dallas_tmos_cpt.jsonl",

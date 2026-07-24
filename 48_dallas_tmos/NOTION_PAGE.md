@@ -42,9 +42,13 @@ flowchart LR
 
 ## Record shape
 
+The `<ts></ts>` tag is appended directly to the real scraped release narrative — no
+framing/bridging sentence is generated; every word before the tag is verbatim Dallas Fed prose
+(see "No generated text" fix note below).
+
 ```json
 {
-  "text": "Texas manufacturing output growth decelerated in June, according to business executives responding to the Texas Manufacturing Outlook Survey. The production index... fell five points to 4.1...\n\n... trailing 24 months through June 2026: <ts></ts>",
+  "text": "Texas manufacturing output growth decelerated in June, according to business executives responding to the Texas Manufacturing Outlook Survey. The production index... fell five points to 4.1...\n\n<ts></ts>",
   "timeseries": [
     {"values": ["...", 0.0], "unit": "general_business_activity", "freq": "1M"},
     {"values": ["...", 4.1], "unit": "production", "freq": "1M"},
@@ -65,6 +69,13 @@ flowchart LR
 
 ## Design decisions (resolved)
 
+- **No generated text (fixed 2026-07-24).** An earlier version of this build appended a
+  templated closing sentence to introduce the multi-channel series before `<ts></ts>` (e.g.
+  "Federal Reserve Bank of Dallas Texas Manufacturing Outlook Survey - monthly diffusion
+  indices... trailing 24 months through June 2026:"). That sentence was **not** from the Dallas
+  Fed — it was synthesized by the build script, violating the team's verbatim-text rule. Fixed:
+  `<ts></ts>` is now appended directly to the real scraped narrative, nothing generated in
+  between. Same fix already applied to `52_statcan_daily` and `53_abs_australia`.
 - **One record per release month**, trailing 24-month window (series to 2004 → always full).
 - **7 channels** the narrative recites; diffusion indices (dimensionless), identity in `unit`.
 - **Dual text source** (PDF 2007–2020 + HTML 2024→) with one anchor-based extractor.

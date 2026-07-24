@@ -56,7 +56,8 @@ data:
 
 text:
   min_text_chars: 250
-  ts_intro_sentence: "{bank} {survey_title} - full monthly history of the diffusion indices (general business activity, production, new orders, shipments, employment, raw materials prices, company outlook) from {start} through {month}: <ts></ts>"
+  # No templated ts_intro: <ts></ts> is appended directly to the real scraped narrative,
+  # nothing is generated.
 
 output:
   output_path: output/dallas_tmos_cpt.jsonl
