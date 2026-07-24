@@ -290,7 +290,6 @@ def build_text(
     iso_week: int,
     unique_tweets: List[str],
     max_tweets: Optional[int],
-    ts_intro: str,
 ) -> str:
     monday = iso_week_monday(iso_year, iso_week)
     friday = monday + timedelta(days=4)
@@ -303,11 +302,13 @@ def build_text(
     if remainder > 0:
         tweet_block += f" [{remainder} more tweet{'s' if remainder != 1 else ''} this week.]"
 
+    # No generated/templated ts_intro: the <ts></ts> placeholder is appended directly after
+    # the real tweet content, nothing else is added.
     return (
         f"Investor commentary on {company} ({ticker}; {sector}) "
         f"for the week of {date_range}: "
-        f"{tweet_block} "
-        f"{ts_intro}"
+        f"{tweet_block}"
+        f"\n\n<ts></ts>"
     )
 
 
@@ -330,7 +331,6 @@ def build_record(
     unique_tweets: List[str],
     trading_days: List[str],
     prices: Dict[str, Dict[str, Any]],
-    ts_intro: str,
     max_tweets: Optional[int],
 ) -> Dict[str, Any]:
     monday = iso_week_monday(iso_year, iso_week)
@@ -338,7 +338,7 @@ def build_record(
     return {
         "text": build_text(
             company, ticker, sector, iso_year, iso_week,
-            unique_tweets, max_tweets, ts_intro,
+            unique_tweets, max_tweets,
         ),
         "timeseries": build_timeseries(trading_days, prices),
         "task_type": "world_knowledge",
@@ -383,7 +383,6 @@ def write_jsonl(records: List[Dict[str, Any]], path: Path, indent: Optional[int]
 def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     data_cfg = cfg["data"]
     filt_cfg = cfg.get("filters", {})
-    text_cfg = cfg["text"]
     out_cfg = cfg["output"]
 
     cache_dir    = resolve_path(data_cfg.get("cache_dir", ".cache"))
@@ -398,7 +397,6 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
     if max_tweets_rec is not None:
         max_tweets_rec = int(max_tweets_rec)
 
-    ts_intro   = text_cfg["ts_intro_sentence"]
     max_records = out_cfg.get("max_records")
     if max_records is not None:
         max_records = int(max_records)
@@ -459,7 +457,6 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
                 unique_tweets=unique_tweets,
                 trading_days=trading_days,
                 prices=prices,
-                ts_intro=ts_intro,
                 max_tweets=max_tweets_rec,
             )
 

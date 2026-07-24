@@ -34,7 +34,7 @@
 **Record shape:**
 ```json
 {
-  "text": "Investor commentary on Apple Inc. (AAPL; Technology) for the week of January 6–10, 2014: \"Wall st. kicks off new year on lower note.\" \"Strong buy on $AAPL for 2014.\" Daily open, high, low, close prices (USD) and share volume for this week's trading sessions: <ts></ts>",
+  "text": "Investor commentary on Apple Inc. (AAPL; Technology) for the week of January 6–10, 2014: \"Wall st. kicks off new year on lower note.\" \"Strong buy on $AAPL for 2014.\"\n\n<ts></ts>",
   "timeseries": [
     {"values": [76.45, 76.60, 77.09, 77.44, 77.16], "unit": "open_usd",      "freq": "1d"},
     {"values": [77.07, 77.20, 77.50, 77.93, 77.94], "unit": "high_usd",      "freq": "1d"},
@@ -49,6 +49,7 @@
 ```
 
 **Key issues:**
+- **No generated text.** An earlier version of this build inserted a templated sentence/wrapper around the real tweet text before `<ts></ts>`. That text was not from the source tweets — it was synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real text with nothing generated in between. (Note: tweets are third-party commentary, `text_source: third_party` — that tagging is unrelated and stays as-is; this fix is only about removing build-script-authored sentences.)
 - **Text quality flag** — tweets are third-party social media, not official first-party text (Charon rule #5). Currently tagged `text_quality: "real"`. Confirm with Charon whether this is acceptable or if a separate tag is needed.
 - **Retweet noise** — many tweets are identical retweets; script deduplicates within each week by normalised text. Residual near-duplicate paraphrases remain.
 - **AT_USER / URL tokens** — StockNet's preprocessor replaced all @mentions with `AT_USER` and all hyperlinks with `URL`. These placeholder tokens appear verbatim in the emitted text.

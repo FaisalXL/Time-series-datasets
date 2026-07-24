@@ -32,8 +32,8 @@ filters:
   max_tweets_per_record: null
 
 text:
-  # Closing sentence that contains the <ts></ts> placeholder.
-  ts_intro_sentence: "Daily open, high, low, close prices (USD) and share volume for this week's trading sessions: <ts></ts>"
+  # No templated ts_intro: <ts></ts> is appended directly to the real tweet content, nothing is
+  # generated between the tweets and the placeholder.
 
 output:
   output_path:  "output/stocknet_cpt.jsonl"
