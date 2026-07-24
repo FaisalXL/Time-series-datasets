@@ -1,8 +1,9 @@
 {
-  "generated_at": "2026-06-30T20:53:33Z",
+  "generated_at": "2026-07-24T19:04:01Z",
   "start_date": "2021-05-04",
-  "end_date": "2026-06-30",
-  "window_weeks": 12,
+  "end_date": "2026-07-24",
+  "window": "expanding (full weekly D0-D4 history to each release week)",
+  "series_start": "2000-01-04",
   "statistics_type": "cumulative",
   "area_of_interest": "CONUS",
   "stats": {
@@ -10,7 +11,7 @@
     "records_emitted": 50,
     "skipped_no_pdf": 0,
     "skipped_short_text": 0,
-    "skipped_incomplete_ts": 0,
+    "skipped_short_window": 0,
     "skipped_validation": 0
   },
   "validation_errors": [],
@@ -18,11 +19,12 @@
     "data": {
       "start_date": "2021-05-04",
       "end_date": null,
+      "history_start_date": "2000-01-01",
       "narrative_url_template": "https://droughtmonitor.unl.edu/data/narrativepdf/{date}_nar_usdm.pdf",
       "ts_api_template": "https://usdmdataservices.unl.edu/api/USStatistics/GetDroughtSeverityStatisticsByAreaPercent?aoi=us&startdate={start}&enddate={end}&statisticsType={stype}",
       "statistics_type": 1,
       "area_of_interest": "CONUS",
-      "window_weeks": 12,
+      "min_points": 2,
       "pdf_cache_dir": ".cache/pdf",
       "api_cache_dir": ".cache/api",
       "request_delay_s": 1.0,
@@ -30,8 +32,7 @@
     },
     "text": {
       "min_text_chars": 200,
-      "strip_authors": true,
-      "ts_intro_sentence": "US drought-category coverage (percent of CONUS area, D0 abnormally dry through D4 exceptional drought) for the 12 weeks ending {date}: <ts></ts>"
+      "strip_authors": true
     },
     "output": {
       "output_path": "output/usdm_drought_cpt.jsonl",

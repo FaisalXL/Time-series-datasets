@@ -56,9 +56,8 @@ text:
   # Strip the trailing "Author(s) ..." credits block from the narrative.
   strip_authors: true
 
-  # Closing sentence holding exactly one <ts></ts>. {start} = series common start
-  # (YYYY-MM-DD), {date} = release/valid date (YYYY-MM-DD).
-  ts_intro_sentence: "US drought-category coverage (percent of CONUS area, D0 abnormally dry through D4 exceptional drought), full weekly history from {start} through {date}: <ts></ts>"
+  # No templated ts_intro: <ts></ts> is appended directly to the real scraped narrative,
+  # nothing is generated.
 
 output:
   output_path: output/usdm_drought_cpt.jsonl

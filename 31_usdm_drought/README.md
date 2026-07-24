@@ -36,7 +36,7 @@ Values are **cumulative** (`statisticsType=1`: D0 ≥ D1 ≥ … ≥ D4, each in
 **Record shape:** (real record — 2021-05-04, arrays abbreviated)
 ```json
 {
-  "text": "National Drought Summary – May 4, 2021 ... US drought-category coverage (percent of CONUS area, D0 abnormally dry through D4 exceptional drought), full weekly history from 2000-01-04 through 2021-05-04: <ts></ts>",
+  "text": "National Drought Summary – May 4, 2021 ... Drought Intensity Categories\nD1 ... Moderate Drought\nD2 ... Severe Drought\nD3 ... Extreme Drought\nD4 ... Exceptional Drought\nDrought or Dryness Types\nS ... Short-term\nL ... Long-term\nUpdated May 4, 2021\n\n<ts></ts>",
   "timeseries": [
     {"values": [51.00, 61.80, 67.80, "...", 65.64], "unit": "pct_area_d0_abnormally_dry", "freq": "1w"},
     {"values": [23.35, 24.93, 25.91, "...", 46.55], "unit": "pct_area_d1_moderate_drought", "freq": "1w"},
@@ -53,6 +53,7 @@ Values are **cumulative** (`statisticsType=1`: D0 ≥ D1 ≥ … ≥ D4, each in
 ```
 
 **Key issues:**
+- **No generated text.** An earlier version of this build appended a templated closing sentence to introduce the D0-D4 series before `<ts></ts>`. That sentence was not from the US Drought Monitor — it was synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real National Drought Summary narrative with nothing generated in between.
 - **Cumulative vs marginal** — default is cumulative (`statisticsType=1`); confirm with Charon whether marginal (exclusive per category) is preferred. One-line config flip.
 - **CONUS vs Total** — the API returns both per week; we keep `CONUS` (matches the narrative's regional coverage). `Total` (incl. territories) is available via `data.area_of_interest`.
 - **Long narratives** (~14k chars median) — the full PDF (national + all regions + outlook) is kept. Early-era (2021) PDFs carry a standard methodology preamble. Could be trimmed to the national Summary if shorter text is wanted.

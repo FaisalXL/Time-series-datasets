@@ -264,10 +264,9 @@ def build_record(
     cfg: Dict[str, Any],
 ) -> Dict[str, Any]:
     stype = int(cfg["data"]["statistics_type"])
-    intro = cfg["text"]["ts_intro_sentence"].format(
-        start=common_start.isoformat(), date=valid_date.isoformat()
-    )
-    text = f"{narrative}\n\n{intro}"
+    # No generated/templated framing text: the <ts></ts> placeholder is appended directly
+    # to the real scraped narrative, nothing else is added.
+    text = f"{narrative}\n\n<ts></ts>"
     timeseries = build_timeseries(hist, weeks)
     lengths = {len(ch["values"]) for ch in timeseries}
     assert len(lengths) == 1, f"channel lengths differ: {sorted(lengths)}"
