@@ -428,7 +428,7 @@ def headings_deg(qtrack: List[TrackPoint]) -> List[Optional[float]]:
 
 
 def build_timeseries(qtrack: List[TrackPoint]) -> List[Dict[str, Any]]:
-    return [
+    channels = [
         {"values": [p.max_wind_kt for p in qtrack], "unit": "max_wind_kt", "freq": "6h"},
         {
             "values": [
@@ -445,6 +445,38 @@ def build_timeseries(qtrack: List[TrackPoint]) -> List[Dict[str, Any]]:
         {"values": translation_speeds_kt(qtrack), "unit": "translation_speed_kt", "freq": "6h"},
         {"values": headings_deg(qtrack), "unit": "heading_deg", "freq": "6h"},
     ]
+    # Drop channels with no data at all — e.g. the 34/50/64-kt wind radii, which NHC did
+    # not record before 2004. An all-null channel carries no signal, wastes encoder length,
+    # and would be misnamed by the (now dynamic) ts-intro. Kept channels stay full-length.
+    return [c for c in channels if any(v is not None for v in c["values"])]
+
+
+# Human-readable phrase per channel, for the dynamic ts-intro (names only the channels a
+# given record actually carries, so the text never lists a series that isn't attached).
+CHANNEL_PHRASES = {
+    "max_wind_kt": "maximum sustained wind (kt)",
+    "min_pressure_mb": "minimum central pressure (mb)",
+    "lat": "track latitude",
+    "lon": "track longitude",
+    "r34_max_nm": "maximum 34-kt wind radius (nm)",
+    "r50_max_nm": "maximum 50-kt wind radius (nm)",
+    "r64_max_nm": "maximum 64-kt wind radius (nm)",
+    "translation_speed_kt": "forward translation speed (kt)",
+    "heading_deg": "heading (degrees)",
+}
+
+
+def ts_intro_for(channels: List[Dict[str, Any]], cfg: Dict[str, Any]) -> str:
+    """Build the ts-intro sentence naming exactly the channels present, carrying one <ts>."""
+    phrases = [CHANNEL_PHRASES.get(c["unit"], c["unit"]) for c in channels]
+    if len(phrases) > 1:
+        listed = ", ".join(phrases[:-1]) + ", and " + phrases[-1]
+    else:
+        listed = phrases[0]
+    lead = cfg["text"].get(
+        "ts_intro_lead", "Six-hourly observations across the storm's lifetime —"
+    )
+    return f"{lead} {listed}: <ts></ts>."
 
 
 # ---------------------------------------------------------------------------
@@ -695,15 +727,14 @@ def fetch_tcr_text(storm: Storm, cfg: Dict[str, Any]) -> Optional[str]:
 
 
 def assemble_record_text(
-    tcr_text: Optional[str], advisory_body: Optional[str], cfg: Dict[str, Any]
+    tcr_text: Optional[str], advisory_body: Optional[str], ts_intro: str, cfg: Dict[str, Any]
 ) -> Tuple[Optional[str], Optional[str]]:
     """Compose the final record text and a text_source_product label.
 
     Order: TCR narrative (definitive post-storm report), then advisories, then
-    the ts-intro sentence carrying the single <ts></ts> token. Returns
+    the (dynamic) ts-intro sentence carrying the single <ts></ts> token. Returns
     (text, product) or (None, None) if there is no real text."""
     text_cfg = cfg["text"]
-    ts_intro = text_cfg["ts_intro_sentence"]
     tcr_label = text_cfg.get(
         "tcr_label", "NOAA National Hurricane Center — Tropical Cyclone Report:"
     )
@@ -742,7 +773,8 @@ def basin_metadata(basin: str) -> Tuple[str, str]:
 
 
 def storm_to_record(
-    storm: Storm, record_text: str, text_product: str, cfg: Dict[str, Any]
+    storm: Storm, timeseries: List[Dict[str, Any]], record_text: str,
+    text_product: str, cfg: Dict[str, Any]
 ) -> Dict[str, Any]:
     qtrack = qualifying_track(storm)
     peak = peak_observation(qtrack)
@@ -756,7 +788,7 @@ def storm_to_record(
 
     return emit_record(
         text=record_text,
-        timeseries=build_timeseries(qtrack),
+        timeseries=timeseries,
         alignment="describes",
         license="public-domain-us-gov",
         text_source="first_party_official",
@@ -840,16 +872,18 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
             continue
 
         qtrack = qualifying_track(storm)
+        timeseries = build_timeseries(qtrack)
+        ts_intro = ts_intro_for(timeseries, cfg)
         tcr_text = fetch_tcr_text(storm, cfg)
         advisory_body = fetch_advisory_text(storm, qtrack, cfg)
-        record_text, text_product = assemble_record_text(tcr_text, advisory_body, cfg)
+        record_text, text_product = assemble_record_text(tcr_text, advisory_body, ts_intro, cfg)
         if not record_text:
             skipped["no_text"] = skipped.get("no_text", 0) + 1
             continue
 
         storms_with_text += 1
         try:
-            record = storm_to_record(storm, record_text, text_product, cfg)
+            record = storm_to_record(storm, timeseries, record_text, text_product, cfg)
         except ValueError as exc:
             skipped["validation_error"] = skipped.get("validation_error", 0) + 1
             validation_errors.append(f"{storm.storm_id}: {exc}")
