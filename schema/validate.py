@@ -30,7 +30,7 @@ import os
 import re
 import sys
 
-FREQ_RE = re.compile(r"^\d+(ms|m|h|d|w|W|M|q|y|over)$")
+FREQ_RE = re.compile(r"^\d+(ms|m|h|d|w|W|M|q|y|over|play)$")
 URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 TS_TOKEN = "<ts></ts>"
 

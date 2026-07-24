@@ -2,20 +2,21 @@
 
 Per-dataset packages for instruction-free continued pre-training: natural text with a single `<ts></ts>` placeholder + aligned time series.
 
-**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage. **20 packages built.**
+**Demo / dev outputs** live in each folder's `output/` (typically 50 records, capped locally). Full runs pending shared storage. **21 packages built.**
 
 ---
 
 ## ⚑ For review — non-canonical datasets (outside the Defu-30)
 
-> **Reviewer note.** The packages numbered **01–30** map to ranks in the Defu canonical-30 registry and are **out of scope** for this pass (already vetted). The **8 packages below are NOT in the Defu-30** — they were sourced independently and need alignment sign-off. Alignment = *does the text genuinely describe the paired series* (not merely co-located). Verified by script on the committed `output/` on **2026-07-14** (see per-dataset notes for method + hit-rate).
+> **Reviewer note.** The packages numbered **01–30** map to ranks in the Defu canonical-30 registry and are **out of scope** for this pass (already vetted). The **9 packages below are NOT in the Defu-30** — they were sourced independently and need alignment sign-off. Alignment = *does the text genuinely describe the paired series* (not merely co-located). Verified by script on the committed `output/` on **2026-07-14** (see per-dataset notes for method + hit-rate); #51 verified separately on 2026-07-23 (see its README).
 
 | # | Dataset | Text ↔ series pairing | Alignment tier (verified) | License | Reviewer flag |
 |---|---------|-----------------------|---------------------------|---------|---------------|
+| 51 | [ESPN US Majors (NBA/NFL/NHL)](./51_espn_us_majors/) | AP recap ↔ period-by-period score | **Describes — strong** (0/50 headline-vs-series mismatches after fixing a stale-snapshot + shootout edge case) | ⚠️ AP wire copy **copyrighted** | redistribution pending Charon sign-off (output committed as capped 50-record demo, not full build) |
 | 49 | [Richmond Fed Manufacturing](./49_richmond_manufacturing/) | release narrative ↔ 7 diffusion indices | **Value-reciting — strong** (92% of records recite an exact series value) | Public domain | chart-heavy PDF (best-effort); FRED overlap; text ~2018→ |
 | 50 | [Richmond Fed Service Sector](./50_richmond_nonmanufacturing/) | release narrative ↔ 6 diffusion indices | **Value-reciting — strong** (90%) | Public domain | FRED overlap; text ~2018→ |
 | 48 | [Dallas Fed TMOS](./48_dallas_tmos/) | release narrative ↔ 7 diffusion indices | **Value-reciting** (recites production + key indices, exact) | Public domain | 2021–23 gap; FRED overlap; minor vintage drift |
-| 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | ESPN match report ↔ per-over series | **Describes — strong** (100% recite innings total = `cumulative_runs`) | ⚠️ ESPN **copyrighted** | redistribution pending sign-off (output git-ignored) |
+| 45 | [Cricket Report + Per-Over](./45_cricket_report_overseries/) | ESPN match report ↔ per-over series | **Describes — strong** (100% recite innings total = `cumulative_runs`) | ⚠️ ESPN **copyrighted** | redistribution pending sign-off (output committed as capped 50-record demo, not full build) |
 | 41 | [USDA WASDE](./41_wasde/) | per-commodity narrative ↔ balance-sheet forecast vintages | **Recites — strong** (prose "722" = series endpoint; verified exact) | Public domain | ⚠️ series is **forecast-revision, not measured**; v1 wheat-only; archive JS-gated → local-file build |
 | 35 | [Copernicus Climate Bulletin](./35_copernicus_climate_bulletin/) | monthly bulletin ↔ temp-anomaly series | **Value-reciting — moderate** (55% state the anomaly; rest phrased as rankings, e.g. "2nd-warmest") | Copernicus (free reuse + attribution) | confirm ranking-style prose is acceptable |
 | 47 | [Philadelphia Fed MBOS](./47_philadelphia_mbos/) | release narrative ↔ 7 diffusion indices | ⚠️ **Mixed** — recent months recite exact values; **46/50 older records stop at the directional lead** (correct sign, no number) | Public domain | **extraction gap** — detail paragraph (exact values) not captured for older months; under investigation. FRED overlap |
@@ -52,6 +53,7 @@ Small-scale samples for format inspection and freeze. Open each folder for its R
 | 48 | [Dallas Fed TMOS](./48_dallas_tmos/) | 50 | 7 | `1M` | Texas Mfg Outlook release recites diffusion indices (24-mo window) · PDF 2007–20 + HTML 2024→ (⚠ 2021–23 gap) · public domain |
 | 49 | [Richmond Fed Manufacturing](./49_richmond_manufacturing/) | 50 | 7 | `1M` | Fifth District Mfg release recites composite + sub-indices (24-mo window) · chart-heavy PDF, text ~2018→ · public domain |
 | 50 | [Richmond Fed Service Sector](./50_richmond_nonmanufacturing/) | 50 | 6 | `1M` | Fifth District Service-Sector (non-mfg) release recites revenues/demand/employment/wages (24-mo window) · service twin of #49 · public domain |
+| 51 | [ESPN US Majors (NBA/NFL/NHL)](./51_espn_us_majors/) | 50 | 2 | `1prd` | AP recap + period-by-period away/home cumulative score (17 NBA / 17 NFL / 16 NHL) · new domain-native `1prd` epoch · ⚠️ AP wire copy copyrighted, redistribution pending sign-off |
 
 ## Record format (frozen for dev set)
 
