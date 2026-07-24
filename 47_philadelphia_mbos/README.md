@@ -33,7 +33,7 @@ Values are **diffusion indices** (% reporting increase − % reporting decrease;
 **Record shape** (real — June 2026 MBOS; arrays/text abbreviated):
 ```json
 {
-  "text": "Manufacturing activity in the region expanded overall... The survey's indicators for general activity and new orders rebounded into positive territory... The diffusion index for current general activity rose from -0.4 in May to 10.3 in June...\n\n...Manufacturing Business Outlook Survey - monthly diffusion indices (...), trailing 24 months through June 2026: <ts></ts>",
+  "text": "Manufacturing activity in the region expanded overall... The survey's indicators for general activity and new orders rebounded into positive territory... The diffusion index for current general activity rose from -0.4 in May to 10.3 in June...\n\n...unchanged at 70 to 80 percent.\n\n<ts></ts>",
   "timeseries": [
     {"values": ["...", 10.3], "unit": "general_activity", "freq": "1M"},
     {"values": ["...", 27.3], "unit": "new_orders", "freq": "1M"},
@@ -53,6 +53,7 @@ Values are **diffusion indices** (% reporting increase − % reporting decrease;
 ```
 
 **Key points:**
+- **No generated text.** An earlier version of this build appended a templated closing sentence to introduce the multi-channel series before `<ts></ts>`. That sentence was not from the Philadelphia Fed — it was synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real scraped narrative with nothing generated in between.
 - **Alignment = describes (verified).** June 2026: narrative *"current general activity rose from -0.4 in May to 10.3 in June"* ↔ `general_activity` series terminal = 10.3. The prose recites the numbers the series holds.
 - **⚠️ Real-time vs revised (minor caveat).** `bos_dif.csv` is the **latest seasonally-adjusted** data; each narrative states values **as-of release**. SA re-estimation revises history, so an older month's terminal value can differ slightly from the figure its narrative originally quoted (an ALFRED-style vintage effect). The current-month reading is essentially unrevised; deep-history points drift a little.
 - **⚠️ FRED overlap (for Charon).** The diffusion-index *series* are also on FRED (Oliver's #9). The **novel element is the release-narrative pairing**, not the series — same situation as #42's XBRL reuse. Quick sign-off before scaling. See [NOTION_PAGE.md](NOTION_PAGE.md).

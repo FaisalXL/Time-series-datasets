@@ -1,7 +1,7 @@
 {
   "survey": "Manufacturing Business Outlook Survey",
   "bank": "Federal Reserve Bank of Philadelphia",
-  "window_months": 24,
+  "window": "expanding (full diffusion-index history to each release month)",
   "channels": [
     "general_activity",
     "new_orders",
@@ -57,15 +57,15 @@
           "name": "future_general_activity"
         }
       ],
-      "window_months": 24,
+      "min_points": 2,
+      "source_url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/manufacturing-business-outlook-survey",
       "cache_dir": ".cache",
       "user_agent": "CPT-dataset-research faisal@usc.edu",
       "request_delay_s": 0.3,
       "timeout_s": 60
     },
     "text": {
-      "min_text_chars": 200,
-      "ts_intro_sentence": "{bank} {survey_title} - monthly diffusion indices (current general activity, new orders, shipments, employment, prices paid/received; plus future general activity), trailing {n} months through {month}: <ts></ts>"
+      "min_text_chars": 200
     },
     "output": {
       "output_path": "output/philadelphia_mbos_cpt.jsonl",
