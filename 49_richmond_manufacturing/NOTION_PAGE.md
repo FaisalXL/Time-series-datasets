@@ -1,5 +1,7 @@
 UPDATE: devset built (demo 50; full ~100) @ https://github.com/FaisalXL/Time-series-datasets/tree/main/49_richmond_manufacturing/output
 
+UPDATE 2026-07-24: **No-generated-text fix.** The build previously appended a templated closing sentence (e.g. "...trailing 24 months through June 2026: `<ts></ts>`") to bridge into the timeseries — that sentence was build-script output, not Richmond Fed text. Per the team's rule that CPT `text` must be 100% verbatim source text plus the bare `<ts></ts>` tag, it's removed: `<ts></ts>` is now appended directly to the real scraped narrative. Record count (50/50 demo) and alignment ("describes") are unchanged — only the trailing sentence was affected. Same fix already applied to `52_statcan_daily` / `53_abs_australia`; sibling `50_richmond_nonmanufacturing` (cloned from this package, same bug) is being fixed separately.
+
 **Repo:** https://github.com/FaisalXL/Time-series-datasets/tree/main/49_richmond_manufacturing
 
 **Domain:** Macro / regional manufacturing conditions · **Status:** Built (demo 50) · **License:** Public domain (U.S. Federal Reserve)
@@ -42,7 +44,7 @@ flowchart LR
 
 ```json
 {
-  "text": "Fifth District manufacturing activity was flat in June, according to the most recent survey from the Federal Reserve Bank of Richmond. The composite manufacturing index decreased to 4 in June from 13 in May... Shipments fell to 3 from 16, new orders to 9 from 17, and employment to -1 from 3.\n\n... trailing 24 months through June 2026: <ts></ts>",
+  "text": "Fifth District manufacturing activity was flat in June, according to the most recent survey from the Federal Reserve Bank of Richmond. The composite manufacturing index decreased to 4 in June from 13 in May... Shipments fell to 3 from 16, new orders to 9 from 17, and employment to -1 from 3.\n\n<ts></ts>",
   "timeseries": [
     {"values": ["...", 4.0], "unit": "composite_index", "freq": "1M"},
     {"values": ["...", 3.0], "unit": "shipments", "freq": "1M"},

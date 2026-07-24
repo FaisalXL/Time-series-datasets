@@ -1,7 +1,7 @@
 {
   "survey": "Fifth District Survey of Manufacturing Activity",
   "bank": "Federal Reserve Bank of Richmond",
-  "window_months": 24,
+  "window": "expanding (full index history to each release month)",
   "channels": [
     "composite_index",
     "shipments",
@@ -57,16 +57,16 @@
           "name": "wages"
         }
       ],
-      "window_months": 24,
+      "min_points": 2,
       "min_text_year": 2017,
+      "source_url": "https://www.richmondfed.org/research/regional_economy/surveys_of_business_conditions/manufacturing",
       "cache_dir": ".cache",
       "user_agent": "CPT-dataset-research faisal@usc.edu",
       "request_delay_s": 0.3,
       "timeout_s": 60
     },
     "text": {
-      "min_text_chars": 250,
-      "ts_intro_sentence": "{bank} {survey_title} - monthly diffusion indices (composite, shipments, new orders, employment, order backlog, capacity utilization, wages), trailing {n} months through {month}: <ts></ts>"
+      "min_text_chars": 250
     },
     "output": {
       "output_path": "output/richmond_manufacturing_cpt.jsonl",

@@ -34,7 +34,7 @@ Values are **diffusion indices** (% increase − % decrease; ≈ −100…+100).
 **Record shape** (real — June 2026; arrays/text abbreviated):
 ```json
 {
-  "text": "Fifth District manufacturing activity was flat in June, according to the most recent survey from the Federal Reserve Bank of Richmond. The composite manufacturing index decreased to 4 in June from 13 in May. All three of its component indexes fell in June... Shipments fell to 3 from 16, new orders to 9 from 17, and employment to -1 from 3.\n\n...trailing 24 months through June 2026: <ts></ts>",
+  "text": "Fifth District manufacturing activity was flat in June, according to the most recent survey from the Federal Reserve Bank of Richmond. The composite manufacturing index decreased to 4 in June from 13 in May. All three of its component indexes fell in June... Shipments fell to 3 from 16, new orders to 9 from 17, and employment to -1 from 3.\n\n<ts></ts>",
   "timeseries": [
     {"values": ["...", 4.0], "unit": "composite_index", "freq": "1M"},
     {"values": ["...", 3.0], "unit": "shipments", "freq": "1M"},
@@ -54,6 +54,7 @@ Values are **diffusion indices** (% increase − % decrease; ≈ −100…+100).
 ```
 
 **Key issues:**
+- **No generated text.** An earlier version of this build appended a templated closing sentence to introduce the multi-channel series before `<ts></ts>`. That sentence was not from the Richmond Fed — it was synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real scraped narrative with nothing generated in between.
 - **Alignment = describes (verified).** Narrative "composite … decreased to 4 in June from 13 in May" ↔ `composite_index` = 4 (May 13) — exact for recent months.
 - **⚠️ Vintage drift (minor).** `sa_mfg_composite` is re-benchmarked (annual seasonal re-estimation), so older months drift from the as-published figure: **2025+ median gap 0.0 (exact); pre-2024 median ~2 pts (max ~5)**. Direction/movements hold. Same family-wide caveat — worth a call with the team (accept vs. use the NSA columns, which Richmond also ships).
 - **⚠️ Text ~2018→ only.** Live-site release PDFs start ~2018; older releases (back to the 1993 data) aren't on the live site (CMS migration — FRASER/Wayback could extend). So ~100 records despite 30+ years of series.
