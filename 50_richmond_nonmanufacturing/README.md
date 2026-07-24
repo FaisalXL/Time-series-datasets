@@ -33,7 +33,7 @@ Values are **diffusion indices** (% increase − % decrease; ≈ −100…+100).
 **Record shape** (real — June 2026; arrays/text abbreviated):
 ```json
 {
-  "text": "Fifth District non-manufacturing activity was flat in June, according to the most recent survey by the Federal Reserve Bank of Richmond. In June, the revenues index fell to -1 from 14 and the demand index decreased to 3 from 15. Meanwhile, expectations were strong...\n\n...trailing 24 months through June 2026: <ts></ts>",
+  "text": "Fifth District non-manufacturing activity was flat in June, according to the most recent survey by the Federal Reserve Bank of Richmond. In June, the revenues index fell to -1 from 14 and the demand index decreased to 3 from 15. Meanwhile, expectations were strong...\n\n<ts></ts>",
   "timeseries": [
     {"values": ["...", -1.0], "unit": "revenues", "freq": "1M"},
     {"values": ["...", 3.0], "unit": "demand", "freq": "1M"},
@@ -51,6 +51,10 @@ Values are **diffusion indices** (% increase − % decrease; ≈ −100…+100).
 ```
 
 **Key issues:**
+- **No generated text.** An earlier version of this build appended a templated closing sentence to
+  introduce the multi-channel series before `<ts></ts>`. That sentence was not from the Richmond
+  Fed — it was synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended
+  directly to the real scraped narrative with nothing generated in between.
 - **Alignment = describes (verified).** Narrative "revenues index fell to -1 from 14 and the demand index decreased to 3 from 15" ↔ `revenues` = -1 (May 14), `demand` = 3 (May 15) — exact for recent months.
 - **⚠️ Vintage drift (minor).** SA columns are re-benchmarked (annual seasonal re-estimation), so older months drift from the as-published figure. Same family-wide caveat as `47`/`48`/`49` (accept ~1–2 pts vs. use the NSA columns).
 - **⚠️ Text ~2018→ only.** Live-site release PDFs start ~2018; older releases (back to the 1993 series) aren't on the live site. So ~100 records despite 30+ years of series.

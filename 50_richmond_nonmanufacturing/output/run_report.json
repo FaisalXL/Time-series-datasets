@@ -1,7 +1,7 @@
 {
   "survey": "Fifth District Survey of Service Sector Activity",
   "bank": "Federal Reserve Bank of Richmond",
-  "window_months": 24,
+  "window": "expanding (full index history to each release month)",
   "channels": [
     "revenues",
     "demand",
@@ -56,7 +56,7 @@
           "name": "capital_expenditures"
         }
       ],
-      "window_months": 24,
+      "min_points": 2,
       "min_text_year": 2017,
       "source_url": "https://www.richmondfed.org/region_communities/regional_data_analysis/surveys/service_sector",
       "cache_dir": ".cache",
@@ -65,8 +65,7 @@
       "timeout_s": 60
     },
     "text": {
-      "min_text_chars": 200,
-      "ts_intro_sentence": "{bank} {survey_title} - monthly diffusion indices (revenues, demand, employment, wages, local business conditions, capital expenditures), trailing {n} months through {month}: <ts></ts>"
+      "min_text_chars": 200
     },
     "output": {
       "output_path": "output/richmond_nonmanufacturing_cpt.jsonl",

@@ -59,9 +59,6 @@ _SSL = ssl.create_default_context()
 _SSL.check_hostname = False
 _SSL.verify_mode = ssl.CERT_NONE
 _NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
-_MONTH_NAME = dict(zip(range(1, 13),
-                   ["January", "February", "March", "April", "May", "June", "July",
-                    "August", "September", "October", "November", "December"]))
 
 
 # --- config helpers (same conventions as the other packages) ---------------
@@ -323,14 +320,10 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
             stat["short_text"] += 1
             continue
 
-        yr, mon = ym.split("-")
-        month_label = f"{_MONTH_NAME[int(mon)]} {yr}"
         start_ym = window_ms[0]
-        start_label = f"{_MONTH_NAME[int(start_ym[5:7])]} {start_ym[:4]}"
-        intro = t["ts_intro_sentence"].format(
-            bank=d["bank"], survey_title=d["survey_title"],
-            start=start_label, month=month_label)
-        text = f"{narr}\n\n{intro}"
+        # No generated/templated framing text: the <ts></ts> placeholder is appended directly
+        # to the real scraped release narrative, nothing else is added.
+        text = f"{narr}\n\n<ts></ts>"
         timeseries = [{"values": chan_vals[j], "unit": chans[j]["name"], "freq": "1M"}
                       for j in range(len(chans))]
 

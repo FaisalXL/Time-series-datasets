@@ -54,7 +54,8 @@ data:
 
 text:
   min_text_chars: 200
-  ts_intro_sentence: "{bank} {survey_title} - full monthly history of the diffusion indices (revenues, demand, employment, wages, local business conditions, capital expenditures) from {start} through {month}: <ts></ts>"
+  # No templated ts_intro: <ts></ts> is appended directly to the real scraped release
+  # narrative, nothing is generated.
 
 output:
   output_path: output/richmond_nonmanufacturing_cpt.jsonl

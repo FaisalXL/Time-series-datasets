@@ -22,6 +22,16 @@ series to 1993); (2) **PDF prefix rename** `svc_`→`nmf_` ~late-2025 (build pro
 (3) **chart-heavy PDFs** → extraction best-effort; (4) **vintage drift** (SA re-benchmark)
 on older months; (5) **FRED overlap** sign-off.
 >
+> **Fixed 2026-07-24 (explicit team instruction: no generated text, only source):** the initial
+> build appended a templated closing sentence (e.g. "Federal Reserve Bank of Richmond Fifth
+> District Survey of Service Sector Activity... from December 2010 through June 2026:") to
+> introduce the channel bundle before `<ts></ts>`. That sentence was build-script output, not
+> Richmond Fed prose — removed. `<ts></ts>` is now appended directly to the real scraped release
+> narrative with nothing generated in between (record counts/alignment unchanged — the fix only
+> touched the trailing sentence). Same flag raised on the StatCan (#52) and ABS (#53) siblings;
+> `49_richmond_manufacturing` (this package's clone parent) has the identical issue, being fixed
+> separately.
+>
 
 ## Why this one was cheap
 Pure sibling reuse: cloned `49_richmond_manufacturing`, changed the source segment
@@ -33,7 +43,7 @@ strategy working: one survey's plumbing amortises across its siblings.
 ## Record shape
 ```json
 {
-  "text": "Fifth District non-manufacturing activity was flat in June, according to the most recent survey by the Federal Reserve Bank of Richmond. In June, the revenues index fell to -1 from 14 and the demand index decreased to 3 from 15...\n\n...trailing 24 months through June 2026: <ts></ts>",
+  "text": "Fifth District non-manufacturing activity was flat in June, according to the most recent survey by the Federal Reserve Bank of Richmond. In June, the revenues index fell to -1 from 14 and the demand index decreased to 3 from 15...\n\n<ts></ts>",
   "timeseries": [
     {"values": ["...", -1.0], "unit": "revenues", "freq": "1M"},
     {"values": ["...", 3.0], "unit": "demand", "freq": "1M"},
