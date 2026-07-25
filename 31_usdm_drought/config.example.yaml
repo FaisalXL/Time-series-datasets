@@ -1,71 +1,53 @@
 # US Drought Monitor (USDM) → CPT world-knowledge JSONL
 #
-# Pairs the weekly USDM narrative PDF with the FULL weekly history of
-# drought-category area percentages (D0-D4) from the USDM statistics API,
-# from the series' common start (~2000) through each release week (an
-# expanding window that grows one week per release).
+# One record = ONE REGION SECTION of one weekly USDM release: that section's own
+# prose from the National Drought Summary, paired with only that region's
+# drought-area series over a trailing window ending on the week it reports.
 #
 # Quick start:
-#   pip install -r requirements.txt
-#   python scripts/build_cpt_jsonl.py
+#   python scripts/harvest.py                 # fill .cache/ (narratives + series)
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null
 #
 # Override config:
-#   python scripts/build_cpt_jsonl.py --config config.example.yaml
-#   python scripts/build_cpt_jsonl.py --set output.max_records=null
+#   python scripts/build_cpt_jsonl.py --set data.window_weeks=104
 #   python scripts/build_cpt_jsonl.py --dry-run
 
 data:
-  # USDM releases weekly on Tuesdays (the "valid" date). Narrative PDFs are
-  # available from 2021-05-04 onward; the TS API goes back to 2000.
-  start_date: "2021-05-04"
-  end_date: null            # null = today
+  # Trailing window length, in weekly points, ending ON the week the section
+  # reports. 260 = 5 years, matching 11_eia_petroleum_weekly (the other weekly
+  # package). Every emitted record carries exactly this many points; weeks with
+  # less than a full window of history behind them (the first 259 weeks, i.e.
+  # 2000-01-04 .. 2004-12-21) are skipped rather than emitted short.
+  window_weeks: 260
 
-  # Lower bound for the one-shot full-history TS fetch (the series begins ~2000).
-  # The expanding window is anchored at the common_start derived from the fetched
-  # history; this bound only needs to precede the series.
-  history_start_date: "2000-01-01"
+  # Cached USDM statistics API responses, written by scripts/harvest.py:
+  #   area_{1..6}.json / dsci_{1..6}.json  RegionalClimateCenterStatistics
+  #   area_us.json     / dsci_us.json      USStatistics (CONUS)
+  # aoi 1..6 = High Plains, Midwest, Northeast, South, Southeast, West -- the six
+  # official USDM regions, which are exactly the narrative's section headings.
+  api_cache_dir: ".cache/api_rcc"
 
-  # Text: weekly narrative PDF. {date} = YYYYMMDD (the Tuesday valid date).
-  narrative_url_template: "https://droughtmonitor.unl.edu/data/narrativepdf/{date}_nar_usdm.pdf"
-
-  # Time series: USDM area-percent statistics API (returns JSON with Accept header).
-  # {start}/{end} = YYYY-MM-DD; statisticsType 1 = cumulative (D0 includes D1-D4),
-  # 2 = marginal (exclusive per category).
-  ts_api_template: "https://usdmdataservices.unl.edu/api/USStatistics/GetDroughtSeverityStatisticsByAreaPercent?aoi=us&startdate={start}&enddate={end}&statisticsType={stype}"
+  # statisticsType 1 = cumulative (D0 includes D1-D4). Set in harvest.py.
   statistics_type: 1
 
-  # The API returns two area rows per week: "CONUS" (contiguous US, matches the
-  # narrative's regional coverage) and "Total" (incl. territories). Keep one.
-  area_of_interest: "CONUS"
-
-  # Expanding window: pair each release with the full weekly D0-D4 history from
-  # the common start through the release week. Require at least this many points.
-  min_points: 2
-
-  pdf_cache_dir: ".cache/pdf"
-  api_cache_dir: ".cache/api"
-
-  # Polite delay between live HTTP requests (seconds); skipped on cache hits.
-  request_delay_s: 1.0
-  timeout_s: 30
-
 text:
-  # Drop records with fewer than this many narrative characters.
+  # Drop a section whose prose is shorter than this.
   min_text_chars: 200
 
-  # Strip the trailing "Author(s) ..." credits block from the narrative.
-  strip_authors: true
+  # Also emit one national record per week from the <intro> ("Summary") section,
+  # paired with the CONUS series. Weeks before ~2005 have no <intro> element.
+  emit_national_summary: true
 
-  # No templated ts_intro: <ts></ts> is appended directly to the real scraped narrative,
-  # nothing is generated.
+  # No ts_intro_sentence. <ts></ts> is appended directly to the real section
+  # prose -- nothing in the text is written by this script.
 
 output:
+  # Federal-byline records (public-domain-us-gov).
   output_path: output/usdm_drought_cpt.jsonl
+  # Weeks with any NDMC/DRI/university author, held as proprietary-review
+  # pending NDMC permission. Same shape; no rework needed if permission lands.
+  quarantine_path: output/usdm_drought_quarantine.jsonl
   report_path: output/run_report.json
-  samples_path: samples/example_output.jsonl
 
-  # Demo cap. null = full build (~271 weekly releases, 2021-05 → present).
-  max_records: 50
-
-  # null = compact JSONL (one record/line); integer = pretty-printed JSON array.
-  indent: null
+  # Demo cap on the shippable bucket. null = full build.
+  max_records: null

@@ -1,72 +1,167 @@
 # US Drought Monitor → CPT
 
-> **Status: Built** (demo: 50 records). Full build ~**271 weekly releases** (2021-05-04 → present). Run with `output.max_records=null`.
+> **Status: Rebuilt 2026-07-25.** **3,849 shippable records** (`public-domain-us-gov`)
+> + **1,012 held** (`proprietary-review`, non-federal lead byline). 4,861/4,861 pass
+> `validate.py --strict` with 0 warnings.
 
-**What it is:** The weekly US Drought Monitor (USDM) release. One record = **one weekly map (Tuesday "valid" date)** — the official narrative PDF paired with the **full weekly history** of drought-category area coverage (D0–D4, % of contiguous-US land) from the series' common start (2000-01-04) through the release week (an **expanding window** that grows one week per release).
+**What it is:** the weekly US Drought Monitor. One record = **one region section of one
+weekly release** — that section's own prose from the official *National Drought Summary*,
+paired with **only that region's** drought-area series over a **trailing 260-week window
+ending on the week the section reports**.
 
-**Scale:** USDM publishes every Tuesday. Narrative PDFs exist from **2021-05-04** onward (~271 weeks to mid-2026); the statistics API goes back to 2000, so each release carries the complete weekly history to date (~1,110 points for the earliest release, ~1,385 for the latest). Demo emits 50; full build ~271.
+**Record unit changed.** The retired build emitted one record per week: the *entire*
+national narrative paired with an **expanding** window running back to 2000 (1,114–1,385
+points, growing weekly). The text described one week; the series was 26 years of mostly
+unrelated history, and every record re-shipped the same history. Now the text is one
+region's paragraphs and the series is that region's own 260 weeks ending on that week.
 
-#### 📄 Text — weekly narrative PDF
+#### 📄 Text — the section's own prose
 | | |
 |---|---|
-| **What** | The official "National Drought Summary" — national overview, per-region breakdown (Northeast, Southeast, South, Midwest, High Plains, West, Caribbean, Pacific), and a "Looking Ahead" forecast. Genuine analytical prose explaining *why* categories changed (precipitation, snowpack, streamflow, soil moisture). |
-| **Source** | `droughtmonitor.unl.edu/data/narrativepdf/{YYYYMMDD}_nar_usdm.pdf` (the Tuesday valid date) |
-| **Format** | PDF → text via `pdfplumber`; trailing "Author(s)" credits stripped. ~10k–22k chars. |
-| **`text_quality`** | `"real"` (official NDMC/NOAA/USDA author rotation) |
+| **What** | One `<region>` section of the National Drought Summary (Northeast, Southeast, South, Midwest, High Plains, West), or the national `<intro>` ("Summary") |
+| **Source** | `droughtmonitor.unl.edu/services/data/summary/xml/usdm_summary_{YYYYMMDD}.xml` |
+| **Format** | Structured XML → section text. Median 951 chars, min 200, max 6,369. |
+| **`text_quality`** | `real`. **Nothing in `text` is written by this script** — `<ts></ts>` is appended directly to the section prose. Distinct texts: 3,849/3,849 (100%). |
 
-#### 📈 Time series — drought-category area coverage (5 channels)
-| | |
-|---|---|
-| **What** | % of CONUS land area in each drought category, weekly |
-| **Source** | `usdmdataservices.unl.edu/api/USStatistics/GetDroughtSeverityStatisticsByAreaPercent` (JSON; filtered to `areaOfInterest = CONUS`) |
-| **Window** | `1w`, **full weekly history** from the common start (2000-01-04) through the release date (oldest → newest, expanding) |
+> ⚠️ **robots.txt.** The retired builder fetched `/data/narrativepdf/…`, which is under
+> `Disallow: /data/`. Python's `robotparser` reports `can_fetch=True` only because a UTF-8
+> BOM breaks the first group; a BOM-stripping parser honours the rule. The
+> `/services/data/summary/xml/` endpoint used now is outside every disallowed prefix, is a
+> plain GET (no ASP.NET postback), and covers **all 1,386 weeks back to 2000-01-04**.
+> `scripts/harvest.py` re-checks this on every run and asserts before fetching.
 
+#### 📈 Time series — that region's drought coverage (6 channels)
 | Channel (`unit`) | Meaning |
 |---|---|
-| `pct_area_d0_abnormally_dry` | % area D0 or worse (Abnormally Dry) |
-| `pct_area_d1_moderate_drought` | % area D1 or worse (Moderate) |
-| `pct_area_d2_severe_drought` | % area D2 or worse (Severe) |
-| `pct_area_d3_extreme_drought` | % area D3 or worse (Extreme) |
-| `pct_area_d4_exceptional_drought` | % area D4 (Exceptional) |
+| `pct_area_d0_abnormally_dry` … `pct_area_d4_exceptional_drought` | % of the region's area at D0/D1/D2/D3/D4 **or worse** (cumulative, `statisticsType=1`) |
+| `dsci_drought_severity_coverage_index` | Drought Severity and Coverage Index (0–500) |
 
-Values are **cumulative** (`statisticsType=1`: D0 ≥ D1 ≥ … ≥ D4, each includes the more-severe categories). Set `data.statistics_type=2` for marginal (exclusive) values.
+Source: `usdmdataservices.unl.edu/api/RegionalClimateCenterStatistics/…` with `aoi=1..6` →
+**High Plains, Midwest, Northeast, South, Southeast, West** — the six official USDM regions,
+which are exactly the narrative's section headings. National records use
+`USStatistics/…?aoi=us` filtered to `CONUS`. All 6 regions carry D0–D4 **and** DSCI at
+1,386 weekly points, complete from 2000-01-04.
 
-> **Note:** the narrative (NDMC) and the area statistics (USDM analysis) are independent USDM products keyed on the same valid week — source-native alignment. The prose discusses the same drought conditions the percentages quantify.
+**Window:** `1w`, **trailing 260 weeks ending on the reported week** — 5 years, matching
+`11_eia_petroleum_weekly` (the other weekly package). Length is a guarantee:
+**100% exactly 260 points**, 6 channels each, **6,004,440 datapoints**. Weeks without a
+full 260 weeks of history behind them (the first 259, 2000-01-04 → 2004-12-21) are skipped
+rather than emitted short.
 
-**Record shape:** (real record — 2021-05-04, arrays abbreviated)
-```json
-{
-  "text": "National Drought Summary – May 4, 2021 ... Drought Intensity Categories\nD1 ... Moderate Drought\nD2 ... Severe Drought\nD3 ... Extreme Drought\nD4 ... Exceptional Drought\nDrought or Dryness Types\nS ... Short-term\nL ... Long-term\nUpdated May 4, 2021\n\n<ts></ts>",
-  "timeseries": [
-    {"values": [51.00, 61.80, 67.80, "...", 65.64], "unit": "pct_area_d0_abnormally_dry", "freq": "1w"},
-    {"values": [23.35, 24.93, 25.91, "...", 46.55], "unit": "pct_area_d1_moderate_drought", "freq": "1w"},
-    {"values": [9.45, 9.90, 10.38, "...", 32.24], "unit": "pct_area_d2_severe_drought", "freq": "1w"},
-    {"values": [0.00, 0.00, 0.00, "...", 22.56], "unit": "pct_area_d3_extreme_drought", "freq": "1w"},
-    {"values": [0.00, 0.00, 0.00, "...", 9.04], "unit": "pct_area_d4_exceptional_drought", "freq": "1w"}
-  ],
-  "task_type": "world_knowledge", "text_quality": "real",
-  "data_week": "2021-05-04", "release_date": "2021-05-04", "series_start": "2000-01-04", "n_points": 1114,
-  "statistics_type": "cumulative", "area_of_interest": "CONUS",
-  "report_url": "https://droughtmonitor.unl.edu/data/narrativepdf/20210504_nar_usdm.pdf",
-  "dataset": "usdm_drought", "source": "droughtmonitor.unl.edu", "series_id": "usdm_2021-05-04"
-}
+### Alignment — `describes`
+
+**Structural, and exact in 100% of records:**
+
+| Check | Result |
+|---|--:|
+| Window terminal point == the week the section reports | **3,849/3,849 (100%)** |
+| `period_end` == the reported week | **3,849/3,849 (100%)** |
+| Series region == the section's region | **3,849/3,849 (100%)** by construction |
+| Cumulative ordering D0 ≥ D1 ≥ D2 ≥ D3 ≥ D4 holds | **3,849/3,849 (100%)** |
+
+**Semantic — the prose's direction vs the data's:** classifying each paragraph by whether
+degradation- or improvement-language dominates (margin ≥ 2) and comparing to the
+week-over-week ΔDSCI:
+
+| Subset | Direction agrees |
+|---|--:|
+| All decidable (n=1,172) | **83.5%** |
+| \|ΔDSCI\| ≥ 10 (n=339) | **92.0%** |
+| \|ΔDSCI\| ≥ 25 (n=68) | **95.6%** |
+
+Agreement rises monotonically with the size of the move — when the series moves decisively
+the prose almost always agrees, which is what a genuine pairing looks like. (2,583 records
+have no dominant direction — USDM prose routinely reports improvement *and* degradation in
+one region — and are excluded rather than guessed at.)
+
+**Regional relevance:** 99.4% of regional records name their own region or one of its
+states. The 18 that don't are legitimate short paragraphs ("this region remains free of any
+dryness", "interior southern New England").
+
+**Tier is `describes`, not `recites`:** only 0.36% of records state a terminal value
+verbatim. The prose narrates *why* categories changed; it does not quote the percentages.
+
+### Licensing — per-record, on the byline
+
+The USDM site has **no rights page** and its footer asserts `©2026 – National Drought
+Mitigation Center`; NDMC is at the University of Nebraska–Lincoln, **not a federal agency**,
+so `public-domain-us-gov` is not defensible as a *package* label. The XML carries a
+structured `<author><affiliation>` block, so the split is per-record and mechanical.
+
+Only **10 distinct affiliation strings** appear across all 1,386 weeks, and every one
+classifies unambiguously:
+
+| Affiliation | Weeks | Class |
+|---|--:|---|
+| NOAA, NCEI · NOAA, NWS, NCEP, CPC · U.S. Department of Agriculture · NOAA, CPC · NOAA, NESDIS, NCEI · NCEI · NOAA, CPC, JAWF | 1,450 bylines | **federal** |
+| National Drought Mitigation Center · WRCC, DRI · Western Regional Climate Center | 626 bylines | **non-federal** |
+
+**Attribution rule: the first (lead) author owns the week.** 680 of the 1,386 weeks list
+2–3 authors and the XML never says which author wrote which paragraph; the USDM credits the
+lead author with that week's map and summary, so the lead byline is taken as authoritative
+for the whole release. A week ships as `public-domain-us-gov` when its **first** author is
+federal — **891 of 1,127 eligible weeks (79.1%)**, closely matching the 75% federal share
+the corpus audit measured across all bylines. Weeks with a non-federal lead go to
+`output/usdm_drought_quarantine.jsonl` as `proprietary-review`.
+
+> This is a **licensing-owner decision** (Defu, 2026-07-25), not something the source
+> states. A reviewer who reads each weekly narrative as a §201(a) joint work would instead
+> quarantine every co-authored week; that stricter rule yields 668/1,127 weeks (59.3%) and
+> 2,349 shippable records. Every record keeps its full `meta.authors` list and a
+> `meta.byline_class`, so the call can be reversed by editing `week_license()` and
+> rebuilding — no re-harvesting.
+
+**If NDMC grants permission**, the held 1,012 records need no rework — only a `license`
+field flip. Note the frozen v1 enum has no `permissive-attribution` slot; `cc-by-4.0` would
+be a false identifier since NDMC never invoked Creative Commons.
+
+### Reconcile — balances exactly
+
+```
+1,386 narratives available (1,386/1,386 fetched, 0 misses)
+  − 259 weeks before a full 260-week window (2000-01-04 … 2004-12-21)
+= 1,127 eligible weeks → 4,909 section-units considered
+      3,849 emitted shippable
+    + 1,012 emitted quarantine
+    +    45 dropped: section prose < 200 chars
+    +     2 dropped: same paragraph published under two <region> elements
+    +     1 dropped: duplicate region section within a week
+    = 4,909 ✓
 ```
 
-**Key issues:**
-- **No generated text.** An earlier version of this build appended a templated closing sentence to introduce the D0-D4 series before `<ts></ts>`. That sentence was not from the US Drought Monitor — it was synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real National Drought Summary narrative with nothing generated in between.
-- **Cumulative vs marginal** — default is cumulative (`statisticsType=1`); confirm with Charon whether marginal (exclusive per category) is preferred. One-line config flip.
-- **CONUS vs Total** — the API returns both per week; we keep `CONUS` (matches the narrative's regional coverage). `Total` (incl. territories) is available via `data.area_of_interest`.
-- **Long narratives** (~14k chars median) — the full PDF (national + all regions + outlook) is kept. Early-era (2021) PDFs carry a standard methodology preamble. Could be trimmed to the national Summary if shorter text is wanted.
-- **Demo output ≈ 797 KB** for 50 records (narratives are long); lower `output.max_records` for a more GitHub-friendly sample.
+The build **raises** if this does not balance. Also dropped upstream: 3,526 sections whose
+label is not an official region name, and 292 eligible weeks with no `<intro>` element.
 
-**Run:**
+### Known limits (data, not bugs)
+
+- **Coverage is era-dependent.** The narrative's section labels only settle onto the six
+  official region names in 2018 (**6.0/week, every week, 2018–2026**). 2017 is transitional
+  (5.25 mean); before 2017 the labels are merged and descriptive — *"The Plains, Midwest,
+  and Great Lakes Region"*, *"The East"* — averaging 0.6–2.8 mappable sections/week. Those
+  sections are **deliberately not mapped**: their footprint is not the polygon the series
+  measures. Only a label that *is* an official region name (optionally + "Region") maps.
+  Pre-2017 records were checked against post-2017 and are not weaker (99.5% vs 99.3%
+  name-own-region; 88.0% vs 86.0% direction agreement), so the era is kept, not dropped.
+- **Merged-label mapping is the remaining headroom** (~3,500 unmapped sections). It needs
+  aggregated multi-region series and would loosen alignment; not taken.
+- **Out-of-region spillover:** 16.9% of state mentions in pre-2017 regional prose name a
+  state outside that region (6.9% post-2017) — normal editorial spillover in weeks with
+  fewer, broader sections.
+- **Non-CONUS sections** (Caribbean, Pacific, Alaska, Hawaii, Puerto Rico) have prose but no
+  CONUS-region series, and are never emitted.
+
+### Run
+
 ```bash
-pip install -r requirements.txt
-python scripts/build_cpt_jsonl.py                          # demo (50 records)
-python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3   # smoke test
-python scripts/build_cpt_jsonl.py --set output.max_records=null          # full build (~271)
+python scripts/harvest.py                    # robots check + 1,386 narratives + series
+python scripts/build_cpt_jsonl.py            # full build (max_records: null)
+python scripts/verify.py                     # final-inspection pass
+python ../schema/validate.py output/ --strict
 ```
 
-**Output:** `output/usdm_drought_cpt.jsonl` + `output/run_report.json` (`samples/` is gitignored; `.cache/` holds downloaded PDFs + API JSON so reruns are free).
+`.cache/` holds every narrative (`summary_xml/`) and API response (`api_rcc/`), so rebuilds
+are offline and free. The stale `.cache/pdf/` (61 MB) is from the retired
+robots-disallowed path and is no longer read by anything.
 
-**Sources:** [US Drought Monitor](https://droughtmonitor.unl.edu/) (NDMC / NOAA / USDA) · [USDM statistics API](https://droughtmonitor.unl.edu/DmData/DataDownload/WebServiceInfo.aspx)
+**Sources:** [US Drought Monitor](https://droughtmonitor.unl.edu/) (NDMC / NOAA / USDA) ·
+[USDM web services](https://droughtmonitor.unl.edu/DmData/DataDownload/WebServiceInfo.aspx)

@@ -1,45 +1,96 @@
 {
-  "generated_at": "2026-07-24T19:04:01Z",
-  "start_date": "2021-05-04",
-  "end_date": "2026-07-24",
-  "window": "expanding (full weekly D0-D4 history to each release week)",
-  "series_start": "2000-01-04",
-  "statistics_type": "cumulative",
-  "area_of_interest": "CONUS",
+  "generated_at": "2026-07-25T04:57:06Z",
+  "record_unit": "one region section of one weekly USDM release",
+  "window": "trailing 260 weeks ending on the reported week",
   "stats": {
-    "weeks_attempted": 50,
-    "records_emitted": 50,
-    "skipped_no_pdf": 0,
-    "skipped_short_text": 0,
-    "skipped_short_window": 0,
-    "skipped_validation": 0
+    "byline_first-author-federal": 891,
+    "byline_first-author-nonfederal": 236,
+    "narratives_cached": 1386,
+    "records_emitted": 3849,
+    "records_quarantine": 1012,
+    "records_shippable": 3849,
+    "section_unmapped": 3526,
+    "skip_duplicate_region_section": 1,
+    "skip_short_text": 45,
+    "skip_text_duplicated_across_regions": 2,
+    "skip_window_too_early": 259,
+    "units_considered": 4909,
+    "week_no_intro": 292,
+    "weeks_in_series": 1386
   },
-  "validation_errors": [],
+  "reconcile": {
+    "narratives_available": 1386,
+    "weeks_before_full_window": 259,
+    "weeks_eligible": 1127,
+    "units_considered": 4909,
+    "emitted_shippable": 3849,
+    "emitted_quarantine": 1012,
+    "skip_short_text": 45,
+    "skip_incomplete_window": 0,
+    "skip_duplicate_region_section": 1,
+    "skip_text_duplicated_across_regions": 2,
+    "accounted_for": 4909,
+    "balances": true
+  },
+  "series_points": {
+    "min": 260,
+    "median": 260,
+    "max": 260
+  },
+  "text_chars": {
+    "min": 211,
+    "median": 955,
+    "max": 6380
+  },
+  "regions": {
+    "Southeast": 606,
+    "West": 683,
+    "Midwest": 511,
+    "South": 445,
+    "Northeast": 505,
+    "High Plains": 399,
+    "US": 700
+  },
+  "years": {
+    "2004": 2,
+    "2005": 42,
+    "2006": 23,
+    "2007": 67,
+    "2008": 71,
+    "2009": 76,
+    "2010": 64,
+    "2011": 81,
+    "2012": 108,
+    "2013": 119,
+    "2014": 121,
+    "2015": 156,
+    "2016": 144,
+    "2017": 324,
+    "2018": 339,
+    "2019": 289,
+    "2020": 325,
+    "2021": 266,
+    "2022": 273,
+    "2023": 287,
+    "2024": 280,
+    "2025": 245,
+    "2026": 147
+  },
   "config_snapshot": {
     "data": {
-      "start_date": "2021-05-04",
-      "end_date": null,
-      "history_start_date": "2000-01-01",
-      "narrative_url_template": "https://droughtmonitor.unl.edu/data/narrativepdf/{date}_nar_usdm.pdf",
-      "ts_api_template": "https://usdmdataservices.unl.edu/api/USStatistics/GetDroughtSeverityStatisticsByAreaPercent?aoi=us&startdate={start}&enddate={end}&statisticsType={stype}",
-      "statistics_type": 1,
-      "area_of_interest": "CONUS",
-      "min_points": 2,
-      "pdf_cache_dir": ".cache/pdf",
-      "api_cache_dir": ".cache/api",
-      "request_delay_s": 1.0,
-      "timeout_s": 30
+      "window_weeks": 260,
+      "api_cache_dir": ".cache/api_rcc",
+      "statistics_type": 1
     },
     "text": {
       "min_text_chars": 200,
-      "strip_authors": true
+      "emit_national_summary": true
     },
     "output": {
       "output_path": "output/usdm_drought_cpt.jsonl",
+      "quarantine_path": "output/usdm_drought_quarantine.jsonl",
       "report_path": "output/run_report.json",
-      "samples_path": "samples/example_output.jsonl",
-      "max_records": 50,
-      "indent": null
+      "max_records": null
     }
   },
   "dry_run": false
