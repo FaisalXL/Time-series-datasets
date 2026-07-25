@@ -35,15 +35,15 @@ Small-scale samples for format inspection and freeze. Open each folder for its R
 
 | # | Dataset | Dev samples | Channels | `freq` | Notes |
 |---|---------|------------:|---------:|--------|-------|
-| 01 | [NOAA Storm Events](./01_noaa_storm_events/) | 50 | 3 | `1d` | state-month unit → 28–31 daily steps |
+| 01 | [NOAA Storm Events](./01_noaa_storm_events/) | **78,618 (full)** | 3 | `1d` | per-episode narrative + trailing 32-day state window → **100% 32 steps** |
 | 02 | [NHC HURDAT2](./02_nhc_hurdat2/) | 50 | 5 | `6h` | per-storm track, 8–70 steps |
 | 04 | [TelecomTS](./04_telecom_ts/) | 50 | 5 | `100ms` | 128-step window · ⚠️ anomaly text GPT-generated, pending sign-off |
 | 05 | [FNSPID](./05_fnspid/) | 75 | 6 | `1d` | 30-day OHLCV window · raw + relevance-filtered files (see folder README) |
 | 06 | [StockNet](./06_stocknet/) | 50 | 5 | `1d` | weekly OHLCV (~5 steps) · tweets are third-party text (`"real"`) — confirm tag |
 | 07 | [CDC FluView](./07_cdc_fluview/) | 358 | 15 | `1w` | season-to-date window (1–52 wks, median ~22) |
-| 08 | [BLS CPI Releases](./08_bls_cpi/) | 50 | 5 | `1M` | CPI release recites the index = the series (all-items SA/NSA, core, food, energy) |
+| 08 | [BLS CPI Releases](./08_bls_cpi/) | **2,752 (full)** | 2–19 | `1M` | one record per (data month × the release's own narrative section) + trailing 120-month window → **100% 120 steps** |
 | 11 | [EIA Weekly Petroleum](./11_eia_petroleum_weekly/) | 50 | 6 | `1W` | WPSR "Highlights" recite crude/gasoline/distillate stocks, refinery inputs/util, imports = the series · 52-wk window · **public domain** |
-| 24 | [NOAA SWPC Space Weather](./24_noaa_swpc/) | 364 | 18 | `1d`/`3h` | geomagnetic alert/forecast text + Kp / A-index / particle-flux channels |
+| 24 | [NOAA SWPC Space Weather](./24_noaa_swpc/) | **8,385 (full)** | ≤17 | `1d` | SGAS report + trailing 32-day window of daily Kp / A-index / solar channels |
 | 25 | [NOAA NWPS + USGS Flood](./25_noaa_nwps_flood/) | 50 | 1 | `1h` | per-event hourly river-stage hydrograph + NWS flood-category defs & impact statements for the crest stage · ⚠️ "describes" via threshold semantics · public domain |
 | 26 | [ICS-209-PLUS Wildfire](./26_ics209_wildfire/) | 50 | 3 | `1d` | fire situation-report narrative + daily acres/containment/personnel arc · CC BY 4.0 |
 | 31 | [US Drought Monitor](./31_usdm_drought/) | 50 | 5 | `1w` | 12-week window · D0–D4 % CONUS area · narrative PDF + stats API |
@@ -78,15 +78,15 @@ Estimated **full-scale datapoints** = CPT records at `output.max_records=null` (
 
 | # | Dataset | Status | Est. datapoints (full) |
 |---|---------|--------|-----------------------:|
-| 01 | [NOAA Storm Events](./01_noaa_storm_events/) | Complete | **~150k** (~10k/yr, 2010+) |
+| 01 | [NOAA Storm Events](./01_noaa_storm_events/) | **Built full-scale** | **78,618** (1996–2026, 31 yr, 60 states); public domain; strict 78,618/78,618 |
 | 02 | [NHC HURDAT2](./02_nhc_hurdat2/) | Complete | **~320** storms (2000–23, w/ text) |
 | 04 | [TelecomTS](./04_telecom_ts/) | Demo done | **~1.3k** (small dataset) |
 | 05 | [FNSPID](./05_fnspid/) | Built (full HF pipeline) | **~146k** candidates (5k raw / 2.7k filtered sampled; scales to millions) |
 | 06 | [StockNet](./06_stocknet/) | Demo done | **~29k** (87 tickers × ~2 yrs) |
 | 07 | [CDC FluView](./07_cdc_fluview/) | Complete (358/558 wks) | **~558** weekly reports |
-| 08 | [BLS CPI Releases](./08_bls_cpi/) | Built (demo 50) | **~389** monthly releases (1994+, PDF+HTML) |
+| 08 | [BLS CPI Releases](./08_bls_cpi/) | **Built full-scale** | **2,752** (389/389 releases = 389 data months, 1994-01→2026-06; only 2025-10 absent, never published); public domain; strict 2,752/2,752 |
 | 11 | [EIA Weekly Petroleum](./11_eia_petroleum_weekly/) | Built (demo 50) | **~779** weekly reports (2011→); series to 1982; **public domain** |
-| 24 | [NOAA SWPC Space Weather](./24_noaa_swpc/) | Demo done | **~12.3k** (~10.8k daily 1996+ / ~1.5k weekly 1997+) |
+| 24 | [NOAA SWPC Space Weather](./24_noaa_swpc/) | **Built full-scale** | **8,385** (1996–2018 — DGD/DSD index stops at 2018); public domain; strict 8,385/8,385 |
 | 25 | [NOAA NWPS + USGS Flood](./25_noaa_nwps_flood/) | Built (demo 50) | **~10k–40k** flood events (~2,760 rich-impact gauges of 12,756; each floods repeatedly over ~15 yr); **public domain**; ⚠️ alignment = "describes" via threshold semantics (Charon sign-off) |
 | 26 | [ICS-209-PLUS Wildfire](./26_ics209_wildfire/) | Built (demo 50) | **~7–10k** wildfire incidents (1999–2020); **CC BY 4.0**; one record/incident (per-sitrep alt ≈ 80k) |
 | 31 | [US Drought Monitor](./31_usdm_drought/) | Built (demo 50) | **~269** weekly releases (2021-05→) |
