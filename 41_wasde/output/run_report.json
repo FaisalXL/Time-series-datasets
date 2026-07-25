@@ -5,15 +5,23 @@
     "reports_xml": 190,
     "reports_txt": 186,
     "series_specs": 35,
+    "attempts": 2256,
     "candidates": 2046,
-    "emitted": 1904,
-    "recites": 1446,
-    "describes": 458,
-    "channels_emitted": 11072,
-    "no_prose": 4,
-    "short_series": 138,
+    "emitted": 1840,
+    "recites": 1071,
+    "describes": 769,
+    "channels_emitted": 10697,
+    "no_prose": 5,
+    "short_series": 186,
     "no_value": 210,
-    "invalid": 0
+    "garbled_text": 15,
+    "long_block": 0,
+    "invalid": 0,
+    "reconcile": {
+      "attempts": 2256,
+      "accounted": 2256,
+      "balances": true
+    }
   },
   "config_snapshot": {
     "data": {
@@ -297,8 +305,10 @@
           ]
         }
       ],
-      "window_max": 24,
-      "min_series": 24,
+      "window_max": 32,
+      "min_series": 32,
+      "max_block_chars": 8000,
+      "max_garble_ratio": 0.015,
       "request_delay_s": 0.2
     },
     "text": null,

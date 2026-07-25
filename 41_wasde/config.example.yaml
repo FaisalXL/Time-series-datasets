@@ -53,9 +53,25 @@ data:
   # and corn BUSHELS in the full panel -> corn reads "full"; in .txt the same split is a "CORN" subsection.
   # All channels validated to the correct US unit (mil bu / mil cwt / mil bales / 1000 STRV) vs the prose.
   #
-  # alignment is computed PER RECORD by the build: "recites" when ANY channel's endpoint value is stated
-  # in the prose block, else "describes". Sugar = XML-only (txt_title null; .txt has unit drift).
-  # Still candidate (not built): sorghum-barley-oats + livestock/poultry/dairy/eggs.
+  # alignment is computed PER RECORD by the build: "recites" when the ANCHOR channel's (Ending Stocks)
+  # endpoint is stated in the prose block, else "describes". Sugar = XML-only (txt_title null; .txt has
+  # unit drift) and is effectively always "describes" -- its prose narrates beet/cane components and
+  # acreage, not the table's totals (measured: 1.8% anchor-recite vs a 0.0% permutation control).
+  #
+  # NOT BUILT, and why (measured 2026-07-25 against the July 2026 XML + the May 2003 txt):
+  #   - sorghum/barley/oats: a U.S. table exists in both eras, but the narrative has no section of
+  #     its own -- they are discussed inside "COARSE GRAINS:", which corn already uses. Splitting
+  #     them out would re-ship corn's paragraph under a second label = boilerplate reuse, banned by
+  #     SCHEMA.md "no fake scale".
+  #   - livestock/poultry/dairy/eggs: this one IS real headroom (~350 records). "LIVESTOCK, POULTRY,
+  #     AND DAIRY:" is a genuine 7th narrative section, present in BOTH eras, with its own tables.
+  #     Not built because it needs engineering, not a config entry: the U.S. Meats table exposes no
+  #     `attribute*` values in the XML (280 cells, all attribute=None), so it needs a positional
+  #     parse path; and one joint narrative would have to be paired with 4 heterogeneous tables
+  #     (Meats + Egg balance sheets, Dairy Prices, Quarterly Animal Product Production) in
+  #     different units. See README "Headroom".
+  #   - World tables (wheat/corn/rice/soybean/cotton/coarse grain): the world numbers are discussed
+  #     inside the SAME commodity paragraph already used, so pairing them would reuse that text.
   commodities:
     - commodity: wheat
       xml_title: "U.S. Wheat Supply and Use"
@@ -136,8 +152,11 @@ data:
         - {xml_name: "Exports",          txt_label: "Exports",          channel: "sugar_exports_1000_strv",          human: "exports"}
         - {xml_name: "Ending Stocks",    txt_label: "Ending stocks",    channel: "sugar_ending_stocks_1000_strv",    human: "ending stocks"}
 
-  window_max: 24                   # trailing continuous monthly window (Xinyue: >=~32 ideal; 24 for now, extend on ask)
-  min_series: 24                   # emit only full-length windows (uniform 24; drops the earliest under-filled reports)
+  window_max: 32                   # trailing continuous monthly window == the model's patch size
+  min_series: 32                   # emit only full-length windows (uniform 32; drops the earliest under-filled reports)
+  # Text-quality guards (both drop the record and are counted in the run report's reconcile):
+  max_block_chars: 8000            # a block this long means no end marker was found (p99 is ~4.4k)
+  max_garble_ratio: 0.015          # duplicated-glyph PDF text layers, e.g. the 2016-09..2017-02 releases
   request_delay_s: 0.2
 
 text:
@@ -148,4 +167,4 @@ output:
   output_path: output/wasde_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
-  max_records: null                # null = emit all (~501: 3 commodities × ~167); set an int to cap
+  max_records: null                # null = emit all (~1,860: 6 commodities × ~350, sugar ~160); set an int to cap

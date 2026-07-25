@@ -1,129 +1,186 @@
 # USDA WASDE (World Agricultural Supply and Demand Estimates) → CPT
 
-> **Status: Built.** **1,904 records** — 6 commodities (wheat, corn, soybean, rice, cotton, sugar),
-> one **multi-channel** record per (commodity × release month) bundling the whole balance sheet
-> (**11,072 channels** total), **uniform 24-month windows**, spanning **1995-01 → 2026-07** (376 reports:
-> 190 `.xml` + 186 `.txt`, auto-fetched via the ESMIS API). New-domain **agriculture**. `new_datasets.md`
-> #41. **US public domain** (17 U.S.C. §105).
+> **Status: ✅ Finalized 2026-07-25.** **1,840 records** (`public-domain-us-gov`, 17 U.S.C. §105).
+> 1,840/1,840 pass `validate.py --strict` with 0 warnings. New-domain **agriculture**;
+> `new_datasets.md` #41.
 
-**What it is:** One record = **(commodity × release month)** — the monthly WASDE report's per-commodity
-narrative block paired, under a **single `<ts>`**, with that commodity's whole **balance sheet as multiple
-channels** (beginning stocks, production, imports, domestic use / crush, exports, ending stocks — 5–6
-channels). Each channel is a trailing 24-month **continuous monthly current-crop projection** of that line
-(the report's own headline figure at the window's end, the then-current crop at each earlier month). This
-**avoids duplicating the prose** across attributes: 1,904 records = 1,904 unique paragraphs (vs. an earlier
-per-attribute design that repeated each paragraph ~2.6×). Bonus: the channels satisfy the balance identity
-(begin + production + imports = supply; domestic + exports + ending stocks = supply).
+**What it is:** One record = **(commodity × release month)** — the monthly WASDE report's own
+per-commodity narrative block paired, under a **single `<ts>`**, with that commodity's whole
+**balance sheet as multiple channels** over a **trailing 32-month window ending on the month the
+report covers**.
 
-**Alignment is per-record**, set by whether the prose states *any* of the record's channel endpoints:
-`recites` if yes, else `describes`. Overall **1,446 recites + 458 describes** (76% recite — the
-balance-sheet paragraph almost always states at least one plotted line, e.g. production or ending stocks).
-Series **values are correct** everywhere (validated unit/panel).
+**Six commodities**, 1997-09 → 2026-07: soybean 342 · rice 339 · corn 337 · wheat 336 ·
+cotton 327 · sugar 159. **10,697 channels**, **58,880 timesteps**, **342,304 datapoints**.
 
-#### 📄 Text — per-commodity prose (two eras)
-Clean narrative blocks — `WHEAT:`, `COARSE GRAINS:`, `RICE:`, `OILSEEDS:`, `SUGAR:`, `COTTON:` — each
-discussing that commodity's balance sheet (e.g. *"Projected 2026/27 ending stocks are reduced 22 million
-bushels to 722 million"*). Prose comes from the report **PDF** (`pdftotext`) in the xml era and from the
-**`.txt`** narrative in the 1995–2009 era.
+#### 📄 Text — the commodity's own narrative block
 
-#### 📈 Time series — continuous current-crop projection, two eras stitched
-For a record at report month M, the series is a **continuous monthly line**: at each report we take the
-*then-current* (headline "Proj.") marketing year's this-month value, stitched chronologically up to M
-(`freq: 1m`, trailing 24 months), stitching two source eras seamlessly:
-- **`.xml` (2010-07→present):** structured `Report[@sub_report_title]→attribute→market_year→forecast_month→Cell`,
-  unambiguous (no unit guessing).
-- **`.txt` (1995–2009):** fixed-width tables — this-month = the last numeric column, headline MY from the
-  `"YYYY/YY Projections"` header. Machine-readable, **no OCR**.
+| | |
+|---|---|
+| **What** | One narrative section of the report: `WHEAT:`, `COARSE GRAINS:`, `RICE:`, `OILSEEDS:`, `SUGAR:`, `COTTON:` |
+| **Source** | Report **PDF** (`pdftotext -layout`) in the xml era; the machine-readable **`.txt`** narrative for 1995–2009 |
+| **Format** | Median 2,003 chars (min 198, max 5,069) |
+| **`text_quality`** | `real`. **Nothing in `text` is written by this script** — `<ts></ts>` is appended directly to the extracted narrative. Distinct texts: 1,840/1,840 (100%). |
 
-It **deliberately crosses new-crop transitions** — a real regime step — so the model sees a long monthly
-signal, not a ~12-point single-crop stub. Verified continuous across the era boundary (wheat ending stocks
-`…2009-12: 900 → 2010-01: 976…`; corn stays bushels `…2009-12: 1675 → 2010-01: 1764…`). Example
-(wheat ending stocks, ending 2026-07): `…938 → 762 → 744 → 722` — the 2025/26 crop's last headline (938),
-the 2026/27 new-crop reset (762), revised to the prose-recited **722**.
+#### 📈 Time series — the continuous current-crop projection, two eras stitched
 
-**Record shape** (real, abridged — one multi-channel record):
-```json
-{
-  "text": "WHEAT: The outlook for 2026/27 U.S. wheat this month is for lower supplies... Projected 2026/27 ending stocks are reduced 22 million bushels to 722 million and are down 22 percent from last year... Projected 2026/27 global ending stocks are lowered 2.6 million tons to 272.8 million, primarily on reductions for the United States, India, Argentina, and Canada.\n\n<ts></ts>",
-  "timeseries": [
-    {"values": ["…24…", 920.0], "unit": "wheat_beginning_stocks_mil_bu", "freq": "1m"},
-    {"values": ["…24…", 1536.0], "unit": "wheat_production_mil_bu", "freq": "1m"},
-    {"values": ["…24…", 140.0], "unit": "wheat_imports_mil_bu", "freq": "1m"},
-    {"values": ["…24…", 1099.0], "unit": "wheat_domestic_use_mil_bu", "freq": "1m"},
-    {"values": ["…24…", 775.0], "unit": "wheat_exports_mil_bu", "freq": "1m"},
-    {"values": ["…24…", 722.0], "unit": "wheat_ending_stocks_mil_bu", "freq": "1m"}
-  ],
-  "task_type": "world_knowledge", "text_quality": "real",
-  "alignment": "recites", "license": "public-domain-us-gov",
-  "source": "https://www.usda.gov/oce/commodity/wasde/", "dataset": "wasde",
-  "domain": "agriculture", "region": "US", "period_start": "2024-07-01", "period_end": "2026-07-01",
-  "meta": {"commodity": "wheat", "attributes": ["beginning stocks","production","imports","domestic use","exports","ending stocks"],
-           "n_channels": 6, "marketing_year": "2026/27", "report_month": "2026-07", "source_format": "xml",
-           "window": 24, "marketing_years_spanned": ["2024/25","2025/26","2026/27"], "new_crop_resets": 2}
-}
+Each channel is the commodity's balance-sheet line (beginning stocks, production, imports,
+domestic use / crush, exports, ending stocks — 5–6 channels) as a **continuous monthly line**: at
+each report we take the *then-current* headline ("Proj.") marketing year's this-month value and
+stitch chronologically. Two source eras join seamlessly:
+
+- **`.xml` (2010-07→present):** `Report[@sub_report_title]→attribute→market_year→forecast_month→Cell` — unambiguous, no unit guessing.
+- **`.txt` (1995–2009):** fixed-width tables — this-month = the last numeric column, headline MY from the `"YYYY/YY Projections"` header. Machine-readable, **no OCR**.
+
+Verified continuous across the era boundary (wheat ending stocks `…2009-12: 900 → 2010-01: 976…`;
+corn stays bushels `…1675 → 1764…`).
+
+**Window:** `1m`, **trailing 32 months ending on the reported month** — matched to the model's
+32-point patch size. Length is a guarantee: **100% exactly 32 points** (min = med = max = 32).
+Months without a full 32-month history behind them are skipped rather than emitted short.
+
+The series **deliberately crosses new-crop transitions** — a real regime step (e.g. **938 → 762**
+as the new crop opens), not an artifact. `meta.new_crop_resets` counts them per window (median 3).
+
+### Alignment — tagged per record, on the anchor channel
+
+**Structural, and exact in 100% of records:**
+
+| Check | Result |
+|---|--:|
+| Window terminal month == the month the report covers | **1,840/1,840 (100%)** |
+| `period_end` == the reported month | **1,840/1,840 (100%)** |
+| `period_start` == the window's first month | **1,840/1,840 (100%)** |
+| `vintage_months` length == series length | **1,840/1,840 (100%)** |
+| Window months strictly chronological | **1,840/1,840 (100%)** |
+
+**Semantic — does the prose actually state the number?** A record is `recites` when the **anchor
+channel's** (ending stocks) endpoint appears in its prose, else `describes` →
+**1,071 recites + 769 describes**.
+
+> ⚠️ **The previous rule was "any of the 6 channels", and it was not trustworthy.** Measured with a
+> **permutation control** — the same endpoints tested against a *different month's* prose for the
+> *same commodity*, which should almost never match — the any-channel rule fired **34.1%** of the
+> time on mismatched text against a 75.8% true rate. **More than a third of its `recites` tags were
+> coincidence.** Restricting the test to the anchor drops the control to **3.8%** against a 58.2%
+> true rate:
+
+| Commodity | n | own prose | other month's prose | lift |
+|---|--:|--:|--:|--:|
+| soybean | 342 | 85.1% | 2.3% | **+82.7** |
+| rice | 339 | 85.3% | 12.4% | **+72.9** |
+| cotton | 327 | 72.8% | 4.9% | **+67.9** |
+| wheat | 336 | 40.8% | 0.6% | **+40.2** |
+| corn | 337 | 30.6% | 0.6% | **+30.0** |
+| sugar | 159 | 8.2% | 0.0% | +8.2 |
+| **All** | **1,840** | **58.2%** | **3.8%** | **+54.4** |
+
+The anchor is also the line the window is built on and the figure WASDE prose leads with, so it is
+the honest test. The tag is reproducible from text+series in **1,840/1,840 (100%)**.
+
+**Sugar is `describes` in substance** (8.2% anchor-recite, 0.0% control): its prose narrates
+beet/cane components and NASS acreage — *"beet sugar production is projected at 4.821 million
+STRV"* — not the table's totals. Real, first-party, on-topic prose about the balance sheet; it just
+does not quote it. Kept, correctly tagged.
+
+### Reconcile — balances exactly, and the build raises if it doesn't
+
 ```
-*(Single `<ts>`, 6 index-aligned channels — the whole wheat balance sheet as one multivariate series.)*
+376 reports (190 .xml + 186 .txt) × 6 commodities = 2,256 attempts
+      1,840 emitted
+    +   210 dropped: anchor line has no value that month (186 = sugar, which has no .txt tier)
+    +   186 dropped: fewer than 32 months of history behind the report
+    +    15 dropped: corrupted PDF text layer (see below)
+    +     5 dropped: no usable prose block
+    +     0 long-block / 0 invalid
+    = 2,256 ✓
+```
 
-**Key issues / caveats:**
-- **No generated text.** An earlier version of this build appended a templated closing sentence
-  (e.g. "USDA's successive monthly WASDE balance-sheet projections for U.S. wheat — beginning
-  stocks, production, imports, domestic use, exports, and ending stocks — for the then-current
-  marketing year (2026/27), across the trailing 24 monthly reports through 2026-07:") to introduce
-  the multi-channel series before the `<ts></ts>` tag. That sentence was **not** from USDA — it was
-  synthesized by the build script. Fixed 2026-07-24: `<ts></ts>` is now appended directly to the
-  real scraped/extracted narrative with nothing generated in between. Every character of `text`
-  before the tag is verbatim USDA prose.
-- **⚠️ Forecast, not measured (the core caveat).** The series tracks USDA *revising its own projection*
-  month to month — a forecast-revision trajectory, not a physical measurement. This is the opposite of the
-  "measured signal" preference. The measured cousin is USDA **NASS Crop Production / Quick Stats**
-  (surveyed actuals) — a natural sibling package.
-- **Enumeration via the ESMIS REST API (no scraping, no manual download).** The build paginates
-  [`/api/v1/release/findByIdentifier/wasde`](https://esmis.nal.usda.gov/api-documentation) (fault-tolerant —
-  retries + skips transient 5xx) — 700 releases, each with file URLs + date — and auto-fetches per era:
-  **`.xml` 2010-07→present (190 reports)**, and **machine-readable `.txt` for 1995–2009 (186 reports, no
-  OCR)**. Pre-1995 releases are **pdf-only image scans** (no text layer — `pdftotext` yields ~27 chars) →
-  OCR phase-2 tier. `data.use_txt_tier` toggles the txt era; `data.max_reports` caps newest-N.
-- **⚠️ Two-panel tables → `month_style` / `txt_subsection` (the corn unit fix).** Some tables stack **two
-  measure panels**. In XML they're keyed by forecast-month *spelling* — abbreviated (`"Jul"`) vs full
-  (`"July"`): the **Feed-Grain-and-Corn** table puts feed-grain **metric tons** in the abbr panel and **corn
-  bushels** in the full panel (`xml_month_style: full`). In `.txt` the same split is a **`CORN` subsection**
-  below the metric panel (`txt_subsection: CORN`). Wheat/soy/rice/cotton/sugar read the abbreviated/first
-  panel. **Units differ:** wheat/corn/soy = mil bu, rice = mil cwt, cotton = mil 480-lb bales, sugar = 1,000
-  STRV. Verified continuous across the era boundary (corn stays bushels, no metric contamination). Still
-  candidate: **sorghum/barley/oats** (combined-aggregate) + livestock/poultry/dairy/eggs (quarterly).
-- **Multi-channel, one record per (commodity, report)** — the balance-sheet lines are bundled as channels
-  under a single `<ts>` (index-aligned, equal length), *not* emitted as separate per-attribute records. This
-  eliminates prose duplication (1,904 records = 1,904 unique paragraphs; the earlier per-attribute design
-  repeated each paragraph ~2.6×) and better matches the text, which describes the whole balance sheet. A
-  channel is dropped from a record only if it's missing at any window month (keeps channels equal-length);
-  most records carry all 6 (rice 5).
-- **Alignment is per-record** (computed by the build, not configured): `recites` if the prose states **any**
-  of the record's channel endpoints, else `describes`. Overall **1,446 recites + 458 describes** (76%). The
-  balance-sheet paragraph almost always states at least one plotted line (production and/or ending stocks),
-  so most records recite; the `describes` minority is where the prose is purely directional (esp. the older
-  `.txt` era) or administrative (sugar). Series **values are correct** everywhere.
-- **⚠️ Continuous series crosses new-crop resets (by design).** To give the model a long monthly signal
-  (it patches series in **32-point blocks**, so a ~12-point single-crop stub is penalised), the series
-  **deliberately crosses new-crop transitions** — **real regime steps** (e.g. **938 → 762** as the new crop
-  opens), not artifacts. `meta.new_crop_resets` counts them per window. Window is **24** for now
-  (`data.window_max`); extend on request — Xinyue's target is ≥~32.
-- **Sugar is the weakest** (~8% of channels recited, XML-only, often-administrative prose) — a drop-candidate.
-- **Leakage note.** For `recites` records the prose states at least one channel's endpoint value (its last
-  point). Standard for value-reciting alignment; mask the last point per channel if a stricter variant is wanted.
+### Exhaustion — the machine-readable era is complete
 
-**Run** (fetches reports from the ESMIS API automatically):
+The ESMIS API lists **398 WASDE releases with usable files**, which collapse to **376 distinct
+months** (21 months ship a correction/re-issue; 2019-11 ships three — one report per month is
+correct, not data loss). Against a full monthly calendar for 1995-01 → 2026-07 (379 months),
+exactly **3 are absent — 2013-10, 2019-01 and 2025-10 — all federal government shutdowns, when no
+WASDE was published.** So **376/376 available months are harvested: zero real misses.**
+
+Pre-1995 releases are **pdf-only image scans** (no text layer — `pdftotext` yields ~27 chars) and
+would need OCR; they are out of scope by design.
+
+### Headroom — measured, and deliberately not taken
+
+The config previously listed "sorghum-barley-oats + livestock/poultry/dairy/eggs" as candidates.
+Checked against the July 2026 XML and the May 2003 `.txt`:
+
+- **Sorghum / barley / oats — not real headroom.** A U.S. table exists in both eras, but the
+  narrative has **no section of its own**: they are discussed inside `COARSE GRAINS:`, which corn
+  already uses. Splitting them out would re-ship corn's paragraph under a second label —
+  boilerplate reuse, banned by `SCHEMA.md` "no fake scale".
+- **World tables** (wheat/corn/rice/soybean/cotton/coarse grain) — same problem: the world numbers
+  are discussed **inside the same commodity paragraph** already used.
+- **Livestock / poultry / dairy / eggs — this one IS real (~350 records).**
+  `LIVESTOCK, POULTRY, AND DAIRY:` is a genuine **7th narrative section**, present in **both eras**,
+  with its own tables. Not taken here because it needs engineering rather than a config entry:
+  the `U.S. Meats Supply and Use` table exposes **no `attribute*` values in the XML** (280 cells,
+  all `attribute=None`), so it needs a positional parse path; and one joint narrative would have to
+  be paired with **four heterogeneous tables** (Meats + Egg balance sheets, Dairy Prices, Quarterly
+  Animal Product Production) in different units — the weakest-aligned record type in the package.
+
+### Known limits (data, not bugs)
+
+- **⚠️ Forecast, not measured — the core caveat.** The series tracks USDA *revising its own
+  projection* month to month: a forecast-revision trajectory, not a physical measurement. The
+  measured cousin is USDA **NASS Crop Production / Quick Stats** (surveyed actuals) — a natural
+  sibling package.
+- **Corrupted PDF text layers.** 15 records from **2016-09 → 2017-02** were dropped: those releases
+  duplicate glyphs — *"wheaat ending sttocks are raaised"*, *"cconsumptioon"*. It is in the PDF
+  itself, not a `-layout` artifact (`-raw` and default mode show it too), so it cannot be
+  re-extracted around; and repairing the characters would mean rewriting source prose, which
+  `text_quality: real` forbids. `data.max_garble_ratio` (0.015) is the guard; ALL-CAPS tokens are
+  skipped so acronyms like **CCC** (Commodity Credit Corporation) don't trip it.
+- **One record, `wasde_rice_200001_2000-07`, opens mid-section** rather than at `RICE:` (0.05%).
+- **Two-panel tables → `month_style` / `txt_subsection`.** Some tables stack **two measure panels**,
+  keyed in XML by forecast-month *spelling*: the **Feed-Grain-and-Corn** table puts feed-grain
+  **metric tons** in the abbreviated (`"Jul"`) panel and **corn bushels** in the full (`"July"`)
+  panel (`xml_month_style: full`); in `.txt` the same split is a `CORN` subsection. **Units differ:**
+  wheat/corn/soy = mil bu, rice = mil cwt, cotton = mil 480-lb bales, sugar = 1,000 STRV.
+- **Leakage note.** For `recites` records the prose states the anchor channel's endpoint (its last
+  point). Standard for value-reciting alignment; mask the last point per channel for a stricter variant.
+
+### Fixed during the 2026-07-25 final inspection
+
+1. **Window 24 → 32 months.** The old build capped at 24, below the model's 32-point patch size —
+   the config's own comment flagged it as a placeholder ("≥~32 ideal; 24 for now, extend on ask").
+2. **Recite tag re-based on the anchor channel** (the any-channel rule's 34% false-positive floor,
+   above).
+3. **Cotton prose contamination.** Cotton is the last narrative section, so its `__LAST_SECTION__`
+   end marker fell back to a blind 4,000-char slice that ran through the Outlook Board sign-off,
+   USDA conference advertisements (*"DOWNLOAD SPEECHES … $21.00 … Off press April"*) and into **raw
+   ASCII data tables** — contaminating all 327 cotton records and **inflating their recite rate**,
+   since the scraped tables contain the very numbers the recite test looks for. Blocks now end at
+   the earliest of the configured marker, any other commodity's heading, and the narrative sign-off
+   (`NARRATIVE_END`). One 2022 cotton block that reached **37,776 chars** by running through a
+   committee roster is cut by the same rule; `data.max_block_chars` is the backstop.
+4. **Cross-section bleed.** WASDE reorders its narrative sections across eras (OILSEEDS ran before
+   RICE in 1998 and 2008), so 3 corn records had swallowed the following OILSEEDS block. Now **0**.
+5. **Reconcile assertion** — the build now raises rather than ship an unexplained gap.
+
+### Run
+
 ```bash
 pip install -r requirements.txt          # + poppler (pdftotext)
-python scripts/build_cpt_jsonl.py --dry-run --set data.max_reports=30 --set output.max_records=3  # smoke
-python scripts/build_cpt_jsonl.py                                        # full 1995→2026 (376 reports, 1,904 records)
-python scripts/build_cpt_jsonl.py --set data.use_txt_tier=false          # xml era only (2010→, faster)
+python scripts/build_cpt_jsonl.py        # full 1995→2026 (376 reports, 1,840 records)
+python scripts/verify.py                 # final-inspection pass
+python ../schema/validate.py output/wasde_cpt.jsonl --strict
 ```
 
-**Extend:** widen `data.window_max` (Xinyue's target is ≥~32); add commodities to `data.commodities`, or add
-channels to a commodity's `channels` list (each: `xml_name`, `txt_label`, `channel`, `human`). Footnoted
-attribute names are matched tolerantly; alignment is auto-tagged per record. Reports cache under
-`.cache/reports/` (~2.9 MB/xml-report; ~1 GB for the full 1995→2026 span).
+Reports are enumerated from the **ESMIS REST API** (`/api/v1/release/findByIdentifier/wasde`,
+fault-tolerant — retries then skips transient 5xx) and cached under `.cache/reports/` (~527 MB for
+the full span), so rebuilds are offline and free. `data.use_txt_tier` toggles the 1995–2009 era;
+`data.max_reports` caps newest-N.
 
 **Output:** `output/wasde_cpt.jsonl` + `run_report.json`; `samples/example_output.jsonl`.
 
-**Sources:** [USDA OCE WASDE](https://www.usda.gov/oce/commodity/wasde/) (current) · [ESMIS release files](https://esmis.nal.usda.gov/publication/world-agricultural-supply-and-demand-estimates) · [Cornell mannlib archive 1973→](https://usda.library.cornell.edu/concern/publications/3t945q76s). **US public domain.** See [NOTION_PAGE.md](NOTION_PAGE.md).
+**Sources:** [USDA OCE WASDE](https://www.usda.gov/oce/commodity/wasde/) ·
+[ESMIS release files](https://esmis.nal.usda.gov/publication/world-agricultural-supply-and-demand-estimates) ·
+[Cornell mannlib archive 1973→](https://usda.library.cornell.edu/concern/publications/3t945q76s).
+**US public domain.** See [NOTION_PAGE.md](NOTION_PAGE.md).

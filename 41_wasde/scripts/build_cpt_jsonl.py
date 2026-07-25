@@ -173,7 +173,12 @@ def endpoint_recited(prose: str, ep: float) -> bool:
     aware. WASDE narratives recite the level for some (commodity, attribute, era) combos and state
     only the month-over-month change for others (esp. older wheat/corn), so alignment is tagged PER
     RECORD: 'recites' when the endpoint is stated, else 'describes' (the block still describes the
-    commodity's balance sheet). Small bare integers (<10) are ignored to avoid false positives."""
+    commodity's balance sheet). Small bare integers (<10) are ignored to avoid false positives.
+
+    NOTE: this test is applied to the ANCHOR channel only (see the emit loop). Applied to "any of
+    the 6 channels" it is not trustworthy — a permutation control (same endpoints, a different
+    month's prose for the same commodity) fires 37.2% of the time, against a 75.9% true rate. On
+    the anchor alone the control falls to 4.5% against 57.4%. See scripts/verify.py."""
     forms = set()
     iv = int(round(ep))
     if abs(ep) >= 10:
@@ -293,11 +298,47 @@ def pdf_text(path: Path) -> str:
     return p.stdout.decode("utf-8", "replace")
 
 
-def prose_block(txt: str, start: str, end: str) -> Optional[str]:
+# Every WASDE narrative closes with the Outlook Board sign-off, and the statistical tables
+# (ASCII rules in the txt era) follow it. Cotton is the LAST narrative section, so without
+# these its block fell back to a blind 4,000-char slice that swallowed the sign-off, USDA
+# conference advertisements ("DOWNLOAD SPEECHES", "$21.00, Off press April") and then raw
+# table text -- contaminating all 331 cotton records and inflating their recite rate, since
+# the scraped tables contain the very numbers the recite test looks for.
+NARRATIVE_END = ("Approved by", "APPROVED:", "====",
+                 "(Continued on page", "INTERAGENCY COMMODITY ESTIMATES")
+
+# Some release PDFs carry a corrupted text layer that duplicates glyphs -- "wheaat ending
+# sttocks are raaised", "cconsumptioon", "COARSE GRAINS: G This month h's". It is in the PDF
+# itself, not a pdftotext -layout artifact (-raw and default mode show it too), so it cannot
+# be re-extracted around; and repairing the characters would mean rewriting source prose,
+# which `text_quality: real` forbids. Such records are dropped instead.
+#
+# Signature: doubled vowels (aa/ii/uu -- near-absent in English) or a word-initial doubled
+# consonant. ALL-CAPS tokens are skipped: legitimate acronyms like CCC (Commodity Credit
+# Corporation) otherwise trip the word-initial rule.
+_TOKEN = re.compile(r"[A-Za-z]{3,}")
+_GARBLED_TOKEN = re.compile(r"(aa|ii|uu)|^([bcdfghjklmnpqrstvwxz])\2", re.I)
+
+
+def garble_ratio(text: str) -> float:
+    """Fraction of word tokens showing the duplicated-glyph signature."""
+    toks = [w for w in _TOKEN.findall(text) if not w.isupper()]
+    if not toks:
+        return 0.0
+    return sum(1 for w in toks if _GARBLED_TOKEN.search(w)) / len(toks)
+
+
+def prose_block(txt: str, start: str, end: str, others: Sequence[str] = ()) -> Optional[str]:
+    """The commodity's own narrative block, ending at the EARLIEST of its configured end marker,
+    any OTHER commodity's heading, and the end-of-narrative sign-off. WASDE reorders its narrative
+    sections across eras -- OILSEEDS ran before RICE in 1998 and 2008 -- so a single hardcoded end
+    marker lets one block swallow the next commodity's prose (3 corn records did exactly that)."""
     i = txt.find(start)
     if i < 0:
         return None
-    j = txt.find(end, i + len(start))
+    stops = [p for p in (txt.find(m, i + len(start))
+                         for m in (end, *others, *NARRATIVE_END)) if p > 0]
+    j = min(stops) if stops else -1
     block = txt[i: j if j > 0 else i + 4000]
     block = re.sub(r"\s+", " ", block).strip()
     block = re.sub(r"\s*WASDE\s*-\s*\d+\s*-\s*\d+\s*", " ", block)  # strip page-break footers ("WASDE-673-5")
@@ -475,14 +516,20 @@ def build(cfg) -> Tuple[List[dict], Dict[str, Any]]:
 
     stat = {"reports": len(months), "reports_xml": sum(1 for y in months if reports[y]["kind"] == "xml"),
             "reports_txt": sum(1 for y in months if reports[y]["kind"] == "txt"),
-            "series_specs": len(specs), "candidates": 0, "emitted": 0,
+            "series_specs": len(specs), "attempts": 0, "candidates": 0, "emitted": 0,
             "recites": 0, "describes": 0, "channels_emitted": 0,
-            "no_prose": 0, "short_series": 0, "no_value": 0, "invalid": 0}
+            "no_prose": 0, "short_series": 0, "no_value": 0,
+            "garbled_text": 0, "long_block": 0, "invalid": 0}
+    max_block = int(d.get("max_block_chars", 8000))
+    max_garble = float(d.get("max_garble_ratio", 0.015))
     records: List[dict] = []
 
     # ONE multi-channel record per (commodity, release month): the commodity's balance-sheet lines
     # bundled as channels under a single <ts>. Window anchored on Ending Stocks; each channel is that
     # line's continuous current-crop monthly projection over the SAME 24-month axis (index-aligned).
+    other_starts = {c["commodity"]: [o["prose_start"] for o in d["commodities"]
+                                     if o["commodity"] != c["commodity"]]
+                    for c in d["commodities"]}
     for com in d["commodities"]:
         commodity = com["commodity"]
         channels = com["channels"]
@@ -490,6 +537,7 @@ def build(cfg) -> Tuple[List[dict], Dict[str, Any]]:
         for i, ym in enumerate(months):
             if maxrec is not None and len(records) >= int(maxrec):
                 break
+            stat["attempts"] += 1
             amy, aval = points[ym].get(anchor_key, (None, None))
             if not amy or aval is None:
                 stat["no_value"] += 1
@@ -507,14 +555,25 @@ def build(cfg) -> Tuple[List[dict], Dict[str, Any]]:
             if len(win_months) < min_series:
                 stat["short_series"] += 1
                 continue
-            prose = prose_block(report_prose_text(ym), com["prose_start"], com["prose_end"])
+            prose = prose_block(report_prose_text(ym), com["prose_start"], com["prose_end"],
+                                other_starts[commodity])
             if not prose or len(prose) < 120:
                 stat["no_prose"] += 1
+                continue
+            # a block that runs far past the usual section length means no end marker was
+            # found where one was expected (p99 is ~4.4k; one 2022 cotton block reached 38k
+            # by running through a committee roster and into the statistical tables)
+            if len(prose) > max_block:
+                stat["long_block"] += 1
+                continue
+            if garble_ratio(prose) > max_garble:
+                stat["garbled_text"] += 1
                 continue
 
             # build each channel over the window; keep only channels populated at EVERY window month
             # (so all kept channels are equal-length + index-aligned, as the schema requires)
-            ts, used_humans, endpoints = [], [], []
+            ts, used_humans = [], []
+            anchor_ep = None
             for ch in channels:
                 k = _spec_key(commodity, ch["xml_name"])
                 vals = [points[pm].get(k, (None, None))[1] for pm in win_months]
@@ -522,14 +581,20 @@ def build(cfg) -> Tuple[List[dict], Dict[str, Any]]:
                     continue
                 ts.append({"values": [round(v, 3) for v in vals], "unit": ch["channel"], "freq": "1m"})
                 used_humans.append(ch["human"])
-                endpoints.append(vals[-1])
+                if ch["xml_name"] == ANCHOR_ATTR:
+                    anchor_ep = vals[-1]
             if not ts:
                 stat["no_value"] += 1
                 continue
 
-            # alignment PER RECORD: recites if ANY channel's endpoint value is stated in the prose,
-            # else describes (the block still describes the balance sheet).
-            align = "recites" if any(endpoint_recited(prose, e) for e in endpoints) else "describes"
+            # alignment PER RECORD, decided on the ANCHOR channel (ending stocks) only.
+            # Testing "any of the 6 channels" inflates the tag: a permutation control (these
+            # endpoints vs a DIFFERENT month's prose for the same commodity) fires 37.2% of the
+            # time under any-channel but only 4.5% on the anchor -- so more than a third of the
+            # any-channel `recites` tags were coincidence. The anchor is also the line the window
+            # is built on and the figure WASDE prose leads with, so it is the honest test.
+            align = ("recites" if anchor_ep is not None and endpoint_recited(prose, anchor_ep)
+                     else "describes")
             stat["recites" if align == "recites" else "describes"] += 1
             stat["channels_emitted"] += len(ts)
 
@@ -571,6 +636,17 @@ def build(cfg) -> Tuple[List[dict], Dict[str, Any]]:
                 continue
             records.append(rec)
             stat["emitted"] += 1
+
+    # Reconcile: every (commodity x report month) attempt must land in exactly one bucket.
+    # `no_value` covers both "the anchor line has no value this month" and "no channel is
+    # populated at every window month". The build fails rather than ship an unexplained gap.
+    drops = ("no_value", "short_series", "no_prose", "long_block", "garbled_text", "invalid")
+    accounted = stat["emitted"] + sum(stat[k] for k in drops)
+    stat["reconcile"] = {"attempts": stat["attempts"], "accounted": accounted,
+                         "balances": accounted == stat["attempts"]}
+    if not stat["reconcile"]["balances"] and maxrec is None:
+        raise SystemExit(f"reconcile failed: {stat['reconcile']} :: "
+                         f"{ {k: stat[k] for k in ('emitted', *drops)} }")
     return records, stat
 
 
