@@ -18,3 +18,8 @@
 **/output/*.log
 
 **/NOTION_PAGE.md
+
+# Stale raw XML left in 41_wasde/data — the builder downloads its own copies into
+# .cache/reports from the ESMIS API and never reads data/. (07_cdc_fluview/data is a
+# real build input, declared as csv_dir in its config, and stays tracked.)
+41_wasde/data/
