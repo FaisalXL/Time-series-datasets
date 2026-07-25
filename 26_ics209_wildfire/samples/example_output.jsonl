@@ -1,0 +1,210 @@
+[
+  {
+    "text": "the fire made a major run to the north late sunday, forcing the evacuation of fort greely and part of delta junction, also temporarily closing the richardson highway. winds gusting to 50+ mph, pushed flames past a fire break and onto the main post area of fort greely. the evacuation of fort greely was ordered at 1030, by the post commander. about midnight the continuous winds forced the evacuation of residents in the southern part of delta junction. the fire jumped the richardson highway and destroyed a residential structure,(stam) was assigned to the fire. crews are working to contain spot fires and secure the fires perimeter. in addition to resources listed there are 4 dozers, 3 nodwells, and 2 fire medics units assigned to this fire.\n\nDaily situation-report values — acres burned, percent contained, and total personnel — for the Donnelly Flats Fire (AK) across 4 reporting days through 1999-06-14: <ts></ts>",
+    "timeseries": [
+      {
+        "values": [
+          150.0,
+          1500.0,
+          3200.0,
+          6000.0
+        ],
+        "unit": "acres",
+        "freq": "1d"
+      },
+      {
+        "values": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "unit": "percent",
+        "freq": "1d"
+      },
+      {
+        "values": [
+          92.0,
+          119.0,
+          259.0,
+          362.0
+        ],
+        "unit": "persons",
+        "freq": "1d"
+      }
+    ],
+    "task_type": "world_knowledge",
+    "text_quality": "real",
+    "series_id": "ics209_1999_AK-ARM-B222_DONNELLY FLATS",
+    "dataset": "ics209_wildfire",
+    "source": "https://figshare.com/articles/dataset/All-hazards_dataset_mined_from_the_US_National_Incident_Management_System_1999-2020/19858927",
+    "license": "cc-by-4.0",
+    "text_source": "first_party_official",
+    "alignment": "describes",
+    "domain": "wildfire",
+    "region": "US-AK",
+    "period_start": "1999-06-11",
+    "period_end": "1999-06-14",
+    "timestamps": [
+      "1999-06-11",
+      "1999-06-12",
+      "1999-06-13",
+      "1999-06-14"
+    ],
+    "meta": {
+      "report_dates": [
+        "1999-06-11",
+        "1999-06-12",
+        "1999-06-13",
+        "1999-06-14"
+      ],
+      "incident_id": "1999_AK-ARM-B222_DONNELLY FLATS",
+      "incident_name": "Donnelly Flats",
+      "poo_state": "AK",
+      "start_year": "1999",
+      "cause": "Human",
+      "discovery_date": "1999-06-11",
+      "anchor_report_date": "1999-06-14",
+      "final_acres": 18000.0,
+      "n_reports": 4,
+      "attribution": "St. Denis et al. 2023, ICS-209-PLUS, CC BY 4.0 (figshare article 19858927)"
+    }
+  },
+  {
+    "text": "cool temperatures and favorable humidity have minimized fire activity and aided firefighters with mop-up. efforts were directed to areas of heat concentration and gridding all accessable parts of the line. smokejumpers and crews rehabilitated handline and the tracked excavator continued to perform exceptionally well with rehabilitation of the dozer line. gridding located fire hot spots within 300' of the control lines. three crews and the 16 smokejumpers were released at the end of the shift. their demobe is scheduled for 5/24. the fire was controlled at 2100 hrs 5/23.\n\nDaily situation-report values — acres burned, percent contained, and total personnel — for the Eklutna Fire (AK) across 4 reporting days through 1999-05-24: <ts></ts>",
+    "timeseries": [
+      {
+        "values": [
+          300.0,
+          300.0,
+          383.0,
+          383.0
+        ],
+        "unit": "acres",
+        "freq": "1d"
+      },
+      {
+        "values": [
+          85.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "unit": "percent",
+        "freq": "1d"
+      },
+      {
+        "values": [
+          241.0,
+          243.0,
+          255.0,
+          253.0
+        ],
+        "unit": "persons",
+        "freq": "1d"
+      }
+    ],
+    "task_type": "world_knowledge",
+    "text_quality": "real",
+    "series_id": "ics209_1999_AK-STA-901107_EKLUTNA",
+    "dataset": "ics209_wildfire",
+    "source": "https://figshare.com/articles/dataset/All-hazards_dataset_mined_from_the_US_National_Incident_Management_System_1999-2020/19858927",
+    "license": "cc-by-4.0",
+    "text_source": "first_party_official",
+    "alignment": "describes",
+    "domain": "wildfire",
+    "region": "US-AK",
+    "period_start": "1999-05-21",
+    "period_end": "1999-05-24",
+    "timestamps": [
+      "1999-05-21",
+      "1999-05-22",
+      "1999-05-23",
+      "1999-05-24"
+    ],
+    "meta": {
+      "report_dates": [
+        "1999-05-21",
+        "1999-05-22",
+        "1999-05-23",
+        "1999-05-24"
+      ],
+      "incident_id": "1999_AK-STA-901107_EKLUTNA",
+      "incident_name": "Eklutna",
+      "poo_state": "AK",
+      "start_year": "1999",
+      "cause": "Human",
+      "discovery_date": "1999-05-18",
+      "anchor_report_date": "1999-05-24",
+      "final_acres": 383.0,
+      "n_reports": 4,
+      "attribution": "St. Denis et al. 2023, ICS-209-PLUS, CC BY 4.0 (figshare article 19858927)"
+    }
+  },
+  {
+    "text": "land & water, sta higher humidities and cloudcover kept fire activity to a minimum. burnouts planned for 2 allotments were put on hold, but will be left in the plan if conditions permit. two type ii crews (minto & tanana) were released today. one light helicopter was reassigned to fire b466,as well as an aerial firing module. one type 1 crew is slated for release tomorrow, leaving the fire with one type 1 crew and a medium helicopter(523eh) with helitack module.\n\nDaily situation-report values — acres burned, percent contained, and total personnel — for the Marshall Creek Fire (AK) across 3 reporting days through 1999-07-16: <ts></ts>",
+    "timeseries": [
+      {
+        "values": [
+          18000.0,
+          18000.0,
+          18000.0
+        ],
+        "unit": "acres",
+        "freq": "1d"
+      },
+      {
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "unit": "percent",
+        "freq": "1d"
+      },
+      {
+        "values": [
+          88.0,
+          88.0,
+          88.0
+        ],
+        "unit": "persons",
+        "freq": "1d"
+      }
+    ],
+    "task_type": "world_knowledge",
+    "text_quality": "real",
+    "series_id": "ics209_1999_AK-TAD-B378_MARSHALL CREEK",
+    "dataset": "ics209_wildfire",
+    "source": "https://figshare.com/articles/dataset/All-hazards_dataset_mined_from_the_US_National_Incident_Management_System_1999-2020/19858927",
+    "license": "cc-by-4.0",
+    "text_source": "first_party_official",
+    "alignment": "describes",
+    "domain": "wildfire",
+    "region": "US-AK",
+    "period_start": "1999-07-14",
+    "period_end": "1999-07-16",
+    "timestamps": [
+      "1999-07-14",
+      "1999-07-15",
+      "1999-07-16"
+    ],
+    "meta": {
+      "report_dates": [
+        "1999-07-14",
+        "1999-07-15",
+        "1999-07-16"
+      ],
+      "incident_id": "1999_AK-TAD-B378_MARSHALL CREEK",
+      "incident_name": "Marshall Creek",
+      "poo_state": "AK",
+      "start_year": "1999",
+      "cause": "Natural (lightning)",
+      "discovery_date": "1999-07-02",
+      "anchor_report_date": "1999-07-16",
+      "final_acres": 18000.0,
+      "n_reports": 3,
+      "attribution": "St. Denis et al. 2023, ICS-209-PLUS, CC BY 4.0 (figshare article 19858927)"
+    }
+  }
+]
