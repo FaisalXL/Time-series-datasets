@@ -11,7 +11,10 @@
 .idea/
 .vscode/
 
-# Hand-authored example records — use output/ from script runs instead
-**/samples/
+# Built dataset. This repo carries the builders and a dev sample per package, not the
+# corpus — a full build is hundreds of MB and is reproduced by running the scripts.
+# The assembled corpus lives outside the repo (see cpt_corpus/).
+**/output/*.jsonl
+**/output/*.log
 
 **/NOTION_PAGE.md
