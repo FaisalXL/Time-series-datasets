@@ -1,0 +1,6 @@
+pyyaml>=6.0
+pdfplumber>=0.11.0
+# PyYAML reads config.example.yaml.
+# Series + report-link discovery: NOAA Stock SMART's public JSON API (stdlib urllib), no key.
+# Excel responses (.xlsx) parsed with the stdlib (zipfile + xml.etree) -- no openpyxl/pandas.
+# Report PDFs parsed with pdfplumber (pure Python, no poppler/pdftotext CLI needed).

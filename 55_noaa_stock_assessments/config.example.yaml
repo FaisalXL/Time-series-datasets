@@ -1,0 +1,81 @@
+# NOAA Fisheries Stock Assessments (Stock SMART) -> CPT world-knowledge JSONL
+#
+# One record = one (stock, assessment) pair: the assessment's own final report (real PDF,
+# narrative text) paired with that stock's own historical time series (catch, fishing
+# mortality, recruitment, abundance/biomass) through the assessment's last data year.
+# alignment=recites/describes (assessment reports narrate stock status/trends directly off
+# their own tables). text_quality "real".
+#
+# Verified previously (docs/scouting_build_queue.md #7): a fresh stock (Georges Bank Haddock)
+# matched an entire 8-year table cell-for-cell. Re-confirmed 2026-07-25: Acadian redfish's own
+# assessment carries 71 real years (1934-2004) of catch/Fmort/recruitment/biomass -- far
+# deeper than the 24-32-period baseline other packages target.
+#
+# Series + report-file discovery: NOAA's Stock SMART "sis_servlet" / "data-export-servlet" JSON
+#   API (reverse-engineered from the public NOAA-EDAB/stocksmart R package's
+#   data-raw/query_stocksmart_api.R -- no auth, no key). Report PDFs download from
+#   apps-st.fisheries.noaa.gov/sis/docServlet?fileAction=download&fileId=N (linked via the
+#   summary export's XLSX hyperlink relationships, not the visible cell text).
+#
+# License filter (NOT a blanket public-domain claim -- see NOTION_PAGE.md): excludes
+#   Jurisdiction values that are internationally co-published (Atlantic HMS -- ICCAT-linked;
+#   IPHC -- a US/Canada joint commission) or state-level (ASMFC -- an interstate compact, not
+#   a federal NOAA jurisdiction). Verified directly against the live jurisdiction distribution
+#   (3,527 real stock-assessment rows fetched and counted), not assumed.
+#
+# Quick start:
+#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
+#   python scripts/build_cpt_jsonl.py                                  # demo (50)
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build
+
+data:
+  api_base: "https://apps-st.fisheries.noaa.gov/stocksmart/"
+  report_base: "https://apps-st.fisheries.noaa.gov/sis/docServlet"
+
+  # Jurisdictions confirmed domestic-federal (NOAA regional fishery management councils) --
+  # everything else is excluded. Built from the real distribution, not guessed.
+  jurisdiction_allowlist:
+    - "PFMC"
+    - "NPFMC"
+    - "NEFMC"
+    - "GMFMC"
+    - "SAFMC"
+    - "MAFMC"
+    - "WPFMC"
+    - "CFMC"
+    - "SAFMC / GMFMC"
+    - "NEFMC / MAFMC"
+    - "PFMC / WPFMC"
+  # excluded, confirmed real: "Atlantic HMS" (~79 rows, ICCAT-linked international species),
+  # "IPHC" (~10 rows, US/Canada joint international commission),
+  # "ASMFC" (~2 rows, interstate compact, not a federal NOAA jurisdiction).
+
+  min_points: 8          # need a real multi-year series, not a single-point stub
+  min_year: 1800          # sanity floor when trimming leading empty years
+  # Skip reports longer than this -- almost always multi-stock omnibus documents (e.g. the
+  # 362-page "Review of Ocean Salmon Fisheries") where pairing the WHOLE doc with one stock's
+  # series dilutes alignment (most of the text is about other stocks). Prefers tighter,
+  # single/few-stock assessment reports. See NOTION_PAGE.md.
+  max_report_pages: 80
+
+  cache_dir: ".cache"
+  user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+  request_delay_s: 0.3
+  timeout_s: 150
+  max_retries: 3
+  retry_backoff_s: 3.0
+  ts_batch_size: 50       # assessment IDs per TimeSeriesData export call (server-side limit)
+
+  source_url: "https://www.fisheries.noaa.gov/resource/tool-app/stock-smart"
+
+text:
+  min_text_chars: 400
+  # No templated intro: <ts></ts> is appended directly to the real scraped assessment-report
+  # text, nothing generated in between.
+
+output:
+  output_path: output/noaa_stock_assessments_cpt.jsonl
+  report_path: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 50            # demo cap. null = full build
+  indent: null

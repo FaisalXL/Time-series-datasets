@@ -1,0 +1,56 @@
+{
+  "stats": {
+    "entities": 427,
+    "summary_rows": 3527,
+    "after_jurisdiction_filter": 3088,
+    "no_report_link": 348,
+    "report_fetch_failed": 0,
+    "report_too_large": 169,
+    "short_text": 0,
+    "no_timeseries": 10,
+    "short_window": 0,
+    "emitted": 50,
+    "invalid": 0
+  },
+  "config_snapshot": {
+    "data": {
+      "api_base": "https://apps-st.fisheries.noaa.gov/stocksmart/",
+      "report_base": "https://apps-st.fisheries.noaa.gov/sis/docServlet",
+      "jurisdiction_allowlist": [
+        "PFMC",
+        "NPFMC",
+        "NEFMC",
+        "GMFMC",
+        "SAFMC",
+        "MAFMC",
+        "WPFMC",
+        "CFMC",
+        "SAFMC / GMFMC",
+        "NEFMC / MAFMC",
+        "PFMC / WPFMC"
+      ],
+      "min_points": 8,
+      "min_year": 1800,
+      "max_report_pages": 80,
+      "cache_dir": ".cache",
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+      "request_delay_s": 0.3,
+      "timeout_s": 150,
+      "max_retries": 3,
+      "retry_backoff_s": 3.0,
+      "ts_batch_size": 50,
+      "source_url": "https://www.fisheries.noaa.gov/resource/tool-app/stock-smart"
+    },
+    "text": {
+      "min_text_chars": 400
+    },
+    "output": {
+      "output_path": "output/noaa_stock_assessments_cpt.jsonl",
+      "report_path": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 50,
+      "indent": null
+    }
+  },
+  "dry_run": false
+}
