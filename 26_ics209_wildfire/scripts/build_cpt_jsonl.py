@@ -1,22 +1,27 @@
 #!/usr/bin/env python3
 """Build CPT world-knowledge JSONL from ICS-209-PLUS wildfire situation reports.
 
-One record = one WILDFIRE INCIDENT: the richest situation-report narrative for that fire
-(the "anchor" report) paired with the incident's DAILY time series — acres burned,
-percent contained, total personnel — from its first report through the anchor report.
-The narrative *describes* the fire's progression the series quantifies → "describes".
+One record = one SITUATION REPORT: that report's own free-text narrative paired with the
+TRAILING window of daily incident metrics — acres burned, percent contained, total
+personnel — ENDING at that report. The narrative *describes* the fire state the series
+quantifies → "describes".
 
 Source: ICS-209-PLUS (St. Denis et al. 2023, Scientific Data), figshare 19858927,
         CC BY 4.0. Keyless; the sitrep CSV lives inside the wildfire zip. The CSV is
         contiguous by INCIDENT_ID, so we stream and process one incident at a time.
 
-Design:
+Design (trailing window — same pattern as 11_eia_petroleum_weekly):
   - daily points: one report per calendar day (the last of that day), kept only if ALL
     channels are numeric (no imputation); dropped days => explicit gaps in `report_dates`.
-  - anchor: the daily point with the longest combined narrative; the series window is
-    [first .. anchor] so the text and the series' terminal point are the same report.
-  - text_quality "real"; incidents with < min_reports points or a short anchor narrative
-    are dropped (no synthetic fallback).
+  - one record per report that has >= min_window_reports of trailing history and a
+    narrative >= text.min_text_chars. The series is the last `window_reports` reporting
+    days up to and including that report, so the report's OWN metrics are always the
+    series' terminal point (alignment is structural, not incidental).
+  - a fixed trailing window (not the whole arc) keeps every record's series long enough
+    for a patch-based model while avoiding the expanding-window redundancy that copies a
+    fire's full history into every record.
+  - text_quality "real"; nothing is generated — `<ts></ts>` is appended directly to the
+    real situation-report prose (no templated sentence describing the series).
 
 Examples:
   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
@@ -146,9 +151,17 @@ def combine_narrative(row: Dict[str, str], fields: Sequence[str]) -> str:
 
 # --- per-incident record construction --------------------------------------
 
-def build_record(rows: List[Dict[str, str]], cfg) -> Tuple[Optional[dict], Optional[str]]:
+# windows rejected by the physical-validity check, reported in run_report stats
+_dropped: Dict[str, int] = {"acres_drop": 0}
+
+
+def build_records(rows: List[Dict[str, str]], cfg) -> Tuple[List[dict], Optional[str]]:
+    """One record per qualifying situation report (trailing window ending at that report)."""
     d, t = cfg["data"], cfg["text"]
     chans = d["channels"]
+    win_n = int(d["window_reports"])
+    min_win = int(d["min_window_reports"])
+    min_text = int(t.get("min_text_chars", 300))
 
     # 1 report per calendar day (the last of that day), keep only all-channels-present
     by_day: Dict[str, dict] = {}
@@ -167,67 +180,93 @@ def build_record(rows: List[Dict[str, str]], cfg) -> Tuple[Optional[dict], Optio
                            "narr": combine_narrative(r, d["narrative_fields"]), "row": r}
 
     points = [by_day[k] for k in sorted(by_day)]
-    mr = int(d["min_reports"])
-    if len(points) < mr:
-        return None, "few_points"
+    if len(points) < min_win:
+        return [], "few_points"
 
-    # anchor = longest narrative among days that still leave >= min_reports points,
-    # so the window [first .. anchor] is always long enough and ends at the text's report.
-    cand = range(mr - 1, len(points))
-    anchor_i = max(cand, key=lambda i: (len(points[i]["narr"]), i))
-    window = points[:anchor_i + 1]
-    anchor = points[anchor_i]
-    if len(anchor["narr"]) < int(t.get("min_text_chars", 300)):
-        return None, "short_text"
+    # Every report with enough trailing history AND a usable narrative becomes a record.
+    idxs = [i for i in range(len(points))
+            if i + 1 >= min_win and len(points[i]["narr"]) >= min_text]
+    if not idxs:
+        return [], "short_text"
+    cap = d.get("max_records_per_incident")
+    if cap and len(idxs) > int(cap):          # spread the picks evenly across the fire
+        step = len(idxs) / int(cap)
+        idxs = [idxs[int(k * step)] for k in range(int(cap))]
 
-    timeseries = [{"values": [round(p["vals"][c["name"]], 3) for p in window],
-                   "unit": c["unit"], "freq": "1d"} for c in chans]
-    report_dates = [p["date"] for p in window]
+    # Burned area cannot physically shrink. Sub-fire re-scoping inside a "complex" can make
+    # reported ACRES collapse mid-incident (seen as far as -100%), which would teach wrong
+    # dynamics; such windows are dropped. Small decreases (remapping/GIS corrections) are
+    # normal and kept. None disables the check.
+    max_drop = d.get("max_acres_drop_frac")
 
-    a = anchor["row"]
-    name = (a.get("INCIDENT_NAME") or "Unnamed").strip().title()
-    state = (a.get("POO_STATE") or "").strip()
-    yr = (a.get("START_YEAR") or "").strip()
-    yr = yr[:-2] if yr.endswith(".0") else yr
+    def acres_corrupt(window: List[dict]) -> bool:
+        if max_drop is None:
+            return False
+        vals = [p["vals"]["acres_burned"] for p in window]
+        return any(a > 0 and b < a and (a - b) / a > float(max_drop)
+                   for a, b in zip(vals, vals[1:]))
+
     cause_map = {"H": "Human", "L": "Natural (lightning)", "U": "Undetermined", "O": "Other"}
-    cause = (a.get("CAUSE") or "").strip()
-    cause = cause_map.get(cause, cause) or None
-    # No templated ts_intro: <ts></ts> is appended directly to the real situation-report
-    # narrative, nothing is generated.
-    text = f"{anchor['narr']}\n\n<ts></ts>"
+    out: List[dict] = []
+    for i in idxs:
+        window = points[max(0, i + 1 - win_n): i + 1]
+        if len(window) < min_win:
+            continue
+        if acres_corrupt(window):
+            _dropped["acres_drop"] += 1
+            continue
+        report = points[i]
+        timeseries = [{"values": [round(p["vals"][c["name"]], 3) for p in window],
+                       "unit": c["unit"], "freq": "1d"} for c in chans]
+        report_dates = [p["date"] for p in window]
 
-    rec = emit_record(
-        text=text,
-        timeseries=timeseries,
-        timestamps=report_dates,
-        alignment="describes",
-        license="cc-by-4.0",
-        text_source="first_party_official",
-        source=SOURCE_URL,
-        dataset="ics209_wildfire",
-        series_id=f"ics209_{a.get('INCIDENT_ID')}",
-        domain="wildfire",
-        region=f"US-{state}" if state else "US",
-        period_start=report_dates[0],
-        period_end=report_dates[-1],
-        meta={
-            "report_dates": report_dates,
-            "incident_id": a.get("INCIDENT_ID"),
-            "incident_name": name,
-            "poo_state": state,
-            "start_year": yr or None,
-            "cause": cause,
-            "discovery_date": (a.get("DISCOVERY_DATE") or "")[:10] or None,
-            "anchor_report_date": anchor["date"],
-            "final_acres": to_float(a.get("EVENT_FINAL_ACRES")),
-            "n_reports": len(window),
-            "attribution": (
-                "St. Denis et al. 2023, ICS-209-PLUS, CC BY 4.0 "
-                "(figshare article 19858927)"
-            ),
-        },
-    )
-    return rec, None
+        a = report["row"]
+        name = (a.get("INCIDENT_NAME") or "Unnamed").strip().title()
+        state = (a.get("POO_STATE") or "").strip()
+        yr = (a.get("START_YEAR") or "").strip()
+        yr = yr[:-2] if yr.endswith(".0") else yr
+        cause = (a.get("CAUSE") or "").strip()
+        cause = cause_map.get(cause, cause) or None
+        # Nothing generated: <ts></ts> is appended directly to the real narrative.
+        text = f"{report['narr']}\n\n<ts></ts>"
+
+        out.append(emit_record(
+            text=text,
+            timeseries=timeseries,
+            timestamps=report_dates,
+            alignment="describes",
+            license="cc-by-4.0",
+            text_source="first_party_official",
+            source=SOURCE_URL,
+            dataset="ics209_wildfire",
+            series_id=f"ics209_{a.get('INCIDENT_ID')}_{report['date']}",
+            domain="wildfire",
+            region=f"US-{state}" if state else "US",
+            period_start=report_dates[0],
+            period_end=report_dates[-1],
+            meta={
+                "report_dates": report_dates,
+                "incident_id": a.get("INCIDENT_ID"),
+                "incident_name": name,
+                "poo_state": state,
+                "start_year": yr or None,
+                "cause": cause,
+                "discovery_date": (a.get("DISCOVERY_DATE") or "")[:10] or None,
+                # this report IS the series' terminal point (structural alignment)
+                "report_date": report["date"],
+                "report_acres": round(report["vals"]["acres_burned"], 3),
+                "report_pct_contained": round(report["vals"]["percent_contained"], 3),
+                "report_total_personnel": round(report["vals"]["total_personnel"], 3),
+                "final_acres": to_float(a.get("EVENT_FINAL_ACRES")),
+                "n_reports": len(window),
+                "incident_reporting_days": len(points),
+                "attribution": (
+                    "St. Denis et al. 2023, ICS-209-PLUS, CC BY 4.0 "
+                    "(figshare article 19858927)"
+                ),
+            },
+        ))
+    return out, None
 
 
 # Per-record validation now lives in emit_record(): each record is self-checked against
@@ -239,32 +278,37 @@ def build_record(rows: List[Dict[str, str]], cfg) -> Tuple[Optional[dict], Optio
 def run(cfg: Dict[str, Any], dry: bool) -> Dict[str, Any]:
     d, out_cfg = cfg["data"], cfg["output"]
     cache = rp(d["cache_dir"])
-    min_reports = int(d["min_reports"])
     maxrec = out_cfg.get("max_records")
 
     zp = download_cached(d["wildfire_zip_url"], cache / "ics209plus-wildfire.zip",
                          d["user_agent"], int(d["timeout_s"]))
     z = zipfile.ZipFile(zp)
 
-    stats = {"incidents": 0, "emitted": 0, "few_points": 0,
-             "short_text": 0, "invalid": 0}
+    stats = {"incidents": 0, "incidents_used": 0, "emitted": 0, "few_points": 0,
+             "short_text": 0, "acres_drop": 0, "invalid": 0}
     records: List[dict] = []
+    _dropped["acres_drop"] = 0
 
     def flush(rows: List[Dict[str, str]]) -> bool:
         """Process one incident's rows; return True if we should stop (hit max)."""
         stats["incidents"] += 1
         try:
-            rec, err = build_record(rows, cfg)
+            recs, err = build_records(rows, cfg)
         except ValueError:
-            # emit_record rejected the assembled record (strict schema violation).
+            # emit_record rejected an assembled record (strict schema violation).
             stats["invalid"] += 1
             return False
-        if rec is None:
-            stats[err] += 1
+        if not recs:
+            if err:            # None => every window was rejected by a validity check
+                stats[err] += 1
             return False
-        records.append(rec)
-        stats["emitted"] += 1
-        return maxrec is not None and len(records) >= int(maxrec)
+        stats["incidents_used"] += 1
+        for rec in recs:
+            records.append(rec)
+            stats["emitted"] += 1
+            if maxrec is not None and len(records) >= int(maxrec):
+                return True
+        return False
 
     with z.open(d["sitreps_csv_name"]) as fh:
         rd = csv.DictReader(io.TextIOWrapper(fh, encoding="utf-8", errors="replace"))
@@ -282,9 +326,13 @@ def run(cfg: Dict[str, Any], dry: bool) -> Dict[str, Any]:
         if buf and (maxrec is None or len(records) < int(maxrec)):
             flush(buf)
 
+    stats["acres_drop"] = _dropped["acres_drop"]
     report = {
         "wildfire_zip_url": d["wildfire_zip_url"],
-        "min_reports": min_reports,
+        "window_reports": int(d["window_reports"]),
+        "max_acres_drop_frac": d.get("max_acres_drop_frac"),
+        "min_window_reports": int(d["min_window_reports"]),
+        "max_records_per_incident": d.get("max_records_per_incident"),
         "channels": [c["name"] for c in d["channels"]],
         "min_text_chars": cfg["text"].get("min_text_chars"),
         "stats": stats,
@@ -322,8 +370,8 @@ def main() -> None:
     cfg = load_config(args.config, args.set)
     rep = run(cfg, dry=args.dry_run)
     s = rep["stats"]
-    print(f"\nDone: {s['emitted']} records (incidents {s['incidents']}, "
-          f"few_points={s['few_points']}, short_text={s['short_text']}, "
+    print(f"\nDone: {s['emitted']} records from {s['incidents_used']}/{s['incidents']} "
+          f"incidents (few_points={s['few_points']}, short_text={s['short_text']}, "
           f"invalid={s['invalid']}).", file=sys.stderr)
 
 

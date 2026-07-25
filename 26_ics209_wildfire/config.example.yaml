@@ -1,10 +1,10 @@
 # ICS-209-PLUS Wildfire Situation Reports → CPT world-knowledge JSONL
 #
-# One record = one WILDFIRE INCIDENT: the richest situation-report narrative for that
-# fire (the "anchor" report — significant events, current threat, projected activity,
-# weather, planned actions) paired with the incident's DAILY time series (acres burned,
-# percent contained, total personnel) from its first report through the anchor report.
-# The narrative *describes* the fire's progression the series quantifies → "describes".
+# One record = one SITUATION REPORT: that report's own narrative (significant events,
+# current threat, projected activity, weather, planned actions) paired with the TRAILING
+# window of the incident's DAILY time series (acres burned, percent contained, total
+# personnel) ENDING at that report. The narrative *describes* the fire state the series
+# quantifies → "describes"; the report's own metrics are the series' terminal point.
 #
 # License: ICS-209-PLUS (St. Denis et al. 2023) is CC BY 4.0 — open, attribution only.
 #
@@ -37,7 +37,19 @@ data:
     - {col: "PCT_CONTAINED_COMPLETED", name: "percent_contained", unit: "percent"}
     - {col: "TOTAL_PERSONNEL", name: "total_personnel", unit: "persons"}
 
-  min_reports: 3            # min daily points (through the anchor) or the incident is dropped
+  # Trailing window (same pattern as 11_eia_petroleum_weekly). One record per situation
+  # report: the series is the last `window_reports` reporting days ENDING at that report,
+  # so the report's own metrics are always the series' terminal point. A report needs at
+  # least `min_window_reports` of trailing history to be emitted.
+  window_reports: 32          # trailing window length in reporting days (= 1 patch @ 32)
+  min_window_reports: 21      # a report with fewer trailing points is skipped
+  max_records_per_incident: null   # null = uncapped; N spreads N picks across the fire
+
+  # Burned area cannot physically shrink. Inside a "complex", sub-fire re-scoping can make
+  # reported ACRES collapse mid-incident (observed down to -100%), which would teach wrong
+  # dynamics — those windows are dropped. Small decreases (remapping/GIS corrections) are
+  # normal and kept. null disables the check.
+  max_acres_drop_frac: 0.25
   cache_dir: ".cache"
   user_agent: "CPT-dataset-research faisal@usc.edu"
   timeout_s: 180
