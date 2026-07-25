@@ -1,20 +1,23 @@
 {
   "stats": {
-    "attempted": 366,
-    "emitted": 364,
-    "skip_no_sgas": 2,
+    "attempted": 8401,
+    "emitted": 8385,
+    "skip_no_sgas": 14,
     "skip_text_short": 0,
     "skip_no_dgd": 0,
     "skip_no_dsd": 0,
-    "skip_few_ts": 0
+    "skip_few_ts": 0,
+    "skip_invalid": 0,
+    "skip_duplicate_obs": 2
   },
   "config": {
     "data": {
       "cache_dir": ".cache",
-      "start_date": "2000-01-01",
-      "end_date": "2001-01-01",
+      "start_date": "1996-01-01",
+      "end_date": "2019-01-01",
       "request_timeout": 30,
-      "retry_delay": 1.0
+      "retry_delay": 1.0,
+      "window_days": 32
     },
     "filters": {
       "require_dgd": true,
@@ -22,21 +25,60 @@
       "min_text_chars": 80,
       "min_ts_channels": 3
     },
-    "text": {
-      "ts_intro_sentence": "Geomagnetic K-indices (3-hourly intervals), daily A-indices, and solar measurements for this observation day: <ts></ts>"
-    },
+    "text": {},
     "output": {
       "output_path": "output/noaa_swpc_daily_cpt.jsonl",
       "report_path": "output/run_report_daily.json",
-      "samples_path": "samples/example_daily.jsonl",
       "max_records": null,
       "indent": null
     }
   },
-  "dgd_rows_loaded": 1096,
-  "dsd_rows_loaded": 1096,
+  "dgd_rows_loaded": 9131,
+  "dsd_rows_loaded": 9131,
   "date_range": {
-    "start": "2000-01-01",
-    "end": "2001-01-01"
-  }
+    "start": "1996-01-01",
+    "end": "2019-01-01"
+  },
+  "window_days": 32,
+  "channels_per_record": {
+    "3": 12,
+    "5": 10,
+    "6": 22,
+    "7": 34,
+    "8": 84,
+    "9": 183,
+    "12": 135,
+    "13": 135,
+    "14": 291,
+    "15": 448,
+    "16": 3325,
+    "17": 3706
+  },
+  "terminal_recite": {
+    "a_index_fredericksburg": {
+      "stated_in_text": 7725,
+      "match": 4314,
+      "drift": 3411,
+      "pct_match": 55.84
+    },
+    "a_index_planetary": {
+      "stated_in_text": 8281,
+      "match": 6286,
+      "drift": 1995,
+      "pct_match": 75.91
+    },
+    "radio_flux_10_7cm_sfu": {
+      "stated_in_text": 8327,
+      "match": 8301,
+      "drift": 26,
+      "pct_match": 99.69
+    },
+    "sunspot_number": {
+      "stated_in_text": 8368,
+      "match": 8272,
+      "drift": 96,
+      "pct_match": 98.85
+    }
+  },
+  "validation_errors": []
 }

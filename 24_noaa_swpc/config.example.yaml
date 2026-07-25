@@ -15,9 +15,18 @@ data:
   cache_dir: ".cache"
 
   # Date range for SGAS issue dates (end is exclusive).
-  # obs_date = issue_date - 1 day, so DGD/DSD for (start_date - 1 year) are also fetched.
-  start_date: "2000-01-01"
-  end_date:   "2001-01-01"
+  # obs_date = issue_date - 1 day and the series reaches window_days further back, so
+  # DGD/DSD for the preceding year are also fetched.
+  #
+  # Range is bounded by the TS side, not the text: SGAS runs 1996→present, but the
+  # NGDC annual DGD/DSD index files stop at 2018 (2019+ return 404), so there is no
+  # series to pair after that. Widen end_date only if a newer index source is wired up.
+  start_date: "1996-01-01"
+  end_date:   "2019-01-01"
+
+  # Trailing window length in days. The SGAS observation day is always the terminal
+  # point; 32 targets a patch-32 model.
+  window_days: 32
 
   request_timeout: 30   # seconds per HTTP request
   retry_delay: 1.0      # seconds between retries (backs off × attempt)
@@ -36,9 +45,9 @@ filters:
   min_ts_channels: 3
 
 text:
-  ts_intro_sentence: >-
-    Geomagnetic K-indices (3-hourly intervals), daily A-indices,
-    and solar measurements for this observation day: <ts></ts>
+  # No templated ts_intro: <ts></ts> is appended directly to the real SGAS prose,
+  # nothing is generated. (An earlier build appended a synthesized sentence
+  # introducing the series to 100% of records; removed 2026-07-25.)
 
 output:
   output_path:  "output/noaa_swpc_daily_cpt.jsonl"

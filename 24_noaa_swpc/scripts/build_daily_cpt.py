@@ -20,6 +20,7 @@ import time
 import copy
 import logging
 import argparse
+from collections import Counter
 from pathlib import Path
 from datetime import date, timedelta
 from typing import Optional
@@ -45,10 +46,15 @@ BASE_DSD  = "https://www.ngdc.noaa.gov/stp/space-weather/swpc-products/annual_re
 DEFAULT_CFG = {
     "data": {
         "cache_dir": ".cache",
-        "start_date": "2000-01-01",
-        "end_date":   "2001-01-01",
+        # Bounded by the TS side: SGAS text runs 1996→present, but the NGDC annual
+        # DGD/DSD index files stop at 2018 (2019+ are 404), so there is no series to
+        # pair after that.
+        "start_date": "1996-01-01",
+        "end_date":   "2019-01-01",
         "request_timeout": 30,
         "retry_delay": 1.0,
+        # Trailing window length in days; 32 targets a patch-32 model.
+        "window_days": 32,
     },
     "filters": {
         "require_dgd": True,
@@ -56,12 +62,7 @@ DEFAULT_CFG = {
         "min_text_chars": 80,
         "min_ts_channels": 3,
     },
-    "text": {
-        "ts_intro_sentence": (
-            "Geomagnetic K-indices (3-hourly intervals), daily A-indices, "
-            "and solar measurements for this observation day: <ts></ts>"
-        ),
-    },
+    "text": {},
     "output": {
         "output_path":  "output/noaa_swpc_daily_cpt.jsonl",
         "report_path":  "output/run_report_daily.json",
@@ -123,40 +124,82 @@ def fetch(url: str, cache_path: Path, timeout: int, session: requests.Session,
 # ─── DGD parsing ──────────────────────────────────────────────────────────
 
 def _int_or_none(s: str, missing: int = -1) -> Optional[int]:
+    if s == "*":                 # the archive's other missing marker
+        return None
     try:
         v = int(s)
         return None if v == missing else v
     except ValueError:
         return None
 
-_INT_TOKEN_RE = re.compile(r"-?\d+")
+_INT_TOKEN_RE = re.compile(r"\*|-?\d+")
+
+# The NGDC archive carries two layouts. 1997+ uses 'YYYY MM DD' with space-separated
+# indices; 1996 uses 'DD Mon YY' with hyphen-separated K-indices ('2-0-0-1-2-2-2-2').
+# Both mark missing values as either -1 or '*'.
+_DGD_NEW_DATE_RE = re.compile(r"^(\d{4})\s+(\d{1,2})\s+(\d{1,2})\s+(.*)$")
+_DGD_OLD_DATE_RE = re.compile(r"^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{2})\s+(.*)$")
+
+
+def split_index_date(line: str) -> tuple[Optional[str], Optional[str], bool]:
+    """Split a DGD/DSD data line into (iso_date, remainder, is_old_layout)."""
+    m = _DGD_NEW_DATE_RE.match(line)
+    if m:
+        return (f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}",
+                m.group(4), False)
+    m = _DGD_OLD_DATE_RE.match(line)
+    if m:
+        mon = _MONTHS.get(m.group(2).lower())
+        if mon:
+            yy = int(m.group(3))
+            year = 1900 + yy if yy >= 50 else 2000 + yy
+            return f"{year}-{mon:02d}-{int(m.group(1)):02d}", m.group(4), True
+    return None, None, False
+
+
+def _dgd_tokens(rest: str, old_layout: bool) -> list[str]:
+    """Tokenise the index columns of a DGD line under either layout."""
+    if old_layout:
+        out: list[str] = []
+        for field in rest.split():
+            # '2-0-0-1-2-2-2-2' is eight K values, not a negative number.
+            out.extend(field.split("-") if not field.startswith("-") else [field])
+        return out
+    # 1997+ can concatenate -1 markers ('-1-1-1-1'), which split() would fuse.
+    return _INT_TOKEN_RE.findall(rest)
+
 
 def parse_dgd_file(text: str) -> dict:
     """
     Returns {date_str → {fr_a, fr_k, co_a, co_k, pl_a, pl_k}}.
     date_str format: 'YYYY-MM-DD'.
-    K-index lists contain None for missing values (-1 in source).
+    A-index and K-index values are None where the source has -1 or '*'.
 
-    Uses regex tokenisation instead of split() because some DGD lines have
-    -1 values concatenated directly to adjacent digits (e.g. '3 2-1 2').
+    Handles both archive layouts and treats '*' as a missing marker. An earlier
+    version tokenised with a bare int regex, which could not see '*' at all: a row
+    with any starred station fell under the token-count floor and was dropped
+    whole, losing the two stations that *were* observed (all of 1996, 20 days of
+    1997).
     """
     records = {}
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith(("#", ":")):
             continue
-        parts = _INT_TOKEN_RE.findall(line)
-        if len(parts) < 30:
+        date_str, rest, old = split_index_date(line)
+        if date_str is None:
+            continue
+        parts = _dgd_tokens(rest, old)
+        if len(parts) < 27:              # 3 stations x (1 A-index + 8 K-indices)
             continue
         try:
-            date_str = f"{parts[0]}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
             records[date_str] = {
-                "fr_a": _int_or_none(parts[3]),
-                "fr_k": [_int_or_none(parts[4 + i]) for i in range(8)],
-                "co_a": _int_or_none(parts[12]),
-                "co_k": [_int_or_none(parts[13 + i]) for i in range(8)],
-                "pl_a": _int_or_none(parts[21]),
-                "pl_k": [_int_or_none(parts[22 + i]) for i in range(8)],
+                "fr_a": _int_or_none(parts[0]),
+                "fr_k": [_int_or_none(parts[1 + i]) for i in range(8)],
+                "co_a": _int_or_none(parts[9]),
+                "co_k": [_int_or_none(parts[10 + i]) for i in range(8)],
+                "pl_a": _int_or_none(parts[18]),
+                "pl_k": [_int_or_none(parts[19 + i]) for i in range(8)],
             }
         except (IndexError, ValueError):
             continue
@@ -200,32 +243,42 @@ def parse_dsd_file(text: str) -> dict:
     Returns {date_str → {radio_flux, ssn, sunspot_area, new_regions,
                           xray_bkgd_wm2, c_flares, m_flares, x_flares,
                           s_flares, o1_flares, o2_flares, o3_flares}}.
-    Stanford Mean Field (column 7) is intentionally skipped (systematic -999 gaps).
+    Stanford Mean Field is intentionally skipped (systematic -999 gaps).
+
+    Handles both archive layouts: 1997+ carries 13 index columns, 1996 carries only
+    9 (no optical flare counts), and 1996 dates its rows 'DD Mon YY'. Missing values
+    are marked -1 or '*'.
     """
     records = {}
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith(("#", ":")):
             continue
-        parts = line.split()
-        if len(parts) < 16:
+        date_str, rest, _old = split_index_date(line)
+        if date_str is None:
             continue
+        p = rest.split()
+        if len(p) < 9:
+            continue
+
+        def col(i: int):
+            return p[i] if i < len(p) else "-1"
+
         try:
-            date_str = f"{parts[0]}-{parts[1]}-{parts[2]}"
             records[date_str] = {
-                "radio_flux":    _int_or_none(parts[3]),
-                "ssn":           _int_or_none(parts[4]),
-                "sunspot_area":  _int_or_none(parts[5]),
-                "new_regions":   _int_or_none(parts[6]),
-                # parts[7] = Stanford field — skipped
-                "xray_bkgd_wm2": _parse_xray_bkgd(parts[8]),
-                "c_flares":      _int_or_none(parts[9]),
-                "m_flares":      _int_or_none(parts[10]),
-                "x_flares":      _int_or_none(parts[11]),
-                "s_flares":      _int_or_none(parts[12]),
-                "o1_flares":     _int_or_none(parts[13]),
-                "o2_flares":     _int_or_none(parts[14]),
-                "o3_flares":     _int_or_none(parts[15]),
+                "radio_flux":    _int_or_none(col(0)),
+                "ssn":           _int_or_none(col(1)),
+                "sunspot_area":  _int_or_none(col(2)),
+                "new_regions":   _int_or_none(col(3)),
+                # col(4) = Stanford mean field — skipped (systematic -999 gaps)
+                "xray_bkgd_wm2": _parse_xray_bkgd(col(5)),
+                "c_flares":      _int_or_none(col(6)),
+                "m_flares":      _int_or_none(col(7)),
+                "x_flares":      _int_or_none(col(8)),
+                "s_flares":      _int_or_none(col(9)),
+                "o1_flares":     _int_or_none(col(10)),
+                "o2_flares":     _int_or_none(col(11)),
+                "o3_flares":     _int_or_none(col(12)),
             }
         except (IndexError, ValueError):
             continue
@@ -273,68 +326,127 @@ def get_obs_date(sgas_text: str, issue_date: date) -> date:
                 pass
     return issue_date - timedelta(days=1)
 
+_TITLE_RE = re.compile(r"^JOINT\s+USAF/NOAA", re.IGNORECASE)
+
+
 def extract_sgas_text(sgas_text: str, obs_date: date) -> Optional[str]:
-    """Strip header lines; return sections A–F prefixed with date context."""
+    """Return the report's own text: its real title block through section F.
+
+    Starts at the source's own 'JOINT USAF/NOAA ...' title line, which is followed by
+    the real 'SGAS NUMBER ... ISSUED AT ...' and 'COMPILED FROM DATA RECEIVED AT SWO ON
+    ...' datelines, so the record carries the report's authentic header rather than a
+    dateline we synthesized. Only the machine-readable `:Product:`/`#` preamble is
+    dropped. Falls back to section A when a file has no title line.
+    """
     lines = sgas_text.splitlines()
     start = None
     for i, line in enumerate(lines):
-        if _SECTION_A_RE.match(line.strip()):
+        if _TITLE_RE.match(line.strip()):
             start = i
             break
     if start is None:
+        for i, line in enumerate(lines):
+            if _SECTION_A_RE.match(line.strip()):
+                start = i
+                break
+    if start is None:
         return None
-    body = "\n".join(lines[start:]).strip()
-    obs_str = obs_date.strftime("%B %-d, %Y")
-    return f"Joint USAF/NOAA Solar and Geophysical Activity Summary for {obs_str}:\n{body}"
+    return "\n".join(lines[start:]).strip()
 
 # ─── TS builder ───────────────────────────────────────────────────────────
 
-def build_timeseries(dgd: Optional[dict], dsd: Optional[dict]) -> list:
+# Daily channels the window is assembled from: (source, key, unit).
+# Everything is daily, so a window is uniformly `1d` — the old build mixed a single
+# 8-point 3-hourly K-index channel with 15 one-value channels, which is a scalar
+# snapshot rather than a series.
+WINDOW_CHANNELS = [
+    ("dgd", "pl_a",         "a_index_planetary"),
+    ("dgd", "fr_a",         "a_index_fredericksburg"),
+    ("dgd", "co_a",         "a_index_college"),
+    ("dgd", "pl_k_max",     "k_index_planetary_daily_max"),
+    ("dgd", "fr_k_max",     "k_index_fredericksburg_daily_max"),
+    ("dsd", "radio_flux",   "radio_flux_10_7cm_sfu"),
+    ("dsd", "ssn",          "sunspot_number"),
+    ("dsd", "sunspot_area", "sunspot_area_millionths_hemis"),
+    ("dsd", "new_regions",  "new_sunspot_regions"),
+    ("dsd", "xray_bkgd_wm2", "xray_background_flux_wm2"),
+    ("dsd", "c_flares",     "c_flare_count"),
+    ("dsd", "m_flares",     "m_flare_count"),
+    ("dsd", "x_flares",     "x_flare_count"),
+    ("dsd", "s_flares",     "optical_s_flare_count"),
+    ("dsd", "o1_flares",    "optical_1_flare_count"),
+    ("dsd", "o2_flares",    "optical_2_flare_count"),
+    ("dsd", "o3_flares",    "optical_3_flare_count"),
+]
+
+
+def daily_value(dgd_data: dict, dsd_data: dict, src: str, key: str,
+                day: str) -> Optional[float]:
+    """One channel's value on one day, or None when the source has no usable number."""
+    row = (dgd_data if src == "dgd" else dsd_data).get(day)
+    if row is None:
+        return None
+    if key.endswith("_k_max"):
+        ks = row.get(key[:-4])          # 'pl_k_max' -> 'pl_k'
+        if not ks or any(v is None for v in ks):
+            return None
+        return max(ks)
+    return row.get(key)
+
+
+def build_window_timeseries(dgd_data: dict, dsd_data: dict, obs_date: date,
+                            window_days: int) -> tuple[list, list[str]]:
+    """Trailing `window_days` of daily indices ENDING at obs_date.
+
+    A channel is emitted only if it is present on EVERY day of the window — no
+    imputation, so a partially-observed channel is dropped rather than filled. The
+    observation day the SGAS text reports on is always the series' terminal point,
+    which is what makes the alignment structural.
+    """
+    days = [(obs_date - timedelta(days=window_days - 1 - i)).isoformat()
+            for i in range(window_days)]
     ts = []
+    for src, key, unit in WINDOW_CHANNELS:
+        vals = [daily_value(dgd_data, dsd_data, src, key, d) for d in days]
+        if any(v is None for v in vals):
+            continue
+        ts.append({"values": vals, "unit": unit, "freq": "1d"})
+    return ts, days
 
-    if dgd:
-        for k_key, unit in [
-            ("fr_k", "kp_fredericksburg"),
-            ("co_k", "kp_college"),
-            ("pl_k", "kp_planetary"),
-        ]:
-            vals = dgd[k_key]
-            if vals and all(v is not None for v in vals):
-                ts.append({"values": vals, "unit": unit, "freq": "3h"})
 
-        for a_key, unit in [
-            ("fr_a", "a_index_fredericksburg"),
-            ("co_a", "a_index_college"),
-            ("pl_a", "a_index_planetary"),
-        ]:
-            v = dgd[a_key]
-            if v is not None:
-                ts.append({"values": [v], "unit": unit, "freq": "1d"})
+# ─── Terminal-point alignment check ───────────────────────────────────────
+#
+# SGAS section E recites that day's own indices, e.g.
+#   10 CM 181  SSN 141  AFR/AP 026/023   X-RAY BACKGROUND B8.7
+# Those are the report's REAL-TIME PRELIMINARY values while DGD/DSD carry the later
+# final ones, so they agree often but not always. We measure the agreement rather
+# than assume it, and report it per record.
 
-    if dsd:
-        scalar_channels = [
-            ("radio_flux",   "radio_flux_10_7cm_sfu"),
-            ("ssn",          "sunspot_number"),
-            ("sunspot_area", "sunspot_area_millionths_hemis"),
-            ("new_regions",  "new_sunspot_regions"),
-            ("c_flares",     "c_flare_count"),
-            ("m_flares",     "m_flare_count"),
-            ("x_flares",     "x_flare_count"),
-            ("s_flares",     "optical_s_flare_count"),
-            ("o1_flares",    "optical_1_flare_count"),
-            ("o2_flares",    "optical_2_flare_count"),
-            ("o3_flares",    "optical_3_flare_count"),
-        ]
-        for key, unit in scalar_channels:
-            v = dsd.get(key)
-            if v is not None:
-                ts.append({"values": [v], "unit": unit, "freq": "1d"})
+_E_10CM = re.compile(r"\b10\s*CM\s+(\d+)", re.IGNORECASE)
+_E_SSN = re.compile(r"\bSSN\s+(\d+)", re.IGNORECASE)
+_E_AFRAP = re.compile(r"\bAFR/AP\s+(\d+)\s*/\s*(\d+)", re.IGNORECASE)
 
-        xb = dsd.get("xray_bkgd_wm2")
-        if xb is not None:
-            ts.append({"values": [xb], "unit": "xray_background_flux_wm2", "freq": "1d"})
 
-    return ts
+def terminal_recite_check(text: str, ts: list) -> dict:
+    """Compare the values SGAS states for the observation day to the series terminal."""
+    term = {c["unit"]: c["values"][-1] for c in ts}
+    out: dict = {}
+
+    def cmp(unit: str, stated: Optional[float]) -> None:
+        if stated is None or unit not in term:
+            return
+        out[unit] = {"stated": stated, "series": term[unit],
+                     "match": abs(float(stated) - float(term[unit])) < 0.5}
+
+    m = _E_10CM.search(text)
+    cmp("radio_flux_10_7cm_sfu", int(m.group(1)) if m else None)
+    m = _E_SSN.search(text)
+    cmp("sunspot_number", int(m.group(1)) if m else None)
+    m = _E_AFRAP.search(text)
+    if m:
+        cmp("a_index_fredericksburg", int(m.group(1)))
+        cmp("a_index_planetary", int(m.group(2)))
+    return out
 
 # ─── Main pipeline ────────────────────────────────────────────────────────
 
@@ -350,7 +462,7 @@ def run_pipeline(cfg: dict) -> None:
     timeout    = dcfg["request_timeout"]
     retry_del  = dcfg["retry_delay"]
     max_recs   = ocfg["max_records"]  # None = unlimited
-    ts_intro   = tcfg["ts_intro_sentence"]
+    window_days = int(dcfg.get("window_days", 32))
 
     out_path     = Path(ocfg["output_path"])
     report_path  = Path(ocfg["report_path"])
@@ -361,9 +473,10 @@ def run_pipeline(cfg: dict) -> None:
     session = requests.Session()
     session.headers["User-Agent"] = "CPT-dataset-builder/1.0 (research)"
 
-    # Load DGD and DSD for all years we might need.
-    # obs_date = issue_date - 1, so earliest obs is start_date - 1 day.
-    obs_start = start_date - timedelta(days=1)
+    # Load DGD and DSD for all years we might need. obs_date = issue_date - 1, and the
+    # series reaches a further `window_days - 1` days back, so a January observation
+    # needs the previous year's indices too.
+    obs_start = start_date - timedelta(days=window_days)
     years_needed = range(obs_start.year, end_date.year + 1)
 
     log.info("Loading DGD for years %s–%s …", years_needed.start, years_needed.stop - 1)
@@ -383,8 +496,11 @@ def run_pipeline(cfg: dict) -> None:
     # Iterate issue dates and emit records.
     stats = {"attempted": 0, "emitted": 0, "skip_no_sgas": 0,
              "skip_text_short": 0, "skip_no_dgd": 0, "skip_no_dsd": 0,
-             "skip_few_ts": 0, "skip_invalid": 0}
+             "skip_few_ts": 0, "skip_invalid": 0, "skip_duplicate_obs": 0}
     validation_errors: list[str] = []
+    seen_obs: set[str] = set()
+    recite_stats: Counter = Counter()
+    channel_hist: Counter = Counter()
 
     out_f = out_path.open("w")
 
@@ -407,6 +523,15 @@ def run_pipeline(cfg: dict) -> None:
         obs_date = get_obs_date(raw, issue_date)
         obs_str  = obs_date.isoformat()
 
+        # Occasionally two consecutive SGAS issues report the same observation day
+        # (e.g. 2004-10-28 and 2004-10-29 both compiled from 27 Oct data). The window
+        # is keyed on obs_date, so the second would duplicate the first's series under
+        # a duplicate series_id. Keep the earliest issue.
+        if obs_str in seen_obs:
+            stats["skip_duplicate_obs"] += 1
+            issue_date += timedelta(days=1)
+            continue
+
         text_body = extract_sgas_text(raw, obs_date)
         if not text_body or len(text_body) < fcfg["min_text_chars"]:
             stats["skip_text_short"] += 1
@@ -425,21 +550,28 @@ def run_pipeline(cfg: dict) -> None:
             issue_date += timedelta(days=1)
             continue
 
-        ts = build_timeseries(dgd, dsd)
+        ts, window_days_list = build_window_timeseries(
+            dgd_data, dsd_data, obs_date, window_days
+        )
         if len(ts) < fcfg["min_ts_channels"]:
             stats["skip_few_ts"] += 1
             issue_date += timedelta(days=1)
             continue
 
-        full_text = text_body + "\n" + ts_intro
+        # Nothing generated: <ts></ts> is appended directly to the real SGAS prose.
+        full_text = text_body + "\n\n<ts></ts>"
+        recite = terminal_recite_check(text_body, ts)
+        for unit, r in recite.items():
+            recite_stats[f"{unit}:{'match' if r['match'] else 'drift'}"] += 1
 
-        # SGAS text is a first-party official narrative of the day's space-weather
-        # episode (energetic events, geomagnetic/solar activity summary); it does not
-        # literally recite the Kp/A-index/flux values that form the series → "describes".
+        # The SGAS report narrates the observation day that terminates the window and
+        # recites that day's own indices in section E, but says nothing about the 31
+        # preceding days the series also carries → "describes", not "recites".
         try:
             record = emit_record(
                 text=full_text,
                 timeseries=ts,
+                timestamps=window_days_list,
                 alignment="describes",
                 license="public-domain-us-gov",
                 text_source="first_party_official",
@@ -448,12 +580,16 @@ def run_pipeline(cfg: dict) -> None:
                 series_id=f"noaa_swpc:daily:{obs_str}",
                 domain="space_weather",
                 region="global",
-                period_start=obs_str,
+                period_start=window_days_list[0],
                 period_end=obs_str,
                 meta={
                     "obs_date":      obs_str,
                     "sgas_issue":    issue_date.isoformat(),
                     "n_ts_channels": len(ts),
+                    "window_days":   len(window_days_list),
+                    # the observation day IS the series' terminal point
+                    "terminal_date": window_days_list[-1],
+                    "terminal_recite": recite or None,
                 },
             )
         except ValueError as exc:
@@ -465,6 +601,8 @@ def run_pipeline(cfg: dict) -> None:
         indent = ocfg["indent"]
         line = json.dumps(record, indent=indent, ensure_ascii=False)
         out_f.write(line + "\n")
+        seen_obs.add(obs_str)
+        channel_hist[len(ts)] += 1
         stats["emitted"] += 1
         if stats["emitted"] % 10 == 0:
             log.info("  emitted %d records …", stats["emitted"])
@@ -473,12 +611,26 @@ def run_pipeline(cfg: dict) -> None:
 
     out_f.close()
 
+    # Terminal-point agreement: SGAS section E states the observation day's own
+    # real-time preliminary indices; DGD/DSD carry the later final values.
+    recite_summary = {}
+    for unit in sorted({k.rsplit(":", 1)[0] for k in recite_stats}):
+        ok, drift = recite_stats[f"{unit}:match"], recite_stats[f"{unit}:drift"]
+        if ok + drift:
+            recite_summary[unit] = {
+                "stated_in_text": ok + drift, "match": ok, "drift": drift,
+                "pct_match": round(100.0 * ok / (ok + drift), 2),
+            }
+
     report = {
         "stats": stats,
         "config": cfg,
         "dgd_rows_loaded": len(dgd_data),
         "dsd_rows_loaded": len(dsd_data),
         "date_range": {"start": dcfg["start_date"], "end": dcfg["end_date"]},
+        "window_days": window_days,
+        "channels_per_record": {str(k): v for k, v in sorted(channel_hist.items())},
+        "terminal_recite": recite_summary,
         "validation_errors": validation_errors[:20],
     }
     report_path.write_text(json.dumps(report, indent=2))

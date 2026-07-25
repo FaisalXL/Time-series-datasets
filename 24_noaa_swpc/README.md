@@ -1,70 +1,134 @@
 # NOAA SWPC → CPT (daily)
 
-> **Status: Demo** — 50 sample records. Full build: ~10,500–10,800 records (1996–2026).
+> **Status: Built full-scale** — **8,385 records, 1995-12→2018, 8,385/8,385 strict.**
 
-**What it is:** Daily space weather activity reports paired with geomagnetic and solar measurements. One record = **one observation day**. Window size: **1 day** (sub-daily K-indices are 3-hourly, 8 values/day). Text source is the official NOAA/USAF Solar and Geophysical Activity Summary (SGAS). Time series come from two companion products: Daily Geomagnetic Data (DGD) and Daily Solar Data (DSD).
+**What it is:** Daily space-weather activity reports paired with geomagnetic and solar
+measurements. One record = **one SGAS report**: that report's own prose + the **trailing
+32 days** of daily indices **ending on the observation day it reports**. Text is the
+official NOAA/USAF Solar and Geophysical Activity Summary (SGAS); the series come from the
+companion Daily Geomagnetic Data (DGD) and Daily Solar Data (DSD) products.
 
-**Scale:** ~10,800 records from 1996-01-01 through 2026. Full range set via `data.start_date` / `data.end_date` in config.
+**Scale:** **8,385 records** across 24 calendar years. Up to 17 channels (median 16),
+always 32 daily steps.
 
-**Record shape:**
+#### Why the trailing window
+
+The earlier build made each record **one observation day**: a single 8-point 3-hourly
+K-index channel alongside ~15 channels holding *one value each*. That is a scalar snapshot,
+not a series, and unusable for a patch-32 model. Anchoring a 32-day daily window to the
+report's own observation day (the `11`/`25`/`26` pattern) gives **100% 32-step** series on a
+uniform `1d` cadence, with the reported day always the terminal point.
+
+#### Two fixes made during this build
+
+- **Generated text removed.** The old build appended a synthesized sentence
+  (`"Geomagnetic K-indices (3-hourly intervals) … for this observation day: <ts></ts>"`)
+  to **100% of records** — the same defect that made `26_ics209_wildfire`'s first bank
+  unusable. `<ts></ts>` is now appended directly to the real SGAS prose, and the record
+  keeps the report's own `JOINT USAF/NOAA …` / `SGAS NUMBER … ISSUED AT …` header instead
+  of a dateline the script wrote.
+- **Old-layout archive recovered.** The NGDC index files use two layouts. The parser only
+  understood the 1997+ one (`YYYY MM DD`, space-separated) and could not see the `*`
+  missing-marker at all, so any row with a starred station fell under its token-count floor
+  and was dropped whole. That silently lost **all of 1996** and 20 days of 1997
+  (`skip_no_dgd` 379 → 0, +394 records).
+
+#### Alignment — `describes`, with a measured terminal point
+
+SGAS section E recites the observation day's own indices
+(`10 CM 130  SSN 091  AFR/AP 020/027  X-RAY BACKGROUND B4.4`), so the series' **terminal
+point is verifiable against the text**. The report says nothing about the preceding 31 days,
+so the tier stays `describes`. Measured agreement across the build (`terminal_recite` in the
+run report, also per-record in `meta`):
+
+| Channel stated in section E | Match |
+|---|---:|
+| `radio_flux_10_7cm_sfu` | **99.7%** |
+| `sunspot_number` | **98.9%** |
+| `a_index_planetary` | 75.9% |
+| `a_index_fredericksburg` | 55.8% |
+
+The two A-index channels drift because section E is labelled *REAL-TIME
+PRELIMINARY/ESTIMATED* while DGD carries the later final values — the same as-published-vs-
+revised drift `07_cdc_fluview` documents. Not an extraction bug: the column mapping was
+regression-checked against the raw DGD file.
+
+**⚠️ Range is bounded by the series, not the text.** SGAS runs 1996→present, but the NGDC
+annual DGD/DSD files **stop at 2018** (2019+ return 404), so there is nothing to pair after
+that. Extending past 2018 needs a newer index source wired up (~2,700 more records available
+on the text side).
+
+**Record shape** (real record, arrays abbreviated). The `<ts></ts>` tag is appended
+directly to the real SGAS prose — every word before it is verbatim NOAA/USAF text:
 
 ```json
 {
-  "text": "Joint USAF/NOAA Solar and Geophysical Activity Summary for January 1, 2000:\nA.  ENERGETIC EVENTS\nBEGIN  MAX  END  RGN   LOC   XRAY  OP 245MHZ 10CM   SWEEP\n2013 2016 2020  8814 N11E32 B8.0  SF 120\nB.  PROTON EVENTS:  NONE\nC.  GEOMAGNETIC ACTIVITY SUMMARY: THE GEOMAGNETIC FIELD WAS AT UNSETTLED TO MINOR STORM LEVELS...\n... [sections D–F] ...\nGeomagnetic K-indices (3-hourly intervals), daily A-indices, and solar measurements for this observation day: <ts></ts>",
+  "text": "JOINT USAF/NOAA SOLAR AND GEOPHYSICAL ACTIVITY SUMMARY\nSGAS NUMBER 001 ISSUED AT 0245Z ON 02 JAN 2000\nTHIS REPORT IS COMPILED FROM DATA RECEIVED AT SWO ON 01 JAN\nA.  ENERGETIC EVENTS\n...\nE.  DAILY INDICES: (REAL-TIME PRELIMINARY/ESTIMATED VALUES)\n10 CM 130  SSN 091  AFR/AP 020/027   X-RAY BACKGROUND B4.4\n...\nF.  COMMENTS:  NONE\n\n<ts></ts>",
   "timeseries": [
-    {"values": [5, 5, 3, 3, 3, 2, 3, 2], "unit": "kp_fredericksburg",            "freq": "3h"},
-    {"values": [4, 3, 6, 6, 6, 4, 4, 3], "unit": "kp_college",                   "freq": "3h"},
-    {"values": [4, 5, 4, 4, 5, 3, 3, 2], "unit": "kp_planetary",                 "freq": "3h"},
-    {"values": [21],                      "unit": "a_index_fredericksburg",       "freq": "1d"},
-    {"values": [44],                      "unit": "a_index_college",              "freq": "1d"},
-    {"values": [27],                      "unit": "a_index_planetary",            "freq": "1d"},
-    {"values": [130],                     "unit": "radio_flux_10_7cm_sfu",        "freq": "1d"},
-    {"values": [69],                      "unit": "sunspot_number",               "freq": "1d"},
-    {"values": [540],                     "unit": "sunspot_area_millionths_hemis","freq": "1d"},
-    {"values": [0],                       "unit": "new_sunspot_regions",          "freq": "1d"},
-    {"values": [3],                       "unit": "c_flare_count",               "freq": "1d"},
-    {"values": [0],                       "unit": "m_flare_count",               "freq": "1d"},
-    {"values": [0],                       "unit": "x_flare_count",               "freq": "1d"},
-    {"values": [1],                       "unit": "optical_s_flare_count",       "freq": "1d"},
-    {"values": [0],                       "unit": "optical_1_flare_count",       "freq": "1d"},
-    {"values": [0],                       "unit": "optical_2_flare_count",       "freq": "1d"},
-    {"values": [0],                       "unit": "optical_3_flare_count",       "freq": "1d"},
-    {"values": [5.7e-07],                 "unit": "xray_background_flux_wm2",    "freq": "1d"}
+    {"values": [9, 12, 11, "...", 27],   "unit": "a_index_planetary",             "freq": "1d"},
+    {"values": [12, 17, 14, "...", 21],  "unit": "a_index_fredericksburg",        "freq": "1d"},
+    {"values": [4, 4, 4, "...", 5],      "unit": "k_index_planetary_daily_max",   "freq": "1d"},
+    {"values": ["..."],                  "unit": "radio_flux_10_7cm_sfu",         "freq": "1d"},
+    {"values": ["..."],                  "unit": "sunspot_number",                "freq": "1d"}
   ],
-  "task_type": "world_knowledge",
-  "text_quality": "real",
-  "obs_date": "2000-01-01",
-  "sgas_issue": "2000-01-02"
+  "task_type": "world_knowledge", "text_quality": "real", "alignment": "describes",
+  "license": "public-domain-us-gov", "text_source": "first_party_official",
+  "dataset": "noaa_swpc", "domain": "space_weather", "region": "global",
+  "series_id": "noaa_swpc:daily:2000-01-01",
+  "period_start": "1999-12-01", "period_end": "2000-01-01",
+  "timestamps": ["1999-12-01", "1999-12-02", "...", "2000-01-01"],
+  "meta": {
+    "obs_date": "2000-01-01", "sgas_issue": "2000-01-02",
+    "n_ts_channels": 17, "window_days": 32, "terminal_date": "2000-01-01",
+    "terminal_recite": {
+      "radio_flux_10_7cm_sfu": {"stated": 130, "series": 130, "match": true},
+      "sunspot_number":        {"stated": 91,  "series": 91,  "match": true}
+    }
+  }
 }
 ```
+
+> Every channel is `1d` and 32 steps long. A channel is emitted only if it is present on
+> **every** day of the window — no imputation, so a partially observed channel is dropped
+> rather than filled. Channel count therefore varies (median 16, max 17; 1996 records carry
+> fewer because the old-layout DSD has no optical-flare columns).
+
 
 **Data sources:**
 
 | Modality | Product | URL pattern | Coverage |
 | --- | --- | --- | --- |
-| Text | SGAS (`yyyymmddSGAS.txt`) | `.../solar_geophysical_activity_summaries/YYYY/MM/` | 1996–2026 |
-| TS (geomagnetic) | DGD (`yyyy_DGD.txt`) | `.../daily_geomagnetic_data/` | 1994–2026 |
-| TS (solar) | DSD (`yyyy_DSD.txt`) | `.../daily_solar_data/` | 1994–2026 |
+| Text | SGAS (`yyyymmddSGAS.txt`) | `.../solar_geophysical_activity_summaries/YYYY/MM/` | 1996–present |
+| TS (geomagnetic) | DGD (`yyyy_DGD.txt`) | `.../daily_geomagnetic_data/` | **1994–2018** (2019+ → 404) |
+| TS (solar) | DSD (`yyyy_DSD.txt`) | `.../daily_solar_data/` | **1994–2018** (2019+ → 404) |
+
+The build range is the **intersection**, so it ends at 2018 — verified by directory listing,
+not inferred from a single failed request.
 
 All sources are on the NGDC public archive (`www.ngdc.noaa.gov/stp/space-weather/swpc-products/`).
 
 **Processing:**
 
 ```
-SGAS (issued date D)  →  obs_date = D - 1 day  ─┐
-DGD (row for obs_date)                            ├─ join on obs_date → 1 record
-DSD (row for obs_date)                            ─┘
+SGAS (issued date D)  →  obs_date = D - 1 day   ← text, and the window's terminal day
+DGD/DSD rows for [obs_date - 31 .. obs_date]    ← the 32-day trailing series
 ```
 
-SGAS files from 1996–~2002 use ALL CAPS; later years use Title Case. Both are handled. K-index values sometimes appear concatenated without spaces (e.g. `3 2-1 2`) in the DGD source — the parser uses regex integer extraction to handle this.
+SGAS files from 1996–~2002 use ALL CAPS; later years use Title Case. Both are handled.
 
-**TS channels (18 total):**
+The DGD/DSD index files come in **two layouts** and both are parsed: 1997+ uses
+`YYYY MM DD` with space-separated columns (where a run of missing values can be
+concatenated, e.g. `-1-1-1-1`), while 1996 uses `DD Mon YY` with hyphen-separated
+K-indices (`2-0-0-1-2-2-2-2`) and only 9 index columns. Missing values appear as either
+`-1` or `*`; both map to `None`, and a channel with any missing day in the window is
+dropped rather than imputed.
+
+**TS channels (17 max, median 16):**
 
 | Channel | Source | Freq | Unit/Description |
 | --- | --- | --- | --- |
-| `kp_fredericksburg` | DGD | 3h | K-index, middle latitude (length 8) |
-| `kp_college` | DGD | 3h | K-index, high latitude (length 8) |
-| `kp_planetary` | DGD | 3h | Estimated planetary K-index (length 8) |
+| `k_index_planetary_daily_max` | DGD | 1d | Daily max of the 8 3-hourly planetary K-indices |
+| `k_index_fredericksburg_daily_max` | DGD | 1d | Daily max of the 8 3-hourly mid-latitude K-indices |
 | `a_index_fredericksburg` | DGD | 1d | Daily A-index, middle latitude |
 | `a_index_college` | DGD | 1d | Daily A-index, high latitude |
 | `a_index_planetary` | DGD | 1d | Daily planetary A-index |
