@@ -1,91 +1,143 @@
 #!/usr/bin/env python3
-"""Build CPT world-knowledge JSONL from BLS CPI monthly press releases + BLS API.
+"""Build CPT world-knowledge JSONL from BLS CPI monthly news releases + BLS API.
 
-One record per monthly release: BLS HTML narrative (via Internet Archive Wayback
-Machine) paired with an EXPANDING window of CPI index values from the BLS
-public API (v1, no key required) — the full monthly history of every configured
-series from a common start month through that release's data month. The window
-grows over time, so recent releases carry hundreds of monthly points.
+**One record = (data month x narrative section of that month's release.)**
 
-The window is anchored at `common_start`: the earliest month where every configured
-series already has a value (max over series of each series' first month). Interior
-gaps become null (JSON null) so all channels stay equal-length; genuine gaps are not
-fabricated. Records are dropped only if fewer than `min_points` months are available,
-or if no Wayback Machine snapshot is available for that release.
+A CPI news release is natively sectioned and each section is about one group of CPI
+indexes, so the release itself supplies the split — `Food`, `Energy`, `All items less
+food and energy`, `Not seasonally adjusted CPI measures` from 2009-12 on, and one
+paragraph per major expenditure group (food and beverages, housing, transportation,
+apparel, medical care, recreation, education and communication, other goods and
+services) plus CPI-W and C-CPI-U sections before that. See `cpi_text.py`.
 
-Note: bls.gov blocks automated access; HTML is fetched via the Wayback Machine CDX
-API. Effective text coverage is ~2008–2026. Time series data is available 1994+
-via the BLS public API.
+Each section's verbatim prose is paired with a **trailing window of `window_months`
+monthly index levels ending on the month that section reports**, covering only the
+indexes that section is about (`TOPICS` below). The window ends where the source says
+it ends, and its stride is the source's own monthly release cadence.
 
-Examples:
-  python scripts/build_cpt_jsonl.py
-  python scripts/build_cpt_jsonl.py --set output.max_records=10
-  python scripts/build_cpt_jsonl.py --set data.start_year=2010 --set output.max_records=null
+Run:
+  python scripts/build_cpt_jsonl.py                        # full build
+  python scripts/build_cpt_jsonl.py --set output.max_records=50
 """
-
 from __future__ import annotations
 
 import argparse
 import json
 import re
 import sys
-import time
+from collections import Counter
 from datetime import UTC, datetime
-from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
-
-try:
-    import requests
-except ImportError as exc:
-    raise SystemExit("requests is required. Install with: pip install -r requirements.txt") from exc
 
 try:
     import yaml
 except ImportError as exc:
     raise SystemExit("PyYAML is required. Install with: pip install -r requirements.txt") from exc
 
-
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(ROOT.parent / "schema"))
 
-# shared v1-compliant record builder (self-validates against schema/validate.py --strict)
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from cpi_series import SERIES, load_history  # noqa: E402
+from cpi_text import (MONTHS, load_text, parse_data_month, sections_of)  # noqa: E402
 from emit import emit_record  # noqa: E402
 
-CDX_API_URL = "http://web.archive.org/cdx/search/cdx"
-BLS_ARCHIVE_BASE = "https://www.bls.gov/news.release/archives/"
-BLS_HISTORY_URL = "https://www.bls.gov/news.release/history/"
-WAYBACK_BASE = "https://web.archive.org/web"
-BLS_API_URL = "https://api.bls.gov/publicAPI/v1/timeseries/data/"
+BLS_ARCHIVE = "https://www.bls.gov/news.release/archives/"
+BLS_HISTORY = "https://www.bls.gov/news.release/history/"
 
-TXT_FILENAME_RE = re.compile(r"\bcpi_(\d{6}|\d{8})\.txt\b", re.IGNORECASE)
+# ---------------------------------------------------------------------------
+# topic -> the CPI indexes that topic's prose is about
+# ---------------------------------------------------------------------------
+# First entry is the topic anchor: the index the section's opening sentence is about.
+# A record is only emitted if its anchor is present for the reported month, so a
+# record can never be prose about one index paired with a window of something else.
 
-CPI_FILENAME_RE = re.compile(r"cpi_(\d{8})\.htm$", re.IGNORECASE)
-WAYBACK_TOOLBAR_RE = re.compile(
-    r"<!-- BEGIN WAYBACK TOOLBAR INSERT -->.*?<!-- END WAYBACK TOOLBAR INSERT -->",
-    re.DOTALL | re.IGNORECASE,
-)
+TOPICS: Dict[str, Dict[str, Any]] = {
+    "all_items": {
+        "what": "the all items CPI-U",
+        "channels": ["all_items_nsa", "all_items_sa", "core_sa", "core_nsa",
+                     "food_sa", "energy_sa", "shelter_sa"],
+    },
+    "cpi_w": {
+        "what": "the all items CPI-W",
+        "channels": ["cpi_w_nsa", "cpi_w_sa", "all_items_nsa", "all_items_sa"],
+    },
+    "c_cpi_u": {
+        "what": "the chained CPI (C-CPI-U)",
+        "channels": ["c_cpi_u_nsa", "all_items_nsa", "all_items_sa"],
+    },
+    "food": {
+        "what": "food prices",
+        "channels": ["food_nsa", "food_sa", "food_beverages_sa", "food_at_home_sa",
+                     "food_at_home_nsa", "food_away_sa", "food_away_nsa",
+                     "cereals_bakery_sa", "meats_eggs_sa", "dairy_sa", "fruits_veg_sa",
+                     "nonalc_bev_sa", "other_food_home_sa", "alcoholic_bev_sa",
+                     "full_svc_meals_sa"],
+    },
+    "energy": {
+        "what": "energy prices",
+        "channels": ["energy_nsa", "energy_sa", "gasoline_sa", "gasoline_nsa",
+                     "electricity_sa", "utility_gas_sa", "fuel_oil_sa"],
+    },
+    "core": {
+        "what": "the all items less food and energy index",
+        "channels": ["core_nsa", "core_sa", "shelter_sa", "shelter_nsa", "rent_sa",
+                     "oer_sa", "lodging_away_sa", "medical_sa", "medical_svcs_sa",
+                     "hospital_sa", "apparel_sa", "new_vehicles_sa", "used_cars_sa",
+                     "airline_fares_sa", "communication_sa", "recreation_sa",
+                     "personal_care_sa", "motor_veh_ins_sa", "household_ops_sa"],
+    },
+    "nsa": {
+        "what": "the not-seasonally-adjusted CPI measures",
+        "channels": ["all_items_nsa", "cpi_w_nsa", "c_cpi_u_nsa"],
+    },
+    "housing": {
+        "what": "housing costs",
+        "channels": ["housing_nsa", "housing_sa", "shelter_sa", "shelter_nsa", "rent_sa",
+                     "oer_sa", "fuels_utilities_sa", "electricity_sa", "utility_gas_sa",
+                     "fuel_oil_sa", "household_ops_sa"],
+    },
+    "transportation": {
+        "what": "transportation costs",
+        "channels": ["transportation_nsa", "transportation_sa", "new_vehicles_sa",
+                     "used_cars_sa", "gasoline_sa", "gasoline_nsa", "public_transp_sa",
+                     "airline_fares_sa", "motor_veh_ins_sa"],
+    },
+    "apparel": {
+        "what": "apparel prices",
+        "channels": ["apparel_nsa", "apparel_sa"],
+    },
+    "medical": {
+        "what": "medical care costs",
+        "channels": ["medical_nsa", "medical_sa", "medical_comm_sa", "medical_svcs_sa",
+                     "physicians_sa", "hospital_sa", "prescription_sa"],
+    },
+    "recreation": {
+        "what": "recreation costs",
+        "channels": ["recreation_nsa", "recreation_sa"],
+    },
+    "educ_comm": {
+        "what": "education and communication costs",
+        "channels": ["educ_comm_nsa", "educ_comm_sa", "education_sa", "communication_sa"],
+    },
+    "other": {
+        "what": "the other goods and services index",
+        "channels": ["other_goods_nsa", "other_goods_sa", "personal_care_sa", "tobacco_sa"],
+    },
+    "annual_review": {
+        "what": "the calendar year just ended",
+        "channels": ["all_items_nsa", "all_items_sa", "core_nsa", "core_sa", "food_nsa",
+                     "energy_nsa", "gasoline_nsa", "shelter_nsa"],
+    },
+}
 
-SKIP_STARTS = (
-    "table ",
-    "note:",
-    "source:",
-    "http",
-    "[1]", "[2]", "[3]",
-    "bureau of labor statistics",
-    "u.s. bureau of labor",
-    "consumer price index—all",
-    "consumer price index -",
-    "not seasonally adjusted",
-    "seasonally adjusted",
-    "percent change",
-    "unadjusted",
-)
+EXT_PREF = ("txt", "htm", "pdf")
 
 
 # ---------------------------------------------------------------------------
-# Config helpers
+# config
 # ---------------------------------------------------------------------------
 
 
@@ -100,972 +152,362 @@ def deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]
 
 
 def coerce_value(raw: str) -> Any:
-    lowered = raw.strip().lower()
-    if lowered in {"true", "yes"}:
+    low = raw.strip().lower()
+    if low in {"true", "yes"}:
         return True
-    if lowered in {"false", "no"}:
+    if low in {"false", "no"}:
         return False
-    if lowered in {"null", "none", "~"}:
+    if low in {"null", "none", "~"}:
         return None
     if re.fullmatch(r"-?\d+", raw):
         return int(raw)
     if re.fullmatch(r"-?\d+\.\d+", raw):
         return float(raw)
-    if raw.startswith("[") and raw.endswith("]"):
-        inner = raw[1:-1].strip()
-        if not inner:
-            return []
-        return [coerce_value(part.strip()) for part in inner.split(",")]
     return raw
 
 
-def parse_set_args(set_args: Sequence[str]) -> Dict[str, Any]:
-    result: Dict[str, Any] = {}
-    for item in set_args:
+def load_config(path: Path, overrides: Sequence[str]) -> Dict[str, Any]:
+    cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+    for item in overrides:
         if "=" not in item:
             raise ValueError(f"Invalid --set value (need key=value): {item}")
         key, raw = item.split("=", 1)
-        parts = key.split(".")
-        cursor = result
+        parts, cursor = key.split("."), {}
+        node = cursor
         for part in parts[:-1]:
-            cursor = cursor.setdefault(part, {})
-        cursor[parts[-1]] = coerce_value(raw)
-    return result
-
-
-def load_config(config_path: Path, set_overrides: Sequence[str]) -> Dict[str, Any]:
-    with config_path.open(encoding="utf-8") as fh:
-        cfg = yaml.safe_load(fh)
-    if set_overrides:
-        cfg = deep_merge(cfg, parse_set_args(set_overrides))
+            node = node.setdefault(part, {})
+        node[parts[-1]] = coerce_value(raw)
+        cfg = deep_merge(cfg, cursor)
     return cfg
 
 
-def resolve_path(path_str: str) -> Path:
-    path = Path(path_str)
+def resolve_path(p: str) -> Path:
+    path = Path(p)
     return path if path.is_absolute() else ROOT / path
 
 
 # ---------------------------------------------------------------------------
-# Date helpers
+# months
 # ---------------------------------------------------------------------------
 
 
-def previous_month(year: int, month: int) -> Tuple[int, int]:
-    if month == 1:
-        return year - 1, 12
-    return year, month - 1
+def month_window(end_ym: str, n: int) -> List[str]:
+    """The n months ending at end_ym, oldest first."""
+    y, m = int(end_ym[:4]), int(end_ym[5:7])
+    out: List[str] = []
+    for _ in range(n):
+        out.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            y, m = y - 1, 12
+    return list(reversed(out))
 
 
-def ym_str(year: int, month: int) -> str:
-    return f"{year:04d}-{month:02d}"
-
-
-def next_month(year: int, month: int) -> Tuple[int, int]:
-    if month == 12:
-        return year + 1, 1
-    return year, month + 1
-
-
-def months_between(start_ym: str, end_ym: str) -> List[str]:
-    """Return the inclusive list of 'YYYY-MM' strings from start_ym through end_ym."""
-    sy, sm = int(start_ym[:4]), int(start_ym[5:7])
-    ey, em = int(end_ym[:4]), int(end_ym[5:7])
-    result: List[str] = []
-    y, m = sy, sm
-    while (y, m) <= (ey, em):
-        result.append(ym_str(y, m))
-        y, m = next_month(y, m)
-    return result
+def pretty_month(ym: str) -> str:
+    return f"{MONTHS[int(ym[5:7]) - 1].capitalize()} {ym[:4]}"
 
 
 # ---------------------------------------------------------------------------
-# HTTP fetch + cache
+# recite detection
 # ---------------------------------------------------------------------------
 
+# BLS printed index levels to 1 decimal before the 1998 rebasing of many series and to
+# 3 decimals after, and the API echoes whichever form was published.
+def level_forms(value: float) -> List[str]:
+    forms = {f"{value:.3f}", f"{value:.2f}", f"{value:.1f}"}
+    return [f for f in forms if f]
 
-def fetch_html(
-    session: requests.Session,
-    url: str,
-    cache_file: Path,
-    timeout_s: float,
-) -> Tuple[Optional[str], bool]:
-    if cache_file.exists():
-        return cache_file.read_text(encoding="utf-8", errors="replace"), True
 
-    cache_file.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        response = session.get(url, timeout=timeout_s)
-    except requests.RequestException as exc:
-        print(f"  warning: request failed for {url}: {exc}", file=sys.stderr)
-        return None, False
-
-    if response.status_code != 200:
-        print(f"  warning: HTTP {response.status_code} for {url}", file=sys.stderr)
-        return None, False
-
-    html = response.text
-    cache_file.write_text(html, encoding="utf-8")
-    return html, False
+def recited_channels(text: str, channels: List[Dict[str, Any]],
+                     keys: List[str]) -> List[str]:
+    """Channels whose terminal (reported-month) level appears verbatim in the prose."""
+    hits = []
+    for key, ch in zip(keys, channels):
+        end = ch["values"][-1]
+        if end is None:
+            continue
+        if any(re.search(r"(?<![\d.])" + re.escape(f) + r"(?![\d])", text)
+               for f in level_forms(end)):
+            hits.append(key)
+    return hits
 
 
 # ---------------------------------------------------------------------------
-# Archive discovery via Internet Archive CDX
+# build one record
 # ---------------------------------------------------------------------------
 
 
-def discover_archive_releases(
-    session: requests.Session,
-    cache_dir: Path,
-    timeout_s: float,
-    data_start_year: int,
-    data_end_year: int,
-) -> List[Tuple[str, str, int, int]]:
-    """Use Internet Archive CDX to find BLS CPI press release snapshots.
+def build_channels(hist, keys: List[str], window: List[str], min_coverage: float
+                   ) -> Tuple[List[str], List[Dict[str, Any]]]:
+    """Drop a channel unless it covers the reported month and enough of the window.
 
-    Returns list of (mmddyyyy, wayback_url, data_year, data_month) sorted oldest first.
+    Several component indexes begin mid-window (communication 1998-01, personal care
+    1999-01, C-CPI-U 1999-12), and an all-but-empty channel is noise rather than a
+    series, so it is dropped and the ts-intro names only what survives.
     """
-    cache_file = cache_dir / "cdx_listing.json"
-    if cache_file.exists():
-        with cache_file.open(encoding="utf-8") as fh:
-            rows = json.load(fh)
-    else:
-        try:
-            resp = session.get(
-                CDX_API_URL,
-                params={
-                    "url": "www.bls.gov/news.release/archives/cpi_",
-                    "matchType": "prefix",
-                    "output": "json",
-                    "fl": "original,timestamp",
-                    "sort": "reverse",       # newest snapshot first
-                    "collapse": "original",  # one entry per unique URL (most recent)
-                    "limit": 2000,
-                },
-                timeout=timeout_s,
-            )
-            resp.raise_for_status()
-            rows = resp.json()
-        except (requests.RequestException, ValueError) as exc:
-            raise RuntimeError(f"CDX query failed: {exc}") from exc
-
-        cache_file.parent.mkdir(parents=True, exist_ok=True)
-        with cache_file.open("w", encoding="utf-8") as fh:
-            json.dump(rows, fh)
-
-    # rows[0] is the header ["original","timestamp"]; rows[1:] are data
-    seen_dates: Dict[str, Tuple[str, str]] = {}  # mmddyyyy → (original, timestamp)
-    for row in rows[1:]:
-        original, timestamp = row[0], row[1]
-        m = CPI_FILENAME_RE.search(original)
-        if not m:
+    kept_keys, kept = [], []
+    for key in keys:
+        series = hist.get(key) or {}
+        if series.get(window[-1]) is None:
             continue
-        mmddyyyy = m.group(1).lower()
-        # Keep only the first entry we see (most recent snapshot, due to sort=reverse)
-        if mmddyyyy not in seen_dates:
-            seen_dates[mmddyyyy] = (original, timestamp)
-
-    releases = []
-    for mmddyyyy, (original_url, timestamp) in seen_dates.items():
-        rel_month = int(mmddyyyy[0:2])
-        rel_year = int(mmddyyyy[4:8])
-        data_year, data_month = previous_month(rel_year, rel_month)
-        if not (data_start_year <= data_year <= data_end_year):
+        values = [series.get(ym) for ym in window]
+        if sum(v is not None for v in values) / len(values) < min_coverage:
             continue
-        wayback_url = f"{WAYBACK_BASE}/{timestamp}/{original_url}"
-        releases.append((
-            mmddyyyy, wayback_url, data_year, data_month,
-            rel_year, rel_month, int(mmddyyyy[2:4]),
-        ))
-
-    # Sort by release date ascending
-    releases.sort(key=lambda x: (x[4], x[5], x[6]))
-    return [(r[0], r[1], r[2], r[3]) for r in releases]
-
-
-# ---------------------------------------------------------------------------
-# TXT release discovery + fetch (1994–2007 historical releases)
-# ---------------------------------------------------------------------------
-
-
-def parse_txt_filename_date(date_str: str) -> Tuple[int, int, int]:
-    """Parse MMDDYY (6-char) or MMDDYYYY (8-char) from BLS TXT filenames."""
-    if len(date_str) == 6:
-        return int(date_str[:2]), int(date_str[2:4]), 1900 + int(date_str[4:])
-    return int(date_str[:2]), int(date_str[2:4]), int(date_str[4:])
-
-
-def discover_txt_releases(
-    session: requests.Session,
-    cache_dir: Path,
-    timeout_s: float,
-    data_start_year: int,
-    data_end_year: int,
-) -> List[Tuple[str, str, Optional[str], int, int]]:
-    """Find BLS CPI TXT releases (1994-2007).
-
-    Tries the BLS history directory listing first (works when bls.gov is reachable),
-    then falls back to Wayback Machine CDX. Returns list of:
-    (date_str, bls_direct_url, wayback_url_or_None, data_year, data_month)
-    """
-    found: Dict[Tuple[int, int, int], Tuple[str, str, Optional[str], int, int]] = {}
-
-    # 1. Try BLS history directory listing (succeeds on user machines; 403 on servers)
-    dir_cache = cache_dir / "txt_directory.html"
-    dir_html, _ = fetch_html(session, BLS_HISTORY_URL, dir_cache, timeout_s)
-    if dir_html:
-        for m in TXT_FILENAME_RE.finditer(dir_html):
-            date_str = m.group(1)
-            rel_month, rel_day, rel_year = parse_txt_filename_date(date_str)
-            data_year, data_month = previous_month(rel_year, rel_month)
-            if not (data_start_year <= data_year <= data_end_year):
-                continue
-            key = (rel_year, rel_month, rel_day)
-            bls_url = f"{BLS_HISTORY_URL}cpi_{date_str}.txt"
-            found[key] = (date_str, bls_url, None, data_year, data_month)
-        print(f"  BLS history listing: {len(found)} TXT files", file=sys.stderr)
-
-    # 2. Wayback CDX for TXT files (supplements or replaces directory listing)
-    cdx_cache = cache_dir / "cdx_txt_listing.json"
-    if cdx_cache.exists():
-        rows = json.loads(cdx_cache.read_text(encoding="utf-8"))
-    else:
-        try:
-            resp = session.get(CDX_API_URL, params={
-                "url": "www.bls.gov/news.release/history/cpi_",
-                "matchType": "prefix",
-                "output": "json",
-                "fl": "original,timestamp",
-                "sort": "reverse",
-                "collapse": "original",
-                "limit": 500,
-            }, timeout=timeout_s)
-            resp.raise_for_status()
-            rows = resp.json()
-        except (requests.RequestException, ValueError) as exc:
-            print(f"  warning: CDX TXT query failed: {exc}", file=sys.stderr)
-            rows = [[]]
-        cdx_cache.parent.mkdir(parents=True, exist_ok=True)
-        cdx_cache.write_text(json.dumps(rows), encoding="utf-8")
-
-    for row in rows[1:]:
-        original, timestamp = row[0], row[1]
-        m = TXT_FILENAME_RE.search(original)
-        if not m:
-            continue
-        date_str = m.group(1)
-        rel_month, rel_day, rel_year = parse_txt_filename_date(date_str)
-        data_year, data_month = previous_month(rel_year, rel_month)
-        if not (data_start_year <= data_year <= data_end_year):
-            continue
-        key = (rel_year, rel_month, rel_day)
-        bls_url = f"{BLS_HISTORY_URL}cpi_{date_str}.txt"
-        wayback_url = f"{WAYBACK_BASE}/{timestamp}/{original}"
-        if key in found:
-            # Augment existing entry with wayback fallback
-            existing = found[key]
-            found[key] = (existing[0], existing[1], wayback_url, existing[3], existing[4])
-        else:
-            found[key] = (date_str, bls_url, wayback_url, data_year, data_month)
-
-    releases = sorted(found.values(), key=lambda x: (x[3], x[4]))  # sort by data_year, data_month
-    return releases
-
-
-def fetch_txt(
-    session: requests.Session,
-    bls_url: str,
-    wayback_url: Optional[str],
-    cache_file: Path,
-    timeout_s: float,
-) -> Tuple[Optional[str], bool, str]:
-    """Fetch TXT content: try BLS directly first, fall back to Wayback. Returns (text, from_cache, used_url)."""
-    if cache_file.exists():
-        return cache_file.read_text(encoding="utf-8", errors="replace"), True, bls_url
-
-    # Try BLS directly (fast, works when user has bls.gov access)
-    cache_file.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        resp = session.get(bls_url, timeout=timeout_s)
-        if resp.status_code == 200:
-            cache_file.write_text(resp.text, encoding="utf-8")
-            return resp.text, False, bls_url
-    except requests.RequestException:
-        pass
-
-    # Fall back to Wayback Machine
-    if wayback_url:
-        try:
-            resp = session.get(wayback_url, timeout=timeout_s)
-            if resp.status_code == 200:
-                cache_file.write_text(resp.text, encoding="utf-8")
-                return resp.text, False, wayback_url
-        except requests.RequestException:
-            pass
-
-    return None, False, bls_url
-
-
-# ---------------------------------------------------------------------------
-# HTML narrative extraction
-# ---------------------------------------------------------------------------
-
-
-def strip_wayback_wrapper(html: str) -> str:
-    """Remove Wayback Machine toolbar injection from archived HTML."""
-    html = WAYBACK_TOOLBAR_RE.sub("", html)
-    # Strip Wayback URL rewrites so relative URLs resolve correctly
-    html = re.sub(r"https?://web\.archive\.org/web/\d+[a-z]*/", "", html)
-    return html
-
-
-NORMALNEWS_RE = re.compile(
-    r'class="normalnews"[^>]*>.*?<pre>(.*?)</pre>',
-    re.DOTALL | re.IGNORECASE,
-)
-
-PRE_LEDE_RE = re.compile(
-    r"The Consumer Price Index for All Urban Consumers\s*\(CPI-U\)",
-    re.IGNORECASE,
-)
-
-LEDE_RE = re.compile(
-    r"Consumer prices?\s+for\s+all\s+urban\s+consumers?\s+"
-    r"(?:rose|fell|declined|increased|decreased|were unchanged|remained unchanged)",
-    re.IGNORECASE,
-)
-
-
-STOP_RE = re.compile(
-    r"\bTechnical\s+Notes?\b|Last Modified Date:",
-    re.IGNORECASE,
-)
-
-# Heuristic: BLS text-formatted table rows use dot leaders — "Label ........ 123.4 456.7"
-TABLE_LINE_RE = re.compile(r"\.{3,}\s*[\d\-]|\d+\.\d+\s{2,}\d+\.\d+\s{2,}\d+\.\d+")
-# "Table A." / "Table 1." headings signal data tables in pre-formatted text
-TABLE_HEADER_RE = re.compile(r"^Table\s+[A-Z0-9][\.\:]", re.IGNORECASE)
-
-
-class CPIHTMLParser(HTMLParser):
-    """Extract narrative paragraphs; skip table content and stop at stop markers."""
-
-    SKIP_TAGS = {"script", "style", "noscript", "pre"}
-    # Exclude "li" — it's navigation on BLS pages, not narrative prose
-    BLOCK_TAGS = {"p", "h1", "h2", "h3", "h4"}
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.parts: List[str] = []
-        self._table_depth = 0
-        self._skip_depth = 0
-        self._done = False
-
-    def handle_starttag(self, tag: str, attrs: Any) -> None:
-        if self._done:
-            return
-        if tag == "table":
-            self._table_depth += 1
-        if tag in self.SKIP_TAGS:
-            self._skip_depth += 1
-        if tag in self.BLOCK_TAGS and self._table_depth == 0:
-            self.parts.append("\n")
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag == "table":
-            self._table_depth = max(0, self._table_depth - 1)
-        if tag in self.SKIP_TAGS:
-            self._skip_depth = max(0, self._skip_depth - 1)
-        if tag in self.BLOCK_TAGS and self._table_depth == 0:
-            self.parts.append("\n")
-
-    def handle_data(self, data: str) -> None:
-        if self._done or self._table_depth > 0 or self._skip_depth > 0:
-            return
-        if STOP_RE.search(data):
-            self._done = True
-            return
-        self.parts.append(data)
-
-    def get_text(self) -> str:
-        text = "".join(self.parts)
-        text = re.sub(r"[ \t]+", " ", text)
-        text = re.sub(r"\n\s*\n+", "\n\n", text)
-        return text.strip()
-
-
-def clean_paragraph(para: str) -> str:
-    para = re.sub(r"\s+", " ", para).strip()
-    if len(para) < 30:
-        return ""
-    lowered = para.lower()
-    if any(lowered.startswith(pat) for pat in SKIP_STARTS):
-        return ""
-    return para
-
-
-def extract_narrative_from_pre(pre_text: str) -> str:
-    """Extract CPI narrative from plain-text <pre> content (both old and new BLS format)."""
-    # Find CPI-U lede
-    lede_match = PRE_LEDE_RE.search(pre_text)
-    if not lede_match:
-        # Fallback: try alternative phrasing
-        lede_match = LEDE_RE.search(pre_text)
-    if not lede_match:
-        return ""
-
-    # Step back to paragraph start
-    para_break = pre_text.rfind("\n\n", 0, lede_match.start())
-    start = (para_break + 2) if para_break >= 0 else lede_match.start()
-    content = pre_text[start:]
-
-    # Normalize leading spaces (pre-text has lots of whitespace padding)
-    lines = []
-    for line in content.split("\n"):
-        stripped = line.strip()
-        lines.append(stripped)
-    content = "\n".join(lines)
-    content = re.sub(r"\n{3,}", "\n\n", content)
-
-    # Collect paragraphs until first text-formatted table row
-    paras = []
-    for para in re.split(r"\n\s*\n", content):
-        para = para.strip()
-        if not para:
-            continue
-        if TABLE_LINE_RE.search(para) or TABLE_HEADER_RE.match(para):
-            break
-        if len(para) < 30:
-            continue
-        paras.append(para)
-
-    return "\n\n".join(paras)
-
-
-def extract_narrative(html: str) -> str:
-    clean_html = strip_wayback_wrapper(html)
-
-    # Primary path: extract from <div class="normalnews"><pre> block (all BLS CPI releases)
-    pre_match = NORMALNEWS_RE.search(clean_html)
-    if pre_match:
-        pre_text = pre_match.group(1)
-        # Decode HTML entities
-        pre_text = (pre_text
-                    .replace("&amp;", "&").replace("&lt;", "<")
-                    .replace("&gt;", ">").replace("&nbsp;", " "))
-        return extract_narrative_from_pre(pre_text)
-
-    # Fallback: modern HTML <p> parser (in case format changes)
-    parser = CPIHTMLParser()
-    parser.feed(clean_html)
-    raw = parser.get_text()
-    lede_match = LEDE_RE.search(raw)
-    if lede_match:
-        para_break = raw.rfind("\n\n", 0, lede_match.start())
-        raw = raw[(para_break + 2) if para_break >= 0 else lede_match.start():]
-
-    paras_raw = [clean_paragraph(p) for p in re.split(r"\n\s*\n+", raw)]
-    clean = []
-    for p in paras_raw:
-        if not p:
-            continue
-        if TABLE_LINE_RE.search(p):
-            break
-        clean.append(p)
-    return "\n\n".join(clean)
-
-
-# ---------------------------------------------------------------------------
-# BLS API time series
-# ---------------------------------------------------------------------------
-
-
-def fetch_api_chunk(
-    session: requests.Session,
-    series_ids: List[str],
-    start_year: int,
-    end_year: int,
-    api_url: str,
-    cache_file: Path,
-    timeout_s: float,
-) -> Optional[Dict[str, Any]]:
-    if cache_file.exists():
-        with cache_file.open(encoding="utf-8") as fh:
-            return json.load(fh)
-
-    payload = {
-        "seriesid": series_ids,
-        "startyear": str(start_year),
-        "endyear": str(end_year),
-    }
-    try:
-        response = session.post(api_url, json=payload, timeout=timeout_s)
-        response.raise_for_status()
-    except requests.RequestException as exc:
-        print(f"  warning: BLS API request failed: {exc}", file=sys.stderr)
-        return None
-
-    data = response.json()
-    if data.get("status") != "REQUEST_SUCCEEDED":
-        print(
-            f"  warning: BLS API status={data.get('status')}: {data.get('message')}",
-            file=sys.stderr,
-        )
-        return None
-
-    cache_file.parent.mkdir(parents=True, exist_ok=True)
-    with cache_file.open("w", encoding="utf-8") as fh:
-        json.dump(data, fh)
-    return data
-
-
-def load_api_timeseries(
-    session: requests.Session,
-    series_spec: List[Dict[str, str]],
-    start_year: int,
-    end_year: int,
-    api_url: str,
-    cache_dir: Path,
-    timeout_s: float,
-    delay_s: float,
-) -> Dict[str, Dict[str, float]]:
-    """Pull and cache all CPI series. Returns {series_id: {"YYYY-MM": float}}."""
-    series_ids = [s["id"] for s in series_spec]
-    all_data: Dict[str, Dict[str, float]] = {sid: {} for sid in series_ids}
-
-    chunk_size = 10  # BLS API v1 limit: 10 years per query
-    year = start_year
-    first_call = True
-    while year <= end_year:
-        chunk_end = min(year + chunk_size - 1, end_year)
-        cache_file = cache_dir / f"api_{year}_{chunk_end}.json"
-
-        if not first_call and not cache_file.exists():
-            time.sleep(delay_s)
-        first_call = False
-
-        chunk = fetch_api_chunk(
-            session, series_ids, year, chunk_end, api_url, cache_file, timeout_s
-        )
-        if chunk:
-            for series in chunk.get("Results", {}).get("series", []):
-                sid = series["seriesID"]
-                for point in series.get("data", []):
-                    period = point.get("period", "")
-                    if not period.startswith("M") or period == "M13":
-                        continue
-                    month_num = int(period[1:])
-                    pt_year = int(point["year"])
-                    ym = ym_str(pt_year, month_num)
-                    try:
-                        all_data[sid][ym] = float(point["value"])
-                    except (ValueError, KeyError):
-                        pass
-        year = chunk_end + 1
-
-    return all_data
-
-
-def compute_common_start(
-    api_data: Dict[str, Dict[str, float]],
-    series_spec: List[Dict[str, str]],
-) -> Optional[str]:
-    """Earliest 'YYYY-MM' where EVERY configured series already has a value.
-
-    = max over series of each series' first non-null month. Returns None if any series
-    is empty (no common anchor exists), which makes the whole build skip.
-    """
-    firsts: List[str] = []
-    for spec in series_spec:
-        series_map = api_data.get(spec["id"], {})
-        if not series_map:
-            return None
-        firsts.append(min(series_map))
-    return max(firsts) if firsts else None
-
-
-def build_timeseries_expanding(
-    api_data: Dict[str, Dict[str, float]],
-    series_spec: List[Dict[str, str]],
-    common_start: str,
-    data_year: int,
-    data_month: int,
-    min_points: int,
-) -> Optional[Tuple[List[Dict[str, Any]], List[str]]]:
-    """Build the expanding-window TS: full monthly history from common_start through the
-    release's data month. Each channel spans the same months; missing values become None
-    (JSON null) — do NOT fabricate. Returns (channels, window_months) or None if the
-    window is shorter than min_points."""
-    data_ym = ym_str(data_year, data_month)
-    if data_ym < common_start:
-        return None
-    window_months = months_between(common_start, data_ym)
-    if len(window_months) < min_points:
-        return None
-    channels = []
-    for spec in series_spec:
-        series_map = api_data.get(spec["id"], {})
-        values = [series_map.get(ym) for ym in window_months]  # None -> JSON null
-        channels.append({"values": values, "unit": spec["unit"], "freq": "1M"})
-    # all channels must share length (equal to the window)
-    assert len({len(c["values"]) for c in channels}) == 1, "channel lengths differ"
-    return channels, window_months
-
-
-# ---------------------------------------------------------------------------
-# Record construction + validation
-# ---------------------------------------------------------------------------
-
-
-# Per-record validation now lives in emit_record(): each record is self-checked against
-# schema/validate.py --strict at construction time, raising ValueError on any violation.
-
-
-def build_record(
-    narrative: str,
-    ts_channels: List[Dict[str, Any]],
-    window_months: List[str],
-    data_year: int,
-    data_month: int,
-    release_date_iso: str,
-    report_url: str,
-    ts_intro: str,
-    fetch_url: Optional[str] = None,
-) -> Dict[str, Any]:
-    dm = ym_str(data_year, data_month)
-    series_start = window_months[0]
-    intro = ts_intro.format(start=series_start, data_month=dm)
-    text = f"{narrative}\n\n{intro}"
-
-    # period covered = the expanding window: series_start (first month) through data_month
-    period_start = f"{series_start}-01"
-    period_end = f"{dm}-01"
-
-    meta: Dict[str, Any] = {
+        kept_keys.append(key)
+        kept.append({"values": values, "unit": key, "freq": "1M"})
+    return kept_keys, kept
+
+
+def ts_sentence(keys: List[str], window: List[str]) -> str:
+    """Name exactly the channels this record carries, in order, with each one's
+    adjustment basis — the record mixes seasonally adjusted and not-seasonally-adjusted
+    indexes and the distinction is the whole point of several sections."""
+    labels = [SERIES[k][1] + (" (not seasonally adjusted)" if k.endswith("_nsa") else "")
+              for k in keys]
+    joined = labels[0] if len(labels) == 1 else ", ".join(labels[:-1]) + " and " + labels[-1]
+    return (f"Monthly U.S. city average CPI index levels, seasonally adjusted unless "
+            f"noted, for {joined} over the {len(window)} months through "
+            f"{pretty_month(window[-1])}: <ts></ts>")
+
+
+def build_record(*, topic: str, prose: str, dm: str, era: str, release_date: str,
+                 report_url: str, fetch_url: Optional[str], hist,
+                 window_months: int, min_coverage: float) -> Optional[Dict[str, Any]]:
+    keys = TOPICS[topic]["channels"]
+    window = month_window(dm, window_months)
+    kept_keys, channels = build_channels(hist, keys, window, min_coverage)
+    if not channels or kept_keys[0] != keys[0]:
+        return None                      # anchor index missing -> not this topic's series
+    text = f"{prose}\n\n{ts_sentence(kept_keys, window)}"
+    recites = recited_channels(prose, channels, kept_keys)
+    meta = {
         "data_month": dm,
-        "series_start": series_start,
-        "n_points": len(window_months),
-        "release_date": release_date_iso,
+        "topic": topic,
+        "release_format": era,
+        "release_date": release_date,
+        "window_months": len(window),
+        "window_start": window[0],
+        "n_channels": len(channels),
+        "channels": kept_keys,
+        "bls_series_ids": [SERIES[k][0] for k in kept_keys],
+        "recited_channels": recites,
         "report_url": report_url,
     }
-    if fetch_url and fetch_url != report_url:
+    if fetch_url:
         meta["fetch_url"] = fetch_url
-
     return emit_record(
         text=text,
-        timeseries=ts_channels,
-        alignment="describes",
+        timeseries=channels,
+        alignment="recites" if recites else "describes",
         license="public-domain-us-gov",
         text_source="first_party_official",
         source=report_url,
         dataset="bls_cpi",
-        series_id=f"bls_cpi:{dm}",
+        series_id=f"bls_cpi:{dm}:{topic}",
         domain="macro_econ",
         region="US",
-        period_start=period_start,
-        period_end=period_end,
+        period_start=f"{window[0]}-01",
+        period_end=f"{dm}-01",
         meta=meta,
     )
 
 
 # ---------------------------------------------------------------------------
-# Output
+# pipeline
 # ---------------------------------------------------------------------------
 
 
-def write_jsonl(records: List[Dict[str, Any]], path: Path, indent: Optional[int]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if indent is None:
-        with path.open("w", encoding="utf-8") as fh:
-            for record in records:
-                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-    else:
-        with path.open("w", encoding="utf-8") as fh:
-            json.dump(records, fh, ensure_ascii=False, indent=int(indent))
-            fh.write("\n")
+TERMINAL_PUNCT = (".", ")", '"', "]", "!", "?")
 
 
-# ---------------------------------------------------------------------------
-# Pipeline
-# ---------------------------------------------------------------------------
+def ends_cleanly(prose: str) -> bool:
+    """A section cut mid-sentence is a damaged capture, not a short section."""
+    return prose.rstrip().endswith(TERMINAL_PUNCT)
+
+
+def choose_document(rel_dir: Path, date: str):
+    """Pick the format that parses best, not just the first one on disk.
+
+    Some archived `.txt` captures are themselves truncated mid-paragraph (13 releases,
+    e.g. 2002-06-18 stops at "...alcoholic beverages--each increased 0.2 percent,"),
+    and the same release's PDF is complete. Scoring the candidates by how many
+    sections come out whole recovers those instead of shipping a cut sentence.
+    """
+    best = None
+    for ext in EXT_PREF:
+        p = rel_dir / f"{date}.{ext}"
+        if not (p.exists() and p.stat().st_size > 0):
+            continue
+        text = load_text(p)
+        dm = parse_data_month(text)
+        if not dm:
+            continue
+        era, sections, _ = sections_of(text)
+        if not sections:
+            continue
+        whole = sum(1 for v in sections.values() if ends_cleanly(v))
+        # No character-count term: a longer PDF extraction usually means table text
+        # leaked in, not that more narrative was recovered. Ties keep the earlier
+        # (more reliable) format because the comparison is strict.
+        score = (whole, len(sections))
+        if best is None or score > best[0]:
+            best = (score, p, text, dm, era, sections)
+    return best
+
+
+def report_url_for(date: str, fetch_log: Dict[str, Any], ext: str) -> str:
+    info = (fetch_log.get(date) or {}).get(ext.lstrip("."), {})
+    fname = info.get("fname")
+    if fname:
+        base = BLS_HISTORY if ext == ".txt" else BLS_ARCHIVE
+        return f"{base}cpi_{fname}{ext}"
+    return f"{BLS_ARCHIVE}cpi_{date}{ext}"
 
 
 def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    data_cfg = cfg["data"]
-    text_cfg = cfg["text"]
-    out_cfg = cfg["output"]
+    dcfg, tcfg, ocfg = cfg["data"], cfg["text"], cfg["output"]
+    rel_dir = resolve_path(dcfg["releases_dir"])
+    api_dir = resolve_path(dcfg["api_cache_dir"])
+    window_months = int(dcfg["window_months"])
+    min_coverage = float(dcfg["min_channel_coverage"])
+    api_start = int(dcfg["api_start_year"])
+    api_end = int(dcfg["api_end_year"])
+    min_chars = int(tcfg["min_text_chars"])
+    max_records = ocfg.get("max_records")
 
-    html_cache_dir = resolve_path(data_cfg.get("html_cache_dir", ".cache/html"))
-    api_cache_dir = resolve_path(data_cfg.get("api_cache_dir", ".cache/api"))
-    delay_s = float(data_cfg.get("request_delay_s", 1.0))
-    timeout_s = float(data_cfg.get("timeout_s", 15))
-    start_year = int(data_cfg.get("start_year", 2009))
-    end_year = int(data_cfg.get("end_year", 2026))
-    min_points = int(data_cfg.get("min_points", 2))
-    min_text_chars = int(text_cfg.get("min_text_chars", 200))
-    ts_intro = text_cfg["ts_intro_sentence"]
-    series_spec = data_cfg["series"]
-    max_records = out_cfg.get("max_records")
-    api_url = data_cfg.get("api_url", BLS_API_URL)
+    print("Loading BLS API history (cached)...", file=sys.stderr)
+    hist = load_history(api_dir, api_start, api_end,
+                        allow_network=bool(dcfg.get("allow_network", True)))
+    empty = [k for k in SERIES if not hist.get(k)]
+    if empty:
+        raise SystemExit(f"series returned no data: {empty}")
 
-    include_txt = bool(data_cfg.get("include_txt", False))
-    txt_start_year = int(data_cfg.get("txt_start_year", 1994))
+    fetch_log_path = resolve_path(dcfg["fetch_log"])
+    fetch_log = json.loads(fetch_log_path.read_text()) if fetch_log_path.exists() else {}
 
-    stats = {
-        "html_releases_in_cdx": 0,
-        "txt_releases_found": 0,
-        "releases_attempted": 0,
-        "records_emitted": 0,
-        "skipped_short_window": 0,
-        "skipped_no_text": 0,
-        "skipped_short_text": 0,
-        "skipped_validation": 0,
-    }
-
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (compatible; CPTDatasetBuilder/1.0; research use)"
-    })
-
-    # 1. Load BLS API time series (one extra year back for the rolling window)
-    api_start = max(1900, min(start_year, txt_start_year) - 1) if include_txt else max(1900, start_year - 1)
-    print("Loading BLS API time series data...", file=sys.stderr)
-    api_data = load_api_timeseries(
-        session, series_spec, api_start, end_year,
-        api_url, api_cache_dir, timeout_s, delay_s,
-    )
-    for spec in series_spec:
-        n = len(api_data.get(spec["id"], {}))
-        flag = "OK" if n > 0 else "WARNING: 0 values — check series ID"
-        print(f"  {spec['id']} ({spec['unit']}): {n} months — {flag}", file=sys.stderr)
-
-    # Expanding-window anchor: earliest month where EVERY configured series has begun.
-    common_start = compute_common_start(api_data, series_spec)
-    if common_start is None:
-        print("  WARNING: no common start month across series — no records will be emitted",
-              file=sys.stderr)
-    else:
-        print(f"  common_start (expanding-window anchor): {common_start}", file=sys.stderr)
-
-    # 2. Discover HTML releases via Wayback CDX (2009–2026)
-    print("\nQuerying Wayback CDX for HTML CPI releases...", file=sys.stderr)
-    html_releases = discover_archive_releases(
-        session, html_cache_dir, timeout_s, start_year, end_year
-    )
-    stats["html_releases_in_cdx"] = len(html_releases)
-    print(f"  Found {len(html_releases)} HTML releases ({start_year}–{end_year})", file=sys.stderr)
-
-    # 3. Optionally discover TXT releases (1994–2007)
-    txt_releases_raw: List[Tuple[str, str, Optional[str], int, int]] = []
-    if include_txt:
-        print("\nDiscovering TXT releases (1994–2007)...", file=sys.stderr)
-        txt_releases_raw = discover_txt_releases(
-            session, html_cache_dir, timeout_s, txt_start_year, start_year - 1
-        )
-        stats["txt_releases_found"] = len(txt_releases_raw)
-        print(f"  Found {len(txt_releases_raw)} TXT releases ({txt_start_year}–{start_year - 1})", file=sys.stderr)
-
-    # 4. Process TXT releases first (chronologically older)
+    dates = sorted({p.stem for p in rel_dir.iterdir()
+                    if p.suffix in (".txt", ".htm", ".pdf")})
+    stats = Counter()
+    stats["release_documents"] = len(dates)
     records: List[Dict[str, Any]] = []
-    print("", file=sys.stderr)
+    seen_dm: Dict[str, str] = {}
+    era_of: Dict[str, str] = {}
 
-    for date_str, bls_url, wayback_url, data_year, data_month in txt_releases_raw:
+    for date in dates:
         if max_records is not None and len(records) >= int(max_records):
             break
-
-        stats["releases_attempted"] += 1
-        dm = ym_str(data_year, data_month)
-        label = f"cpi_{date_str}.txt ({dm})"
-
-        built = None if common_start is None else build_timeseries_expanding(
-            api_data, series_spec, common_start, data_year, data_month, min_points)
-        if built is None:
-            stats["skipped_short_window"] += 1
-            print(f"{label}: skipped (window shorter than {min_points} points)")
+        chosen = choose_document(rel_dir, date)
+        if chosen is None:
+            stats["skip_unparseable_release"] += 1
+            print(f"{date}: skipped (no format yielded a data month + sections)",
+                  file=sys.stderr)
             continue
-        ts_channels, window_months = built
-
-        cache_file = html_cache_dir / f"cpi_{date_str}.txt"
-        content, from_cache, used_url = fetch_txt(session, bls_url, wayback_url, cache_file, timeout_s)
-        if content is None:
-            stats["skipped_no_text"] += 1
-            print(f"{label}: skipped (not accessible)")
-            time.sleep(delay_s)
+        _, path, text, dm, era, sections = chosen
+        if dm in seen_dm:
+            stats["skip_duplicate_data_month"] += 1
+            print(f"{date}: skipped (data month {dm} already from {seen_dm[dm]})",
+                  file=sys.stderr)
             continue
+        seen_dm[dm] = date
+        era_of[dm] = era
+        stats[f"releases_{era}"] += 1
+        stats[f"source_format_{path.suffix.lstrip('.')}"] += 1
+        report_url = report_url_for(date, fetch_log, path.suffix)
+        info = (fetch_log.get(date) or {}).get(path.suffix.lstrip("."), {})
+        fetch_url = (f"https://web.archive.org/web/{info['ts']}/{info['orig']}"
+                     if info.get("ts") else None)
 
-        cache_note = "cache" if from_cache else "fetched"
-        # TXT content might be Wayback-wrapped HTML or plain text
-        if "<html" in content[:200].lower():
-            narrative = extract_narrative(content)
-        else:
-            narrative = extract_narrative_from_pre(content)
+        for topic, prose in sections.items():
+            stats["sections_found"] += 1
+            if topic not in TOPICS:
+                stats["skip_unknown_topic"] += 1
+                continue
+            if not ends_cleanly(prose):
+                stats["skip_truncated_prose"] += 1
+                continue
+            if len(prose) < min_chars:
+                stats["skip_short_text"] += 1
+                continue
+            try:
+                record = build_record(
+                    topic=topic, prose=prose, dm=dm, era=era,
+                    release_date=date, report_url=report_url, fetch_url=fetch_url,
+                    hist=hist, window_months=window_months, min_coverage=min_coverage)
+            except ValueError as exc:
+                stats["skip_validation"] += 1
+                print(f"{dm}/{topic}: validation failed: {exc}", file=sys.stderr)
+                continue
+            if record is None:
+                stats["skip_no_anchor_series"] += 1
+                continue
+            records.append(record)
+            stats["records_emitted"] += 1
 
-        if len(narrative) < min_text_chars:
-            stats["skipped_short_text"] += 1
-            print(f"{label}: {cache_note}, skipped (short text: {len(narrative)} chars)")
-            if not from_cache:
-                time.sleep(delay_s)
-            continue
+    balance = (stats["records_emitted"] + stats["skip_short_text"]
+               + stats["skip_unknown_topic"] + stats["skip_no_anchor_series"]
+               + stats["skip_validation"] + stats["skip_truncated_prose"])
+    if max_records is None and balance != stats["sections_found"]:
+        raise SystemExit(f"reconcile failed: {stats['sections_found']} sections found but "
+                         f"{balance} accounted for ({dict(stats)})")
 
-        # Reconstruct ISO release date from date_str (MMDDYY or MMDDYYYY)
-        rel_month, rel_day, rel_year = parse_txt_filename_date(date_str)
-        release_date_iso = f"{rel_year:04d}-{rel_month:02d}-{rel_day:02d}"
-        report_url = f"{BLS_HISTORY_URL}cpi_{date_str}.txt"
+    out_path = resolve_path(ocfg["output_path"])
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8") as fh:
+        for rec in records:
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
-        try:
-            record = build_record(
-                narrative, ts_channels, window_months, data_year, data_month,
-                release_date_iso, report_url, ts_intro,
-                fetch_url=used_url if used_url != report_url else None,
-            )
-        except ValueError as exc:
-            stats["skipped_validation"] += 1
-            print(f"{label}: {cache_note}, validation failed: {exc}", file=sys.stderr)
-            if not from_cache:
-                time.sleep(delay_s)
-            continue
+    samples = resolve_path(ocfg["samples_path"])
+    samples.parent.mkdir(parents=True, exist_ok=True)
+    samples.write_text(json.dumps(records[:3], ensure_ascii=False, indent=2) + "\n",
+                       encoding="utf-8")
 
-        records.append(record)
-        stats["records_emitted"] += 1
-        print(f"{label}: {cache_note}, emitted ({len(narrative)} chars)")
-        if not from_cache:
-            time.sleep(delay_s)
-
-    # 5. Process HTML releases (2009–2026)
-    for mmddyyyy, wayback_url, data_year, data_month in html_releases:
-        if max_records is not None and len(records) >= int(max_records):
-            break
-
-        stats["releases_attempted"] += 1
-        dm = ym_str(data_year, data_month)
-        label = f"cpi_{mmddyyyy} ({dm})"
-
-        built = None if common_start is None else build_timeseries_expanding(
-            api_data, series_spec, common_start, data_year, data_month, min_points)
-        if built is None:
-            stats["skipped_short_window"] += 1
-            print(f"{label}: skipped (window shorter than {min_points} points)")
-            continue
-        ts_channels, window_months = built
-
-        cache_file = html_cache_dir / f"cpi_{mmddyyyy}.html"
-        html, from_cache = fetch_html(session, wayback_url, cache_file, timeout_s)
-        if html is None:
-            stats["skipped_no_text"] += 1
-            print(f"{label}: skipped (no HTML from Wayback)")
-            time.sleep(delay_s)
-            continue
-
-        cache_note = "cache" if from_cache else "fetched"
-        narrative = extract_narrative(html)
-        if len(narrative) < min_text_chars:
-            stats["skipped_short_text"] += 1
-            print(f"{label}: {cache_note}, skipped (short text: {len(narrative)} chars)")
-            if not from_cache:
-                time.sleep(delay_s)
-            continue
-
-        release_date_iso = f"{mmddyyyy[4:8]}-{mmddyyyy[0:2]}-{mmddyyyy[2:4]}"
-        report_url = f"{BLS_ARCHIVE_BASE}cpi_{mmddyyyy}.htm"
-        try:
-            record = build_record(
-                narrative, ts_channels, window_months, data_year, data_month,
-                release_date_iso, report_url, ts_intro,
-                fetch_url=wayback_url if wayback_url != report_url else None,
-            )
-        except ValueError as exc:
-            stats["skipped_validation"] += 1
-            print(f"{label}: {cache_note}, validation failed: {exc}", file=sys.stderr)
-            if not from_cache:
-                time.sleep(delay_s)
-            continue
-
-        records.append(record)
-        stats["records_emitted"] += 1
-        print(f"{label}: {cache_note}, emitted ({len(narrative)} chars)")
-        if not from_cache:
-            time.sleep(delay_s)
-
-    # 4. Write outputs
-    output_path = resolve_path(out_cfg["output_path"])
-    write_jsonl(records, output_path, out_cfg.get("indent"))
-
-    samples_path = resolve_path(out_cfg["samples_path"])
-    write_jsonl(records[:3], samples_path, indent=2)
-
-    report_path = resolve_path(out_cfg["report_path"])
+    n_pts = [len(r["timeseries"][0]["values"]) for r in records]
+    n_ch = [len(r["timeseries"]) for r in records]
     report = {
         "run_date": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        "start_year": start_year,
-        "end_year": end_year,
-        "window": "expanding (full series history from common_start to each release month)",
-        "common_start": common_start,
-        "min_points": min_points,
-        "series": series_spec,
-        **stats,
+        "record_unit": "one narrative section of one monthly CPI release",
+        "window": f"trailing {window_months} months ending on the reported data month",
+        "data_months": sorted(seen_dm),
+        "data_month_span": [min(seen_dm), max(seen_dm)] if seen_dm else None,
+        "n_data_months": len(seen_dm),
+        "topics": sorted({r["meta"]["topic"] for r in records}),
+        "records_by_topic": dict(Counter(r["meta"]["topic"] for r in records).most_common()),
+        "records_by_format": dict(Counter(r["meta"]["release_format"] for r in records)),
+        "alignment_tiers": dict(Counter(r["alignment"] for r in records)),
+        "timesteps": sum(n_pts),
+        "datapoints": sum(len(c["values"]) for r in records for c in r["timeseries"]),
+        "channels_min_med_max": [min(n_ch), sorted(n_ch)[len(n_ch) // 2], max(n_ch)] if n_ch else None,
+        **dict(stats),
         "config_snapshot": cfg,
     }
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    with report_path.open("w", encoding="utf-8") as fh:
-        json.dump(report, fh, indent=2, ensure_ascii=False)
-        fh.write("\n")
-
+    rep_path = resolve_path(ocfg["report_path"])
+    rep_path.parent.mkdir(parents=True, exist_ok=True)
+    rep_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n",
+                        encoding="utf-8")
     return report, records
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
-
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Build CPT JSONL from BLS CPI press releases (via Wayback Machine) and BLS API.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "Examples:\n"
-            "  python scripts/build_cpt_jsonl.py\n"
-            "  python scripts/build_cpt_jsonl.py --set output.max_records=10\n"
-            "  python scripts/build_cpt_jsonl.py --set output.max_records=null\n"
-        ),
-    )
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=DEFAULT_CONFIG,
-        help=f"YAML config path (default: {DEFAULT_CONFIG.name})",
-    )
-    parser.add_argument(
-        "--set",
-        action="append",
-        default=[],
-        metavar="KEY=VALUE",
-        help="Override a config key (dotted path). Repeatable.",
-    )
-    return parser.parse_args()
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
+    return ap.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    cfg = load_config(args.config, args.set)
-    report, records = run_pipeline(cfg)
-
-    print(
-        f"\nDone: {report['records_emitted']} records emitted "
-        f"({report['releases_attempted']} releases attempted, "
-        f"{report['html_releases_in_cdx']} in CDX).",
-        file=sys.stderr,
-    )
-    print(
-        f"  skipped: {report['skipped_short_window']} short window, "
-        f"{report['skipped_no_text']} no text, "
-        f"{report['skipped_short_text']} short text.",
-        file=sys.stderr,
-    )
-
-    if records:
-        print("\n--- First record text field ---\n")
-        print(records[0]["text"])
+    report, records = run_pipeline(load_config(args.config, args.set))
+    print(f"\nDone: {report['records_emitted']} records from "
+          f"{report['n_data_months']} data months "
+          f"({report['data_month_span'][0]}..{report['data_month_span'][1]}).",
+          file=sys.stderr)
+    print(f"  by topic: {report['records_by_topic']}", file=sys.stderr)
+    print(f"  tiers: {report['alignment_tiers']}", file=sys.stderr)
+    print(f"  timesteps {report['timesteps']:,}  datapoints {report['datapoints']:,}",
+          file=sys.stderr)
+    print(f"  skips: " + ", ".join(f"{k}={v}" for k, v in report.items()
+                                   if k.startswith("skip_")), file=sys.stderr)
 
 
 if __name__ == "__main__":

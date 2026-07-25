@@ -1,75 +1,52 @@
-# BLS CPI → CPT world-knowledge JSONL
+# BLS CPI -> CPT world-knowledge JSONL
+#
+# One record = (data month x narrative section of that month's CPI news release).
 #
 # Quick start:
 #   pip install -r requirements.txt
-#   python scripts/build_cpt_jsonl.py
+#   python scripts/fetch_all.py            # harvest every release document (Wayback)
+#   python scripts/cpi_series.py           # pull + cache the CPI series from the BLS API
+#   python scripts/build_cpt_jsonl.py      # build
 #
 # Override config:
-#   python scripts/build_cpt_jsonl.py --config config.example.yaml
-#   python scripts/build_cpt_jsonl.py --set output.max_records=null
-#   python scripts/build_cpt_jsonl.py --set data.start_year=2010
+#   python scripts/build_cpt_jsonl.py --set output.max_records=50
+#   python scripts/build_cpt_jsonl.py --set data.window_months=60
 
 data:
-  # Data month range for HTML releases (Wayback Machine CDX, coverage ~2009+).
-  # bls.gov blocks automated access for HTML; use Wayback Machine for 2009–2026.
-  start_year: 2009
-  end_year: 2026
+  # Release documents harvested by scripts/fetch_all.py. bls.gov itself 403s automated
+  # access (verified), so every document comes from web.archive.org. 389 release dates
+  # are on disk = 389 distinct data months, 1994-01 .. 2026-06.
+  releases_dir: .cache/releases
+  fetch_log: .cache/probe/fetch_log.json
 
-  # Set include_txt: true to also fetch plain-text press releases from bls.gov
-  # for 1994–2007 (direct bls.gov access required; works on most machines).
-  # txt_start_year sets the lower bound for TXT discovery.
-  include_txt: false   # set true to extend coverage to 1994
-  txt_start_year: 1994
-
-  html_cache_dir: .cache/html
+  # BLS public API v1 - no key required, but 25 series/request, 10 years/request and
+  # 25 requests/day/IP. Responses are cached under api_cache_dir so reruns are free.
+  # 64 series x 5 decade chunks = 15 requests for a cold cache.
   api_cache_dir: .cache/api
+  api_start_year: 1984      # window_months before the first data month (1994-01)
+  api_end_year: 2026
+  allow_network: true       # false = fail instead of calling the API
 
-  # BLS public API v1 — no key required; 25 queries/day, 10 years per query
-  # API responses are cached after first fetch so reruns are free
-  api_url: "https://api.bls.gov/publicAPI/v1/timeseries/data/"
+  # Trailing window: each section is paired with the N monthly index levels ending on
+  # the month that section reports. 120 = ten years, comfortably above the model's
+  # 32-point patch, and long enough to hold a full inflation cycle.
+  window_months: 120
 
-  # CPI series to include in each record's timeseries.
-  # Each series contributes one channel spanning the FULL monthly history of that
-  # series up to the release month (expanding window; see min_points below).
-  # Verify series IDs at https://data.bls.gov/timeseries/ if results look wrong.
-  series:
-    - id: CUSR0000SA0
-      unit: cpi_u_all_items_sa
-    - id: CUUR0000SA0
-      unit: cpi_u_all_items_nsa
-    - id: CUSR0000SA0L1E
-      unit: cpi_u_core_sa
-    - id: CUSR0000SAF
-      unit: cpi_u_food_sa
-    - id: CUSR0000SA0E
-      unit: cpi_u_energy_sa
-
-  # Expanding window: each release is paired with the full monthly history of every
-  # series from a common start month (the earliest month where every configured series
-  # already has a value) through the release's data month. Interior gaps become null.
-  # Records are dropped only if fewer than min_points months are available.
-  min_points: 2
-
-  # Polite delay between live HTTP requests (seconds)
-  request_delay_s: 1.0
-
-  # HTTP timeout per request (seconds)
-  timeout_s: 15
+  # A channel is dropped unless it has a value for the reported month AND covers at
+  # least this fraction of the window. Several component indexes start mid-history
+  # (communication 1998-01, personal care 1999-01, C-CPI-U 1999-12).
+  min_channel_coverage: 0.6
 
 text:
-  # Drop records with less than this many narrative characters
-  min_text_chars: 200
-
-  # Closing sentence containing exactly one <ts></ts>; {start}/{data_month} = "YYYY-MM"
-  ts_intro_sentence: "Monthly CPI indicators covering the full series history from {start} through {data_month}: <ts></ts>"
+  # Drop a section with less than this many characters of its own prose. The terse
+  # one-paragraph groups (apparel, recreation, other goods and services) sit near
+  # this floor; 150 keeps them and drops only the degenerate one-sentence cases.
+  min_text_chars: 150
 
 output:
   output_path: output/bls_cpi_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
 
-  # Demo cap — set null for full build (~385 records, 1994–2026)
-  max_records: 25
-
-  # null = compact JSONL (one record per line); integer = pretty-print JSON array
-  indent: null
+  # null = full build. Set an integer for a smoke test (reconcile check is skipped).
+  max_records: null

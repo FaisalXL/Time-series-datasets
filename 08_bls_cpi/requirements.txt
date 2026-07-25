@@ -1,2 +1,6 @@
 pyyaml>=6.0
 requests>=2.28.0
+
+# System dependency: `pdftotext` (poppler-utils), used only for the PDF rendering of a
+# release. Without it the builder still works from .txt/.htm, which between them cover
+# all 389 releases; the PDF path exists so a damaged capture can fall back.
