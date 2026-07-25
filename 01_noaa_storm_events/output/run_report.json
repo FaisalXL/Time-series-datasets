@@ -1,18 +1,90 @@
 {
-  "grouping": "state_month",
-  "groups_seen": 695,
-  "groups_skipped": {},
-  "records_written": 50,
-  "rows_loaded": 75593,
+  "grouping": "episode_window",
+  "groups_seen": 396502,
+  "groups_skipped": {
+    "missing_episode_narrative": 119062,
+    "short_text": 171159,
+    "sparse_window": 25744,
+    "window_outside_loaded_years": 1919
+  },
+  "records_written": 78618,
+  "rows_loaded": 1797972,
   "validation_errors": [],
+  "series_stats": {
+    "series_len": {
+      "min": 32,
+      "p50": 32,
+      "max": 32,
+      "pct_ge_32": 100.0
+    },
+    "text_chars": {
+      "min": 211,
+      "p50": 754,
+      "max": 2410
+    },
+    "window_active_days": {
+      "min": 8,
+      "p10": 9,
+      "p50": 14,
+      "max": 32,
+      "mean_pct_of_window": 47.53
+    },
+    "episode_share_of_window_events": {
+      "min": 0.0005,
+      "p50": 0.0306,
+      "max": 1.0
+    },
+    "redundancy": {
+      "distinct_series": 53535,
+      "records_sharing_a_series": 40710,
+      "pct_records_sharing_a_series": 51.78,
+      "max_records_per_series": 37,
+      "distinct_texts": 77925,
+      "max_records_per_text": 16
+    }
+  },
   "config_snapshot": {
     "data": {
-      "grouping": "state_month",
+      "grouping": "episode_window",
+      "window_days": 32,
+      "min_active_days_in_window": 8,
+      "min_episode_share": null,
+      "min_days_between_records": 0,
       "source": "download",
       "download_url_template": "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/StormEvents_details-ftp_v1.0_d{year}_c20260323.csv.gz",
       "local_path": null,
       "years": [
-        2023
+        1996,
+        1997,
+        1998,
+        1999,
+        2000,
+        2001,
+        2002,
+        2003,
+        2004,
+        2005,
+        2006,
+        2007,
+        2008,
+        2009,
+        2010,
+        2011,
+        2012,
+        2013,
+        2014,
+        2015,
+        2016,
+        2017,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022,
+        2023,
+        2024,
+        2025,
+        2026
       ],
       "state_filter": [],
       "event_type_filter": [],
@@ -22,6 +94,7 @@
       "min_month_events": 1
     },
     "text": {
+      "min_text_chars": 300,
       "max_event_narratives": 3,
       "event_narrative_char_limit": 400,
       "episode_narrative_char_limit": 1200,
@@ -30,10 +103,10 @@
     "output": {
       "output_path": "output/noaa_storm_events_cpt.jsonl",
       "report_path": "output/run_report.json",
-      "max_records": 50,
+      "max_records": null,
       "indent": null
     }
   },
-  "generated_at": "2026-07-24T19:03:39Z",
+  "generated_at": "2026-07-25T02:28:28Z",
   "dry_run": false
 }

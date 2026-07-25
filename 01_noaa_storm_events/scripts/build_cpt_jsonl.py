@@ -18,12 +18,13 @@ import argparse
 import calendar
 import csv
 import gzip
+import hashlib
 import json
 import re
 import sys
 import urllib.error
 import urllib.request
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -222,9 +223,50 @@ class StateMonthGroup:
     rows: List[EventRow] = field(default_factory=list)
 
 
+@dataclass
+class EpisodeWindowGroup:
+    """One episode, plus the trailing state-wide daily window that ends with it.
+
+    `rows` are the episode's own event rows (they supply the narrative and the
+    window's terminal segment); `state_rows` are every row for the same state
+    inside the window, which is what the series actually aggregates.
+    """
+
+    episode_id: str
+    state: str
+    rows: List[EventRow] = field(default_factory=list)
+    state_rows: List[EventRow] = field(default_factory=list)
+    win_start: Optional[date] = None
+    win_end: Optional[date] = None
+
+
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
+
+
+_INDEX_CACHE: Dict[str, str] = {}
+
+
+def _resolve_year_filename(year: int) -> Optional[str]:
+    """Look up the real detail filename for `year` in the NCEI index.
+
+    Each annual file carries a compile-date suffix (`..._d2024_c20260421.csv.gz`) that
+    NOAA bumps whenever it re-issues a year, so a hardcoded suffix silently rots. The
+    index is fetched once per run and memoized.
+    """
+    if not _INDEX_CACHE:
+        try:
+            with urllib.request.urlopen(NOAA_INDEX_URL, timeout=60) as resp:
+                html = resp.read().decode("utf-8", errors="replace")
+        except (urllib.error.URLError, OSError) as exc:
+            print(f"Warning: could not fetch NCEI index ({exc})", file=sys.stderr)
+            return None
+        for match in re.finditer(
+            r"StormEvents_details-ftp_v1\.0_d(\d{4})_c\d{8}\.csv\.gz", html
+        ):
+            _INDEX_CACHE[match.group(1)] = match.group(0)
+    return _INDEX_CACHE.get(str(year))
 
 
 def download_year_csv(url_template: str, year: int, cache_dir: Path) -> Path:
@@ -234,6 +276,19 @@ def download_year_csv(url_template: str, year: int, cache_dir: Path) -> Path:
     dest = cache_dir / filename
     if dest.exists():
         return dest
+
+    # Templated compile-date suffix may not match what NOAA currently serves; if any
+    # cached file already covers this year, reuse it before going to the network.
+    existing = sorted(cache_dir.glob(f"StormEvents_details-ftp_v1.0_d{year}_c*.csv.gz"))
+    if existing:
+        return existing[-1]
+
+    resolved = _resolve_year_filename(year)
+    if resolved and resolved != filename:
+        dest = cache_dir / resolved
+        if dest.exists():
+            return dest
+        url = NOAA_INDEX_URL + resolved
     print(f"Downloading {url} ...", file=sys.stderr)
     try:
         urllib.request.urlretrieve(url, dest)
@@ -487,6 +542,184 @@ def state_month_to_record(group: StateMonthGroup, cfg: Dict[str, Any]) -> Dict[s
     )
 
 
+# ---------------------------------------------------------------------------
+# Episode + trailing state window
+# ---------------------------------------------------------------------------
+
+
+def group_episode_windows(
+    rows: List[EventRow], cfg: Dict[str, Any]
+) -> List[EpisodeWindowGroup]:
+    """One group per (episode, state), carrying the trailing state-wide daily window.
+
+    The window is the `window_days` calendar days ENDING on the episode's last event
+    day, so the episode's own activity is always the series' terminal segment. The
+    series aggregates *every* event in that state over the window (not just this
+    episode's), which is what makes the quiet days genuine state-level quiet rather
+    than the artefact of slicing one episode.
+    """
+    data_cfg = cfg["data"]
+    window_days = int(data_cfg.get("window_days", 32))
+
+    # state -> date -> rows, so a window lookup is a cheap per-day gather.
+    by_state_day: DefaultDict[str, DefaultDict[date, List[EventRow]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    for row in rows:
+        by_state_day[row.state][row.event_date].append(row)
+
+    episodes = group_episodes(rows)
+    groups: List[EpisodeWindowGroup] = []
+    for ep in episodes:
+        win_end = max(r.event_date for r in ep.rows)
+        win_start = win_end - timedelta(days=window_days - 1)
+        day_index = by_state_day[ep.state]
+        state_rows = [
+            r for day in iter_date_range(win_start, win_end) for r in day_index.get(day, [])
+        ]
+        groups.append(
+            EpisodeWindowGroup(
+                episode_id=ep.episode_id,
+                state=ep.state,
+                rows=ep.rows,
+                state_rows=state_rows,
+                win_start=win_start,
+                win_end=win_end,
+            )
+        )
+    return groups
+
+
+def should_skip_episode_window(
+    group: EpisodeWindowGroup, cfg: Dict[str, Any], loaded_years: set
+) -> Optional[str]:
+    data_cfg, text_cfg = cfg["data"], cfg["text"]
+
+    state_filter = [s.strip().upper() for s in data_cfg.get("state_filter", []) if s]
+    if state_filter and group.state not in state_filter:
+        return "state_filter"
+
+    rows = filter_episode_rows(group.rows, cfg)
+    if not rows:
+        return "event_type_filter"
+
+    # A window reaching outside the loaded years would read as quiet days that are
+    # really just unloaded data. Drop rather than fabricate zeros.
+    if group.win_start.year not in loaded_years:
+        return "window_outside_loaded_years"
+
+    if data_cfg.get("require_episode_narrative", True):
+        if not any(r.episode_narrative for r in rows):
+            return "missing_episode_narrative"
+
+    min_text = int(text_cfg.get("min_text_chars", 0))
+    if min_text:
+        narrative_chars = len(" ".join(
+            sorted({r.episode_narrative for r in rows if r.episode_narrative})
+        ))
+        if narrative_chars < min_text:
+            return "short_text"
+
+    state_rows = filter_episode_rows(group.state_rows, cfg)
+
+    # The zero-sparsity guard. A window whose only active days are this episode's own
+    # is the degenerate case the state-month design suffered from; require the state
+    # to have been genuinely active across the window.
+    min_active = int(data_cfg.get("min_active_days_in_window", 0))
+    if min_active:
+        active_days = len({r.event_date for r in state_rows})
+        if active_days < min_active:
+            return "sparse_window"
+
+    # Optionally require the episode to account for a real share of the window, so the
+    # narrative is describing the window's dominant activity rather than a footnote.
+    min_share = data_cfg.get("min_episode_share")
+    if min_share:
+        share = len(rows) / len(state_rows) if state_rows else 0.0
+        if share < float(min_share):
+            return "episode_share"
+
+    return None
+
+
+def episode_window_to_record(
+    group: EpisodeWindowGroup, cfg: Dict[str, Any]
+) -> Dict[str, Any]:
+    rows = filter_episode_rows(group.rows, cfg)
+    state_rows = filter_episode_rows(group.state_rows, cfg)
+    win_start, win_end = group.win_start, group.win_end
+
+    injuries, damage, events = build_daily_arrays(state_rows, win_start, win_end)
+    window_dates = [d.isoformat() for d in iter_date_range(win_start, win_end)]
+
+    ep_first = min(r.event_date for r in rows)
+    ep_last = max(r.event_date for r in rows)
+    event_types = sorted({r.event_type for r in rows if r.event_type})
+    text = assemble_text(rows, cfg)
+
+    return emit_record(
+        text=text,
+        timeseries=[
+            {"values": injuries, "unit": "injuries/day", "freq": "1d"},
+            {"values": damage, "unit": "USD/day", "freq": "1d"},
+            {"values": events, "unit": "events/day", "freq": "1d"},
+        ],
+        timestamps=window_dates,
+        alignment="describes",
+        license="public-domain-us-gov",
+        text_source="first_party_official",
+        source=_year_source_url(cfg, win_end.year),
+        dataset="noaa_storm_events",
+        series_id=(
+            f"{make_series_id(group.episode_id, group.state, rows)}_{win_end.isoformat()}"
+        ),
+        domain="meteorology",
+        region="US",
+        period_start=win_start.isoformat(),
+        period_end=win_end.isoformat(),
+        meta={
+            "geography": group.state,
+            "event_types": event_types,
+            "episode_id": group.episode_id,
+            # the episode IS the window's terminal segment (structural alignment)
+            "episode_date_range": [ep_first.isoformat(), ep_last.isoformat()],
+            "episode_n_events": len(rows),
+            "episode_injuries": sum(r.injuries for r in rows),
+            "episode_damage_usd": sum(r.damage_usd for r in rows),
+            "episode_share_of_window_events": (
+                round(len(rows) / len(state_rows), 4) if state_rows else None
+            ),
+            "window_days": len(window_dates),
+            "window_active_days": sum(1 for v in events if v > 0),
+            "window_n_events": len(state_rows),
+            "window_n_episodes": len({r.episode_id for r in state_rows if r.episode_id}),
+            "date_range": [win_start.isoformat(), win_end.isoformat()],
+        },
+    )
+
+
+def thin_overlapping_windows(
+    groups: List[EpisodeWindowGroup], min_gap_days: int
+) -> Tuple[List[EpisodeWindowGroup], int]:
+    """Greedily drop windows that end too close to the previously kept one.
+
+    Consecutive episodes in the same state share most of their trailing window, so
+    without a floor on the spacing the corpus carries near-duplicate series. Returns
+    the kept groups (input order preserved) and the number dropped.
+    """
+    if min_gap_days <= 0:
+        return groups, 0
+    order = sorted(range(len(groups)), key=lambda i: (groups[i].state, groups[i].win_end))
+    keep = [False] * len(groups)
+    last_state, last_end = None, None
+    for i in order:
+        g = groups[i]
+        if g.state != last_state or (g.win_end - last_end).days >= min_gap_days:
+            keep[i] = True
+            last_state, last_end = g.state, g.win_end
+    return [g for g, k in zip(groups, keep) if k], keep.count(False)
+
+
 def should_skip_state_month(
     group: StateMonthGroup, cfg: Dict[str, Any]
 ) -> Optional[str]:
@@ -550,6 +783,70 @@ def should_skip_episode(
 # schema/validate.py --strict at construction time, raising ValueError on any violation.
 
 
+def _pct(sorted_vals: List[float], q: float) -> Optional[float]:
+    if not sorted_vals:
+        return None
+    return sorted_vals[min(len(sorted_vals) - 1, int(q * len(sorted_vals)))]
+
+
+def summarize_records(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Series-length and window-density stats — the two things this design must prove."""
+    if not records:
+        return {}
+    lengths = sorted(len(r["timeseries"][0]["values"]) for r in records)
+    active = sorted(
+        r["meta"]["window_active_days"] for r in records if "window_active_days" in r["meta"]
+    )
+    shares = sorted(
+        r["meta"]["episode_share_of_window_events"]
+        for r in records
+        if r["meta"].get("episode_share_of_window_events") is not None
+    )
+    text_lens = sorted(len(r["text"]) for r in records)
+    out: Dict[str, Any] = {
+        "series_len": {
+            "min": lengths[0], "p50": _pct(lengths, 0.5), "max": lengths[-1],
+            "pct_ge_32": round(100.0 * sum(1 for v in lengths if v >= 32) / len(lengths), 2),
+        },
+        "text_chars": {"min": text_lens[0], "p50": _pct(text_lens, 0.5), "max": text_lens[-1]},
+    }
+    if active:
+        out["window_active_days"] = {
+            "min": active[0], "p10": _pct(active, 0.10), "p50": _pct(active, 0.5),
+            "max": active[-1],
+            "mean_pct_of_window": round(
+                100.0 * sum(active) / sum(lengths[: len(active)]), 2
+            ),
+        }
+    if shares:
+        out["episode_share_of_window_events"] = {
+            "min": round(shares[0], 4), "p50": round(_pct(shares, 0.5), 4),
+            "max": round(shares[-1], 4),
+        }
+
+    # Two episodes in the same state ending on the same day yield the same window, so
+    # their series are identical while their narratives differ. That is real many-to-one
+    # source structure, not template inflation — but it is reported, not hidden.
+    series_sig = Counter(
+        hashlib.md5(
+            json.dumps([c["values"] for c in r["timeseries"]]).encode()
+        ).hexdigest()
+        for r in records
+    )
+    text_sig = Counter(r["text"] for r in records)
+    out["redundancy"] = {
+        "distinct_series": len(series_sig),
+        "records_sharing_a_series": sum(v for v in series_sig.values() if v > 1),
+        "pct_records_sharing_a_series": round(
+            100.0 * sum(v for v in series_sig.values() if v > 1) / len(records), 2
+        ),
+        "max_records_per_series": max(series_sig.values()),
+        "distinct_texts": len(text_sig),
+        "max_records_per_text": max(text_sig.values()),
+    }
+    return out
+
+
 def write_output(
     records: List[Dict[str, Any]], cfg: Dict[str, Any], dry_run: bool
 ) -> None:
@@ -595,6 +892,7 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
     max_records = cfg["output"].get("max_records")
     validation_errors: List[str] = []
 
+    thinned = 0
     if grouping == "state_month":
         groups = group_state_months(rows)
         skip_fn = should_skip_state_month
@@ -605,8 +903,22 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
         skip_fn = should_skip_episode
         record_fn = episode_to_record
         label_fn = lambda g: f"{g.episode_id}/{g.state}"
+    elif grouping == "episode_window":
+        loaded_years = {r.event_date.year for r in rows}
+        groups = group_episode_windows(rows, cfg)
+        # Thin before the per-group filters so the spacing floor is applied to the
+        # episode timeline itself, not to whatever survives filtering.
+        groups, thinned = thin_overlapping_windows(
+            groups, int(cfg["data"].get("min_days_between_records", 0))
+        )
+        skip_fn = lambda g, c: should_skip_episode_window(g, c, loaded_years)
+        record_fn = episode_window_to_record
+        label_fn = lambda g: f"{g.episode_id}/{g.state}/{g.win_end}"
     else:
         raise SystemExit(f"Unknown data.grouping: {grouping}")
+
+    if thinned:
+        skipped["window_overlap_thinned"] = thinned
 
     for group in groups:
         reason = skip_fn(group, cfg)
@@ -632,6 +944,7 @@ def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
         "records_written": len(records),
         "rows_loaded": len(rows),
         "validation_errors": validation_errors[:20],
+        "series_stats": summarize_records(records),
         "config_snapshot": cfg,
         "generated_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "dry_run": dry_run,
