@@ -1,9 +1,15 @@
 pyyaml>=6.0
-# PyYAML is the only pip dependency (reads config.example.yaml).
-# Series: the diffusion-index workbook (.xls, actually XLSX) is parsed with the standard
-#   library (zipfile + xml.etree) — no openpyxl/pandas needed.
-# Text: release PDFs (2007-2023) -> text via the `pdftotext` CLI (poppler-utils); recent
-#   releases (2024+) are HTML and parsed with the stdlib. Install poppler:
+pdfplumber>=0.10
+# PyYAML reads config.example.yaml.
+# pdfplumber gives word bounding boxes, needed by scripts/colex.py to rebuild the reading
+#   order of the 2005-2009 releases: those are Wayback captures of the old web page, so the
+#   body column and the site sidebar interleave and poppler's own order shreds sentences.
+# The `pdftotext` CLI (poppler-utils) is still required — scripts/tmostab.py reads the
+#   as-published results table out of the release PDFs in -layout mode:
 #     brew install poppler            (macOS)
 #     apt-get install poppler-utils   (Debian/Ubuntu)
-# The build checks for pdftotext and exits with a clear message if it is missing.
+# Recent releases (2024+) and every Wayback-recovered month are HTML, parsed with the stdlib.
+#
+# NOT a dependency: the diffusion-index workbook (index_sa.xls). It is the as-revised
+# series and disagrees with 93.3% of the releases' own prose, so it is not used — the
+# series is stitched from each release's own table. See config.example.yaml.

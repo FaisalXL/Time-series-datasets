@@ -1,67 +1,186 @@
-# Dallas Fed Texas Manufacturing Outlook Survey (TMOS) → CPT world-knowledge JSONL
+# 48_dallas_tmos — Texas Manufacturing Outlook Survey
 #
-# One record = one release month: the TMOS monthly release narrative (which recites the
-# diffusion-index readings) paired with the FULL history of those indices up to that release
-# (an expanding window). The prose *describes* the series → "describes" (value-reciting,
-# EIA/BLS-tier). text_quality "real".
+# One record = (release month x narrative paragraph): the Bank's own paragraph, verbatim,
+# paired with a trailing 36-month window of exactly the indicators that paragraph names,
+# taken from each release's own table rather than from the Bank's published workbook.
 #
-# One of the Federal Reserve regional business surveys (see docs/fed_surveys_discovery.md).
-# Sibling packages: 47_philadelphia_mbos; Dallas also runs TSSOS (services), Energy,
-# Agriculture, Banking — each its own dataset.
+# Record unit revised 2026-07-27 (owner review, Defu: "the text is really weak here, the
+# alignment"). The first build split per indicator, which gave a median 154 chars of text
+# pinning ONE figure against 216 attached values, and — because joint sentences had to be
+# cut at the conjunction — emitted ungrammatical fragments ("the shipments index moved back
+# into positive territory, climbing six points to 2.8."). TMOS writes ~2,200 chars of
+# narrative covering 14 indicators, so any per-indicator split is thin by construction.
+# The document's own sectioning is thematic paragraphs (current activity / broader
+# conditions / labour / prices / expectations), and pairing each with the indicators it
+# names measures far better: median 332 chars, and 96.4% of a paragraph's figures are
+# values of its own attached indicators. Same principle as 08_bls_cpi (per release section)
+# and 31_usdm_drought (per region section): split on the source's structure, not ours.
 #
-# License: Federal Reserve Bank publications are U.S. public domain / freely reusable.
-# ⚠ The index SERIES are also on FRED (Oliver's #9); the novel element is the
-#   release-narrative pairing. Get overlap sign-off before scaling. See NOTION_PAGE.md.
-#
-# Quick start:
-#   pip install -r requirements.txt        # + poppler (pdftotext)
-#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
-#   python scripts/build_cpt_jsonl.py                                  # demo (50)
-#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build (~230)
+# Why not the workbook: `index_sa.xls` is the as-revised series. The Dallas Fed
+# re-estimates the seasonal factors once a year and revises the whole history — the
+# release says so itself ("Once per year, the Federal Reserve Bank of Dallas revises the
+# historical data ... after calculating new seasonal adjustment factors"). Measured
+# 2026-07-26 over six releases spanning 2008–2024, the value the prose quotes matches the
+# current workbook in 0 of 14 cases, median drift 1.6 index points (Sep-08 general
+# business activity: prose −39.6, workbook −35.7; Jun-12 production: prose 15.5, workbook
+# 17.6). Each release prints the table of what it published that month, which is exactly
+# the vintage its own prose quotes — so the series is stitched from those tables.
+# Same finding as 47_philadelphia_mbos; see [Fed survey vintage trap].
 
 data:
   bank: "Federal Reserve Bank of Dallas"
   survey_title: "Texas Manufacturing Outlook Survey"
   district: 11
   domain: "manufacturing"
+  source_url: "https://www.dallasfed.org/research/surveys/tmos"
+  # Record identity. The builder is 47's, so these must be set explicitly — the first
+  # build after the port stamped every record `philadelphia_mbos` / `US-PA` / `mbos_…`.
+  dataset: "dallas_tmos"
+  region: "US-TX"
+  series_id_prefix: "tmos"
 
-  # Seasonally-adjusted diffusion indices (.xls extension but actually XLSX; stdlib-parsed).
-  # DATE col like "Jun-25"; monthly Jun-2004 -> present. 34 cols (current + future).
-  data_xlsx_url: "https://www.dallasfed.org/~/media/Documents/research/surveys/tmos/documents/index_sa.xls"
+  # The release universe, measured 2026-07-26. TMOS *data* begins 2004-06 but the first
+  # release published to the web is 2005-11: both the live media tree and the retired
+  # /data/outlook/ layout start at tmos0511, checked against every Wayback capture of
+  # both prefixes. The 17 months 2004-06..2005-10 are data-only.
+  first_month: "2005-11"
+  last_month: "2026-06"
 
-  # Release narrative: Dallas serves PDFs for ~2007-2023 and HTML pages for ~2024->present.
-  # The build tries the PDF first, then the HTML page. {year}=YYYY, {yymm}=YY+MM (e.g. 2506).
+  # Provenance only — fetch_release reads the cache; scripts/harvest.py fills it.
   pdf_url_template: "https://www.dallasfed.org/-/media/Documents/research/surveys/tmos/{year}/tmos{yymm}.pdf"
   html_url_template: "https://www.dallasfed.org/research/surveys/tmos/{year}/{yymm}"
+  retired_url_template: "http://dallasfed.org/data/outlook/{year}/tmos{yymm}.html"
+  revised_xlsx_url_unused: "https://www.dallasfed.org/~/media/Documents/research/surveys/tmos/documents/index_sa.xls"
+  wayback_cdx_template: "http://web.archive.org/cdx/search/cdx?url={url}&output=text&fl=timestamp&filter=statuscode:200&limit=40"
+  wayback_raw_template: "http://web.archive.org/web/{ts}id_/{url}"
 
-  # canonical originating page (schema v1 `source` must be a URL)
-  source_url: "https://www.dallasfed.org/research/surveys/tmos"
+  # Indicator topics. Each becomes its own record: `match` selects the narrative
+  # sentences (ALL words of ANY one group must appear, case-insensitive), `anchor` is the
+  # cell whose value must exist for the record to be emitted and whose verbatim
+  # appearance in the prose sets `recites`. Tags must match scripts/tmostab.py.
+  topics:
+    - tag: production
+      label: "production"
+      anchor: cur_idx
+      match: [["production"]]
+    - tag: capacity_utilization
+      label: "capacity utilization"
+      anchor: cur_idx
+      match: [["capacity utilization"]]
+    - tag: new_orders
+      label: "new orders"
+      anchor: cur_idx
+      match: [["new orders"]]
+    - tag: growth_rate_of_orders
+      label: "growth rate of orders"
+      anchor: cur_idx
+      match: [["growth rate of orders"]]
+    - tag: unfilled_orders
+      label: "unfilled orders"
+      anchor: cur_idx
+      match: [["unfilled orders"], ["order backlog"], ["backlogs"]]
+    - tag: shipments
+      label: "shipments"
+      anchor: cur_idx
+      match: [["shipments"]]
+    - tag: delivery_time
+      label: "delivery time"
+      anchor: cur_idx
+      match: [["delivery time"]]
+    - tag: materials_inventories
+      label: "materials inventories"
+      anchor: cur_idx
+      match: [["materials inventories"], ["raw materials inventor"]]
+    - tag: finished_goods_inventories
+      label: "finished goods inventories"
+      anchor: cur_idx
+      match: [["finished goods inventor"]]
+    - tag: prices_raw_materials
+      label: "prices paid for raw materials"
+      anchor: cur_idx
+      match: [["raw materials price"], ["prices paid"], ["input price"],
+              ["price of raw materials"], ["raw material price"]]
+    - tag: prices_finished_goods
+      label: "prices received for finished goods"
+      anchor: cur_idx
+      match: [["finished goods price"], ["prices received"], ["selling price"]]
+    - tag: wages_benefits
+      label: "wages and benefits"
+      anchor: cur_idx
+      match: [["wages and benefits"], ["wage"]]
+    - tag: employment
+      label: "employment"
+      anchor: cur_idx
+      match: [["employment"], ["number of employees"], ["payroll"], ["employees index"]]
+    - tag: hours_worked
+      label: "hours worked"
+      anchor: cur_idx
+      match: [["hours worked"], ["workweek"], ["work hours"], ["average employee"]]
+    - tag: capital_expenditures
+      label: "capital expenditures"
+      anchor: cur_idx
+      match: [["capital expenditures"], ["capital spending"]]
+    - tag: company_outlook
+      label: "company outlook"
+      anchor: cur_idx
+      match: [["company outlook"]]
+    - tag: general_business_activity
+      label: "general business activity"
+      anchor: cur_idx
+      match: [["general business activity"], ["broader business conditions"],
+              ["broader economic conditions"], ["business activity index"]]
+    - tag: outlook_uncertainty
+      label: "outlook uncertainty"
+      anchor: cur_idx
+      match: [["uncertainty"]]
 
-  # Diffusion-index channels (workbook column -> channel name). The narrative recites
-  # each of these. Values are diffusion indices (% increase - % decrease; ~ -100..+100).
+  # Table cell -> channel. `nochg` is deliberately not shipped: it is 100 minus the other
+  # two up to respondent omission, so it adds a near-collinear channel and no information.
   channels:
-    - {col: "Bact", name: "general_business_activity"}
-    - {col: "Prod", name: "production"}
-    - {col: "Vnwo", name: "new_orders"}
-    - {col: "Vshp", name: "shipments"}
-    - {col: "Nemp", name: "employment"}
-    - {col: "Prm",  name: "prices_raw_materials"}
-    - {col: "Colk", name: "company_outlook"}
+    - {cell: cur_idx, unit: "diffusion_index_current"}
+    - {cell: cur_inc, unit: "percent_of_firms_reporting_increase_current"}
+    - {cell: cur_dec, unit: "percent_of_firms_reporting_decrease_current"}
+    - {cell: fut_idx, unit: "diffusion_index_six_month_outlook"}
+    - {cell: fut_inc, unit: "percent_of_firms_expecting_increase_six_month"}
+    - {cell: fut_dec, unit: "percent_of_firms_expecting_decrease_six_month"}
 
-  min_points: 2              # expanding window: full index history to the release month (>= this many points)
+  # A vintage series cannot be interpolated — a month whose release printed no table has
+  # no as-published value — so gaps stay null inside a window rather than voiding it.
+  # 2005-11..2009 is the binding stretch: the release page of that era carries prose but
+  # no results table (the table lived on a separate tmos{yymm}summ.html page, of which
+  # only 31 were ever archived).
+  max_gap_months: 6
+  require_recent_complete: 3
+  # 36 months, matching 47_philadelphia_mbos: same document family, same monthly cadence,
+  # and it clears the model's patch-32 size.
+  trailing_window_months: 36
+  # A paragraph naming six or more indicators is a release summary or a methodology note
+  # rather than one theme's prose (the #08 guard, which there was ">=3 expenditure groups").
+  max_indicators_per_paragraph: 5
+
   cache_dir: ".cache"
   user_agent: "CPT-dataset-research faisal@usc.edu"
-  request_delay_s: 0.3
+  request_delay_s: 0.4
   timeout_s: 60
 
 text:
-  min_text_chars: 250
-  # No templated ts_intro: <ts></ts> is appended directly to the real scraped narrative,
-  # nothing is generated.
+  # NO GENERATED TEXT. `<ts></ts>` follows the release's own sentences and nothing else.
+  # Provenance lives in `meta`. The floor is on the WHOLE record text.
+  #
+  # 80, not 47's 120. Owner decision 2026-07-26, taken on a measured comparison: TMOS
+  # narrates most indicators in exactly one crisp sentence ("The new orders index shot up
+  # 16 points to 17.6, its highest reading in 15 months." = 80 chars), where MBOS tends to
+  # spend two or three. At 120 the floor was not selecting for richer prose, it was
+  # silently deleting whole indicators — new orders fell to 28 records and shipments to 13
+  # against production's 171, which misrepresents how often the Bank actually narrates
+  # them. 120 -> 80 moves 348 topic units from `short_snippet` into the bank (946 -> 1,294)
+  # and every one of them is real first-party prose whose anchor value is verified against
+  # the terminal point of its own series.
+  min_snippet_chars: 80
 
 output:
   output_path: output/dallas_tmos_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
-  max_records: 50            # demo cap. null = full build (~230 monthly releases)
+  max_records: 50            # demo cap. null = full build (run_full.py sets this)
   indent: null

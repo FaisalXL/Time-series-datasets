@@ -1,23 +1,56 @@
 {
   "survey": "Texas Manufacturing Outlook Survey",
   "bank": "Federal Reserve Bank of Dallas",
-  "window": "expanding (full index history to each release month)",
-  "channels": [
-    "general_business_activity",
+  "record_unit": "(release month x narrative paragraph)",
+  "series": "as-first-published vintage, stitched from each release's own table",
+  "window": "trailing 36 months, no gaps",
+  "indicators": [
     "production",
+    "capacity_utilization",
     "new_orders",
+    "growth_rate_of_orders",
+    "unfilled_orders",
     "shipments",
-    "employment",
+    "delivery_time",
+    "materials_inventories",
+    "finished_goods_inventories",
     "prices_raw_materials",
-    "company_outlook"
+    "prices_finished_goods",
+    "wages_benefits",
+    "employment",
+    "hours_worked",
+    "capital_expenditures",
+    "company_outlook",
+    "general_business_activity",
+    "outlook_uncertainty"
   ],
   "stats": {
-    "months_with_window": 132,
-    "emitted": 50,
-    "no_text": 82,
-    "short_text": 0,
+    "months_scanned": 248,
+    "no_release": 1,
+    "no_text_layer": 4,
+    "no_table": 12,
+    "no_narrative": 2,
+    "tab_summ": 30,
+    "src_pdf": 123,
+    "tab_pdf": 93,
+    "tab_html": 108,
+    "src_html": 106,
+    "paragraphs_scanned": 51,
+    "para_no_indicator": 0,
+    "para_is_summary": 0,
+    "short_paragraph": 0,
     "short_window": 0,
-    "invalid": 0
+    "para_no_usable_indicator": 0,
+    "indicator_failed_identity": 0,
+    "indicator_sparse_window": 0,
+    "figures_in_text": 138,
+    "figures_not_in_series": 4,
+    "invalid": 0,
+    "emitted": 50,
+    "releases_usable": 229,
+    "span": "2006-02 .. 2026-06",
+    "recites": 50,
+    "describes": 0
   },
   "config_snapshot": {
     "data": {
@@ -25,48 +58,297 @@
       "survey_title": "Texas Manufacturing Outlook Survey",
       "district": 11,
       "domain": "manufacturing",
-      "data_xlsx_url": "https://www.dallasfed.org/~/media/Documents/research/surveys/tmos/documents/index_sa.xls",
+      "source_url": "https://www.dallasfed.org/research/surveys/tmos",
+      "dataset": "dallas_tmos",
+      "region": "US-TX",
+      "series_id_prefix": "tmos",
+      "first_month": "2005-11",
+      "last_month": "2026-06",
       "pdf_url_template": "https://www.dallasfed.org/-/media/Documents/research/surveys/tmos/{year}/tmos{yymm}.pdf",
       "html_url_template": "https://www.dallasfed.org/research/surveys/tmos/{year}/{yymm}",
-      "source_url": "https://www.dallasfed.org/research/surveys/tmos",
-      "channels": [
+      "retired_url_template": "http://dallasfed.org/data/outlook/{year}/tmos{yymm}.html",
+      "revised_xlsx_url_unused": "https://www.dallasfed.org/~/media/Documents/research/surveys/tmos/documents/index_sa.xls",
+      "wayback_cdx_template": "http://web.archive.org/cdx/search/cdx?url={url}&output=text&fl=timestamp&filter=statuscode:200&limit=40",
+      "wayback_raw_template": "http://web.archive.org/web/{ts}id_/{url}",
+      "topics": [
         {
-          "col": "Bact",
-          "name": "general_business_activity"
+          "tag": "production",
+          "label": "production",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "production"
+            ]
+          ]
         },
         {
-          "col": "Prod",
-          "name": "production"
+          "tag": "capacity_utilization",
+          "label": "capacity utilization",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "capacity utilization"
+            ]
+          ]
         },
         {
-          "col": "Vnwo",
-          "name": "new_orders"
+          "tag": "new_orders",
+          "label": "new orders",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "new orders"
+            ]
+          ]
         },
         {
-          "col": "Vshp",
-          "name": "shipments"
+          "tag": "growth_rate_of_orders",
+          "label": "growth rate of orders",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "growth rate of orders"
+            ]
+          ]
         },
         {
-          "col": "Nemp",
-          "name": "employment"
+          "tag": "unfilled_orders",
+          "label": "unfilled orders",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "unfilled orders"
+            ],
+            [
+              "order backlog"
+            ],
+            [
+              "backlogs"
+            ]
+          ]
         },
         {
-          "col": "Prm",
-          "name": "prices_raw_materials"
+          "tag": "shipments",
+          "label": "shipments",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "shipments"
+            ]
+          ]
         },
         {
-          "col": "Colk",
-          "name": "company_outlook"
+          "tag": "delivery_time",
+          "label": "delivery time",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "delivery time"
+            ]
+          ]
+        },
+        {
+          "tag": "materials_inventories",
+          "label": "materials inventories",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "materials inventories"
+            ],
+            [
+              "raw materials inventor"
+            ]
+          ]
+        },
+        {
+          "tag": "finished_goods_inventories",
+          "label": "finished goods inventories",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "finished goods inventor"
+            ]
+          ]
+        },
+        {
+          "tag": "prices_raw_materials",
+          "label": "prices paid for raw materials",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "raw materials price"
+            ],
+            [
+              "prices paid"
+            ],
+            [
+              "input price"
+            ],
+            [
+              "price of raw materials"
+            ],
+            [
+              "raw material price"
+            ]
+          ]
+        },
+        {
+          "tag": "prices_finished_goods",
+          "label": "prices received for finished goods",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "finished goods price"
+            ],
+            [
+              "prices received"
+            ],
+            [
+              "selling price"
+            ]
+          ]
+        },
+        {
+          "tag": "wages_benefits",
+          "label": "wages and benefits",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "wages and benefits"
+            ],
+            [
+              "wage"
+            ]
+          ]
+        },
+        {
+          "tag": "employment",
+          "label": "employment",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "employment"
+            ],
+            [
+              "number of employees"
+            ],
+            [
+              "payroll"
+            ],
+            [
+              "employees index"
+            ]
+          ]
+        },
+        {
+          "tag": "hours_worked",
+          "label": "hours worked",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "hours worked"
+            ],
+            [
+              "workweek"
+            ],
+            [
+              "work hours"
+            ],
+            [
+              "average employee"
+            ]
+          ]
+        },
+        {
+          "tag": "capital_expenditures",
+          "label": "capital expenditures",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "capital expenditures"
+            ],
+            [
+              "capital spending"
+            ]
+          ]
+        },
+        {
+          "tag": "company_outlook",
+          "label": "company outlook",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "company outlook"
+            ]
+          ]
+        },
+        {
+          "tag": "general_business_activity",
+          "label": "general business activity",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "general business activity"
+            ],
+            [
+              "broader business conditions"
+            ],
+            [
+              "broader economic conditions"
+            ],
+            [
+              "business activity index"
+            ]
+          ]
+        },
+        {
+          "tag": "outlook_uncertainty",
+          "label": "outlook uncertainty",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "uncertainty"
+            ]
+          ]
         }
       ],
-      "min_points": 2,
+      "channels": [
+        {
+          "cell": "cur_idx",
+          "unit": "diffusion_index_current"
+        },
+        {
+          "cell": "cur_inc",
+          "unit": "percent_of_firms_reporting_increase_current"
+        },
+        {
+          "cell": "cur_dec",
+          "unit": "percent_of_firms_reporting_decrease_current"
+        },
+        {
+          "cell": "fut_idx",
+          "unit": "diffusion_index_six_month_outlook"
+        },
+        {
+          "cell": "fut_inc",
+          "unit": "percent_of_firms_expecting_increase_six_month"
+        },
+        {
+          "cell": "fut_dec",
+          "unit": "percent_of_firms_expecting_decrease_six_month"
+        }
+      ],
+      "max_gap_months": 6,
+      "require_recent_complete": 3,
+      "trailing_window_months": 36,
+      "max_indicators_per_paragraph": 5,
       "cache_dir": ".cache",
       "user_agent": "CPT-dataset-research faisal@usc.edu",
-      "request_delay_s": 0.3,
+      "request_delay_s": 0.4,
       "timeout_s": 60
     },
     "text": {
-      "min_text_chars": 250
+      "min_snippet_chars": 80
     },
     "output": {
       "output_path": "output/dallas_tmos_cpt.jsonl",
