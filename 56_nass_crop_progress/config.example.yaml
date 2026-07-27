@@ -1,0 +1,42 @@
+# USDA NASS state-level "Crop Progress and Condition" -> CPT world-knowledge JSONL
+#
+# One record = one state's one real weekly report: the report's own narrative (Agricultural
+# Summary + weather narrative) paired with an expanding within-season window of that state's
+# primary-commodity progress/condition/fieldwork channels (season start -> current week).
+#
+# Series: USDA NASS Quick Stats bulk flat file, free, NO API KEY --
+#   https://www.nass.usda.gov/datasets/  (qs.crops_*.txt.gz, ~1GB; auto-downloaded + cached in
+#   .cache/ on first run, filtered to state-level weekly PROGRESS/CONDITION/DAYS SUITABLE rows).
+#
+# Text: fetched live + via the Wayback Machine, per state (scripts/state_sources.py) -- every
+#   state runs its own field office with its own idiosyncratic archive/naming convention.
+#   Scope is deliberately "clean born-digital text only" (Faisal's call, 2026-07-26): states/
+#   years that are scanned-image or OCR-garbled (e.g. Illinois pre-2018, Nebraska pre-2003) are
+#   excluded rather than OCR'd, to avoid any risk of non-verbatim "recited" text.
+#
+# License: US federal government work, public domain (17 U.S.C. Sec 105).
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
+#   python scripts/build_cpt_jsonl.py                              # demo (96)
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null  # full run, all 12 states
+
+# Which states to build (subset of scripts/state_sources.py:STATE_CONFIGS). null = all.
+states: null
+
+# Real clean-text start year per state is enforced in state_sources.py regardless of this;
+# these only let you narrow the range further for a smoke test.
+start_year: null
+end_year: null
+
+output:
+  max_records: 96          # demo cap across all states combined (8/state x 12 states); null = full run
+  min_window_weeks: 20     # drop records whose trailing window is too short to be a genuinely
+                            # long series (a full season runs ~30-45 weeks; this keeps only the
+                            # back ~half+ of each season). Combined with processing each season's
+                            # weeks latest-first (build_cpt_jsonl.py), a capped run keeps the
+                            # longest windows a season offers rather than the earliest-qualifying
+                            # (shortest) ones.
+  min_text_chars: 200      # drop records whose cleaned narrative is suspiciously short
+                            # (extraction failure, not a real short report)

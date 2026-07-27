@@ -1,0 +1,18 @@
+{
+  "emitted": 96,
+  "skipped_no_series": 0,
+  "skipped_short_text": 0,
+  "skipped_short_window": 29,
+  "cdx_candidates_seen": 1074,
+  "config": {
+    "states": null,
+    "start_year": null,
+    "end_year": null,
+    "output": {
+      "max_records": 96,
+      "min_window_weeks": 20,
+      "min_text_chars": 200
+    }
+  },
+  "total_records": 96
+}
