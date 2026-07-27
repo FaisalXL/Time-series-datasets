@@ -1,6 +1,9 @@
 pyyaml>=6.0
-# PyYAML is the only pip dependency (reads config.example.yaml).
-# Series: diffusion-index CSV parsed with the stdlib (csv/urllib).
-# Text: release PDF -> text via the `pdftotext` CLI (poppler-utils), via subprocess:
+pdfplumber>=0.10
+# PyYAML reads config.example.yaml.
+# pdfplumber gives word bounding boxes, which this package needs twice over:
+#   - scripts/colex.py rebuilds the 2/3-column reading order (poppler's own order zips the
+#     columns line by line and shreds sentences);
+#   - scripts/tabex.py reads the as-published diffusion table off column geometry.
+# The `pdftotext` CLI is no longer required, but is handy for eyeballing a release:
 #   brew install poppler   (macOS)  /  apt-get install poppler-utils   (Debian/Ubuntu)
-# The build checks for pdftotext and exits with a clear message if missing.

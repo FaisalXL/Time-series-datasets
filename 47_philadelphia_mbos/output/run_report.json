@@ -1,23 +1,44 @@
 {
   "survey": "Manufacturing Business Outlook Survey",
   "bank": "Federal Reserve Bank of Philadelphia",
-  "window": "expanding (full diffusion-index history to each release month)",
-  "channels": [
+  "record_unit": "(release month x indicator)",
+  "series": "as-first-published vintage, stitched from each release's own table",
+  "window": "trailing 36 months, no gaps",
+  "topics": [
     "general_activity",
     "new_orders",
     "shipments",
-    "employment",
+    "unfilled_orders",
+    "delivery_times",
+    "inventories",
     "prices_paid",
     "prices_received",
-    "future_general_activity"
+    "employment",
+    "average_workweek",
+    "capital_expenditures"
   ],
   "stats": {
-    "months_with_window": 51,
-    "emitted": 50,
-    "no_pdf": 1,
-    "short_text": 0,
+    "months_scanned": 699,
+    "no_release": 10,
+    "no_text_layer": 361,
+    "no_table": 2,
+    "no_narrative": 0,
+    "src_txt": 40,
+    "src_pdf": 286,
+    "topic_no_prose": 24,
+    "topic_no_table_row": 0,
+    "topic_failed_identity": 0,
+    "topic_no_anchor": 0,
+    "short_snippet": 21,
     "short_window": 0,
-    "invalid": 0
+    "sparse_topic_window": 0,
+    "clause_quotes_other_series": 2,
+    "invalid": 0,
+    "emitted": 50,
+    "releases_usable": 326,
+    "span": "1997-09 .. 2026-07",
+    "recites": 49,
+    "describes": 1
   },
   "config_snapshot": {
     "data": {
@@ -25,47 +46,237 @@
       "survey_title": "Manufacturing Business Outlook Survey",
       "district": 3,
       "domain": "manufacturing",
-      "data_csv_url": "https://www.philadelphiafed.org/-/media/FRBP/Assets/Surveys-And-Data/MBOS/Historical-Data/Diffusion-Indexes/bos_dif.csv",
       "pdf_url_template": "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/{year}/bos{mmyy}.pdf",
-      "channels": [
+      "archive_zip_urls": [
+        "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1968_1969.zip",
+        "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1970_1974.zip",
+        "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1975_1979.zip",
+        "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1980_1984.zip",
+        "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1985_1989.zip",
+        "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1990_1994.zip",
+        "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1995_1999.zip",
+        "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/2000_2004.zip",
+        "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/2005_2007.zip"
+      ],
+      "wayback_enabled": true,
+      "wayback_cdx_template": "https://web.archive.org/cdx/search/cdx?url={prefix}*&output=json&fl=original,timestamp,statuscode&collapse=urlkey&filter=statuscode:200&limit=30000",
+      "wayback_raw_template": "https://web.archive.org/web/{ts}id_/{url}",
+      "wayback_prefixes": [
+        "phil.frb.org/files/bos/",
+        "phil.frb.org/econ/bos/",
+        "phil.frb.org/research-and-data/regional-economy/business-outlook-survey/",
+        "philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/"
+      ],
+      "first_month": "1968-05",
+      "last_month": null,
+      "revised_csv_url_unused": "https://www.philadelphiafed.org/-/media/FRBP/Assets/Surveys-And-Data/MBOS/Historical-Data/Diffusion-Indexes/bos_dif.csv",
+      "topics": [
         {
-          "col": "GAC",
-          "name": "general_activity"
+          "tag": "general_activity",
+          "label": "general activity",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "general activity"
+            ],
+            [
+              "current activity"
+            ],
+            [
+              "broadest measure"
+            ],
+            [
+              "general business activity"
+            ],
+            [
+              "activity index"
+            ],
+            [
+              "index for activity"
+            ]
+          ]
         },
         {
-          "col": "NOC",
-          "name": "new_orders"
+          "tag": "new_orders",
+          "label": "new orders",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "new orders"
+            ]
+          ]
         },
         {
-          "col": "SHC",
-          "name": "shipments"
+          "tag": "shipments",
+          "label": "shipments",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "shipments"
+            ]
+          ]
         },
         {
-          "col": "NEC",
-          "name": "employment"
+          "tag": "unfilled_orders",
+          "label": "unfilled orders",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "unfilled orders"
+            ],
+            [
+              "order backlog"
+            ],
+            [
+              "backlogs"
+            ]
+          ]
         },
         {
-          "col": "PPC",
-          "name": "prices_paid"
+          "tag": "delivery_times",
+          "label": "delivery times",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "delivery time"
+            ]
+          ]
         },
         {
-          "col": "PRC",
-          "name": "prices_received"
+          "tag": "inventories",
+          "label": "inventories",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "inventor"
+            ]
+          ]
         },
         {
-          "col": "GAF",
-          "name": "future_general_activity"
+          "tag": "prices_paid",
+          "label": "prices paid",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "prices paid"
+            ],
+            [
+              "input prices"
+            ],
+            [
+              "prices for inputs"
+            ],
+            [
+              "price of inputs"
+            ],
+            [
+              "prices for raw materials"
+            ]
+          ]
+        },
+        {
+          "tag": "prices_received",
+          "label": "prices received",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "prices received"
+            ],
+            [
+              "prices for their own"
+            ]
+          ]
+        },
+        {
+          "tag": "employment",
+          "label": "employment",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "employment"
+            ],
+            [
+              "number of employees"
+            ],
+            [
+              "payroll"
+            ]
+          ]
+        },
+        {
+          "tag": "average_workweek",
+          "label": "average employee workweek",
+          "anchor": "cur_idx",
+          "match": [
+            [
+              "workweek"
+            ],
+            [
+              "work hours"
+            ],
+            [
+              "average work"
+            ],
+            [
+              "hours worked"
+            ],
+            [
+              "average hours"
+            ]
+          ]
+        },
+        {
+          "tag": "capital_expenditures",
+          "label": "future capital expenditures",
+          "anchor": "fut_idx",
+          "match": [
+            [
+              "capital expenditures"
+            ],
+            [
+              "capital spending"
+            ]
+          ]
         }
       ],
-      "min_points": 2,
+      "channels": [
+        {
+          "cell": "cur_idx",
+          "unit": "diffusion_index_current"
+        },
+        {
+          "cell": "cur_inc",
+          "unit": "percent_of_firms_reporting_increase_current"
+        },
+        {
+          "cell": "cur_dec",
+          "unit": "percent_of_firms_reporting_decrease_current"
+        },
+        {
+          "cell": "fut_idx",
+          "unit": "diffusion_index_six_month_outlook"
+        },
+        {
+          "cell": "fut_inc",
+          "unit": "percent_of_firms_expecting_increase_six_month"
+        },
+        {
+          "cell": "fut_dec",
+          "unit": "percent_of_firms_expecting_decrease_six_month"
+        }
+      ],
+      "max_gap_months": 6,
+      "require_recent_complete": 3,
+      "trailing_window_months": 36,
+      "max_topics_per_sentence": 2,
       "source_url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/manufacturing-business-outlook-survey",
       "cache_dir": ".cache",
       "user_agent": "CPT-dataset-research faisal@usc.edu",
-      "request_delay_s": 0.3,
+      "request_delay_s": 0.4,
       "timeout_s": 60
     },
     "text": {
-      "min_text_chars": 200
+      "min_snippet_chars": 120
     },
     "output": {
       "output_path": "output/philadelphia_mbos_cpt.jsonl",

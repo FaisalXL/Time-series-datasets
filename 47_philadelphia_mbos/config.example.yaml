@@ -1,23 +1,31 @@
 # Philadelphia Fed Manufacturing Business Outlook Survey (MBOS) → CPT world-knowledge JSONL
 #
-# One record = one release month: the MBOS monthly release narrative (which recites the
-# diffusion-index readings) paired with the FULL history of those indices up to that release
-# month (expanding window). The prose *describes* the series → "describes" (value-reciting,
-# EIA/BLS-tier). text_quality "real".
+# One record = ONE INDICATOR from one monthly release: the sentence(s) of that release's
+# narrative that describe a single diffusion index (e.g. the new-orders sentences) paired
+# with a trailing window of THAT indicator's own series. So each release yields ~8 tightly
+# aligned records instead of one release-level record with the whole index history bolted on.
 #
-# One of the Federal Reserve regional business surveys (see docs/fed_surveys_discovery.md).
-# Sibling packages will cover the other surveys (NY Empire State, Richmond, Dallas TMOS,
-# Kansas City, ...) — each is its own dataset (different bank text + diffusion series).
+# ── The series is the AS-FIRST-PUBLISHED (real-time) vintage, not `bos_dif.csv` ───────────
+# The Bank re-estimates the seasonal factors and revises the whole history, so the published
+# CSV disagrees with every release older than the current calendar year: the June 2015
+# release states 15.2 for current activity, `bos_dif.csv` now says 8.2. Measured over the
+# 223 cached releases, the stated value matches the CSV in ~0% of months outside 2026.
+# Each release, though, prints its own table of what it published that month — one row per
+# indicator, ten numeric columns:
+#     <label>  prev_idx  inc  no_chg  dec  idx  |  prev_idx  inc  no_chg  dec  idx
+#              \____ this month vs last ______/    \____ six months from now ____/
+# Stitching those tables gives the vintage the prose actually quotes. Two consequences:
+#   * the text's numbers are checkable, so `alignment` is measured per record
+#     (`recites` when the anchor value appears verbatim, else `describes`);
+#   * the series is NOT the FRED series, so the old "these indices are already on FRED"
+#     overlap caveat no longer applies — a real-time MBOS vintage is published nowhere else.
 #
 # License: Federal Reserve Bank publications are U.S. public domain / freely reusable.
-# ⚠ The index SERIES are also on FRED (Oliver's #9); the novel element is the
-#   release-narrative pairing. Get overlap sign-off before scaling. See NOTION_PAGE.md.
 #
 # Quick start:
-#   pip install -r requirements.txt        # + poppler (pdftotext)
+#   pip install -r requirements.txt        # PyYAML + pdfplumber
 #   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
-#   python scripts/build_cpt_jsonl.py                                  # demo (50)
-#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build (~190)
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build
 
 data:
   bank: "Federal Reserve Bank of Philadelphia"
@@ -25,38 +33,145 @@ data:
   district: 3
   domain: "manufacturing"
 
-  # Diffusion-index CSV: DATE col like "Jun-26"; current (C) + future (F) indices, 1968→.
-  data_csv_url: "https://www.philadelphiafed.org/-/media/FRBP/Assets/Surveys-And-Data/MBOS/Historical-Data/Diffusion-Indexes/bos_dif.csv"
-  # Monthly release PDF (real PDFs ~2010->present; older months 404 to an HTML shell).
+  # Monthly release PDF. Real PDFs 2008-01 → present on this path; earlier months live on
+  # the retired phil.frb.org layout and are reached through Wayback raw captures.
   pdf_url_template: "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/{year}/bos{mmyy}.pdf"
+  # The Bank's own per-era archives of every release back to the survey's first month.
+  # Listing all nine is deliberate: the build then *measures* where the text layer stops
+  # instead of asserting it. Measured 2026-07 — 1968-05 … 2001-12 are image scans with no
+  # text layer at all (`pdftotext`/pdfplumber return zero words), so they are an OCR-tier
+  # problem and out of scope; 2002-01 onward carries real text.
+  archive_zip_urls:
+    - "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1968_1969.zip"
+    - "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1970_1974.zip"
+    - "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1975_1979.zip"
+    - "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1980_1984.zip"
+    - "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1985_1989.zip"
+    - "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1990_1994.zip"
+    - "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/1995_1999.zip"
+    - "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/2000_2004.zip"
+    - "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/archives/2005_2007.zip"
+  # The retired phil.frb.org site published each release as plain text as well. That is
+  # the ONLY machine-readable source for 1997-2001 (the archive PDFs for those years are
+  # image scans), and the host now fails TLS outright, so Wayback is the route. The survey
+  # moved twice, hence four path prefixes.
+  wayback_enabled: true
+  wayback_cdx_template: "https://web.archive.org/cdx/search/cdx?url={prefix}*&output=json&fl=original,timestamp,statuscode&collapse=urlkey&filter=statuscode:200&limit=30000"
+  wayback_raw_template: "https://web.archive.org/web/{ts}id_/{url}"
+  wayback_prefixes:
+    - "phil.frb.org/files/bos/"
+    - "phil.frb.org/econ/bos/"
+    - "phil.frb.org/research-and-data/regional-economy/business-outlook-survey/"
+    - "philadelphiafed.org/-/media/frbp/assets/surveys-and-data/mbos/"
 
-  # Diffusion-index channels (CSV column -> channel name). Values are diffusion indices
-  # (% reporting increase - % reporting decrease; dimensionless, ~ -100..+100).
+  first_month: "1968-05"      # the survey's first month
+  last_month: null            # null = up to the newest release found
+
+  # The Bank's *revised* diffusion-index CSV. The build does NOT read it — it is recorded
+  # here only so the comparison that ruled it out stays reproducible: fetch it, look up any
+  # pre-2026 release month, and compare with the value that release's own prose states.
+  # Measured 2026-07-26 over 2,008 records: they agree in 0-3% of records per year outside
+  # 2026, median absolute drift ~2.2 index points.
+  revised_csv_url_unused: "https://www.philadelphiafed.org/-/media/FRBP/Assets/Surveys-And-Data/MBOS/Historical-Data/Diffusion-Indexes/bos_dif.csv"
+
+  # Indicator topics. Each becomes its own record: `match` selects the narrative sentences
+  # (ALL words of ANY one group must appear, case-insensitive), the channels below name the
+  # table cells that become the series. `anchor` is the cell whose value must exist for the
+  # record to be emitted and whose verbatim appearance in the prose sets `recites`.
+  topics:
+    - tag: general_activity
+      label: "general activity"
+      anchor: cur_idx
+      match: [["general activity"], ["current activity"], ["broadest measure"],
+              ["general business activity"], ["activity index"], ["index for activity"]]
+    - tag: new_orders
+      label: "new orders"
+      anchor: cur_idx
+      match: [["new orders"]]
+    - tag: shipments
+      label: "shipments"
+      anchor: cur_idx
+      match: [["shipments"]]
+    - tag: unfilled_orders
+      label: "unfilled orders"
+      anchor: cur_idx
+      match: [["unfilled orders"], ["order backlog"], ["backlogs"]]
+    - tag: delivery_times
+      label: "delivery times"
+      anchor: cur_idx
+      match: [["delivery time"]]
+    - tag: inventories
+      label: "inventories"
+      anchor: cur_idx
+      match: [["inventor"]]
+    - tag: prices_paid
+      label: "prices paid"
+      anchor: cur_idx
+      match: [["prices paid"], ["input prices"], ["prices for inputs"],
+              ["price of inputs"], ["prices for raw materials"]]
+    - tag: prices_received
+      label: "prices received"
+      anchor: cur_idx
+      match: [["prices received"], ["prices for their own"]]
+    - tag: employment
+      label: "employment"
+      anchor: cur_idx
+      match: [["employment"], ["number of employees"], ["payroll"]]
+    - tag: average_workweek
+      label: "average employee workweek"
+      anchor: cur_idx
+      match: [["workweek"], ["work hours"], ["average work"], ["hours worked"],
+              ["average hours"]]
+    - tag: capital_expenditures
+      label: "future capital expenditures"
+      anchor: fut_idx
+      match: [["capital expenditures"], ["capital spending"]]
+
+  # Table cell -> channel. Cells a topic does not have (capital expenditures has no current
+  # half) are simply not emitted, so that record carries the three future channels only.
   channels:
-    - {col: "GAC", name: "general_activity"}
-    - {col: "NOC", name: "new_orders"}
-    - {col: "SHC", name: "shipments"}
-    - {col: "NEC", name: "employment"}
-    - {col: "PPC", name: "prices_paid"}
-    - {col: "PRC", name: "prices_received"}
-    - {col: "GAF", name: "future_general_activity"}
+    - {cell: cur_idx, unit: "diffusion_index_current"}
+    - {cell: cur_inc, unit: "percent_of_firms_reporting_increase_current"}
+    - {cell: cur_dec, unit: "percent_of_firms_reporting_decrease_current"}
+    - {cell: fut_idx, unit: "diffusion_index_six_month_outlook"}
+    - {cell: fut_inc, unit: "percent_of_firms_expecting_increase_six_month"}
+    - {cell: fut_dec, unit: "percent_of_firms_expecting_decrease_six_month"}
 
-  min_points: 2              # expanding window: full index history to the release month (>= this many points)
-  # canonical originating page (schema v1 `source` must be a URL)
+  # Ten months between 1999 and 2026 have no machine-readable release anywhere: 1999-05,
+  # 2005-04 (its PDF text layer is corrupted) and 2007-05 + 2007-07..12 (never published
+  # to the web in any form — checked against every Wayback capture of all four retired
+  # path prefixes). A vintage series cannot be interpolated, so those months stay `null`
+  # inside a window instead of voiding it — but the recent stretch the prose actually
+  # discusses must be complete.
+  max_gap_months: 6
+  require_recent_complete: 3
+  # Sized to what the prose actually reaches back over, not to a round number. Measured
+  # 2026-07-26 across 272 "since <month>" references in the releases: median 21 months,
+  # p75 36. A 36-month window covers ~75% of them (60 covered 88% but left three times as
+  # much unreferenced history hanging off two sentences); it also clears the model's
+  # patch-32 size and costs 24 fewer months of warm-up.
+  trailing_window_months: 36
+  max_topics_per_sentence: 2   # a sentence naming 3+ indicators is a release summary, not
+                               # this topic's own prose — drop it rather than file it under
+                               # every indicator it happens to name
   source_url: "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/manufacturing-business-outlook-survey"
   cache_dir: ".cache"
   user_agent: "CPT-dataset-research faisal@usc.edu"
-  request_delay_s: 0.3
+  request_delay_s: 0.4
   timeout_s: 60
 
 text:
-  min_text_chars: 200
-  # No templated ts_intro: <ts></ts> is appended directly to the real scraped narrative,
-  # nothing is generated.
+  # NO GENERATED TEXT. `<ts></ts>` follows the release's own sentences and nothing else —
+  # no provenance header, no channel-naming sentence. Earlier drafts of this build carried
+  # both (plus a per-topic world-knowledge paragraph), which left the Bank's own words at
+  # only 26-34% of the record. Provenance lives in `meta` instead: bank, survey, district,
+  # release_month, topic, anchor_cell, channels.
+  # The floor below is therefore a floor on the WHOLE record, not on a fragment of it.
+  min_snippet_chars: 120
 
 output:
   output_path: output/philadelphia_mbos_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
-  max_records: 50            # demo cap. null = full build (~190 monthly releases)
+  max_records: 50            # demo cap. null = full build
   indent: null
