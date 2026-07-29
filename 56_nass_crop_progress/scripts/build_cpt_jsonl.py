@@ -172,6 +172,35 @@ def build_state(state_cfg: ss.StateConfig, cfg: dict, run_report: dict) -> list[
     end_year = cfg.get("end_year") or dt.date.today().year
     min_window = cfg.get("min_window_weeks", 8)
     min_text_chars = cfg.get("min_text_chars", 200)
+    max_candidates = cfg.get("max_candidates_per_state")  # optional smoke-test cap (spread sample)
+
+    # Discover the WHOLE archive once (layout-agnostic), then fetch+parse each report a single
+    # time and bucket it by its own embedded week-ending date. This replaces the old per-year
+    # `{prefix}/{year}/` discovery, which silently missed states whose recent reports sit flat in
+    # the folder root or under `prevCW/{year}` / `{year}_PDF` (an all-state ground round found
+    # ~half the states affected). Bucketing by parsed date means the on-disk layout is irrelevant.
+    candidates, disc_ok = state_cfg.discover_all()
+    if not disc_ok:
+        print(f"  {state_cfg.alpha}: WARNING discover_all query failed (Wayback); no candidates",
+              file=sys.stderr)
+    if max_candidates and len(candidates) > max_candidates:
+        step = len(candidates) / max_candidates
+        candidates = [candidates[int(i * step)] for i in range(max_candidates)]
+    run_report["cdx_candidates_seen"] += len(candidates)
+    print(f"  {state_cfg.alpha}: {len(candidates)} candidate PDFs (whole archive)", file=sys.stderr)
+
+    # date -> (narrative, url), first clean parse wins for a given date
+    date_to_text: dict[dt.date, tuple[str, str]] = {}
+    for ci, (ts, url) in enumerate(candidates):
+        report_date, narrative = fetch_and_parse_pdf((ts, url))
+        print(f"    [{ci+1}/{len(candidates)}] {url.rsplit('/', 1)[-1]} -> "
+              f"{report_date} ({len(narrative)} chars)", file=sys.stderr)
+        if report_date is None:
+            continue
+        if len(narrative) < min_text_chars:
+            run_report["skipped_short_text"] += 1
+            continue
+        date_to_text.setdefault(report_date, (narrative, url))
 
     records = []
     for year in range(start_year, end_year + 1):
@@ -179,23 +208,6 @@ def build_state(state_cfg: ss.StateConfig, cfg: dict, run_report: dict) -> list[
         if not season_dates:
             run_report["skipped_no_series"] += 1
             continue
-
-        candidates = state_cfg.discover_year(year)
-        run_report["cdx_candidates_seen"] += len(candidates)
-        print(f"  {state_cfg.alpha} {year}: {len(candidates)} candidate PDFs, "
-              f"{len(season_dates)} real season weeks", file=sys.stderr)
-        date_to_text: dict[dt.date, tuple[str, str]] = {}
-        for ci, (ts, url) in enumerate(candidates):
-            report_date, narrative = fetch_and_parse_pdf((ts, url))
-            print(f"    [{ci+1}/{len(candidates)}] {url.rsplit('/', 1)[-1]} -> "
-                  f"{report_date} ({len(narrative)} chars)", file=sys.stderr)
-            if report_date is None or report_date not in season_dates:
-                continue
-            if len(narrative) < min_text_chars:
-                run_report["skipped_short_text"] += 1
-                continue
-            # Prefer the first successfully-parsed candidate for a given date.
-            date_to_text.setdefault(report_date, (narrative, url))
 
         # Process latest-in-season weeks first: with a capped max_records, chronological order
         # would fill the cap with the shortest (just-past-min_window) trailing windows every

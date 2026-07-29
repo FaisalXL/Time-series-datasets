@@ -3,9 +3,22 @@
 **Status: Built — demo, 96 records (8 per state × 12 states), 0 rejected.** Passes
 `schema/validate.py --strict` clean (96/96, 0 errors/0 warnings). **Window length: min 20,
 median 31, max 38 real weeks.** Domain: agriculture (US). Original 7 states scouted
-2026-07-25/26 (Iowa, Kansas, Minnesota, Indiana, Nebraska, Illinois, Ohio); 5 more states
-scouted and added 2026-07-26 (Wisconsin, Missouri, Michigan, Pennsylvania, Kentucky) — see
-`docs/scouting_build_queue.md` and the "second rollout" notes below.
+2026-07-25/26 (Iowa, Kansas, Minnesota, Indiana, Nebraska, Illinois, Ohio); 5 more added
+2026-07-26 (Wisconsin, Missouri, Michigan, Pennsylvania, Kentucky).
+
+**All-state rollout (2026-07-29): 39 states now wired in `STATE_CONFIGS`** (the committed
+`output/` demo is still the 12-state build; the full 39-state corpus is a server-side run). An
+all-state archive scout confirmed the data supports scale: **38,953 real archived weekly-report
+PDFs across 48 states.** Record-count ceiling (a record = one state-week; multi-commodity =
+multi-channel in one record, so commodities enrich channels but don't multiply the count):
+- **Realistic, as-configured — 39 wired states at their current conservative floors: ~8.6k
+  healthy long-series records** (window ≥ 20 wk), ~18k counting short early-season windows too.
+  This is what the server `max_records: null` run yields today.
+- **Full-scope max — all 48 states + floors pushed to each archive's true start: ~11.5–13.5k
+  healthy** (~25–27k all-weeks). Reaching it needs the 9 deferred states (a cotton/peanut
+  channel set) and a per-state garbled-boundary check to extend each floor backward.
+
+The rollout also forced a real discovery-layer generalization (whole-folder `discover_all`).
 
 One record = **one state's one real weekly report** during the growing season: that report's
 own narrative (Agricultural Summary + state-climatologist weather narrative; letterhead and
@@ -75,18 +88,37 @@ narration — a different USDA/NASS report family entirely.
   rollout independently hit transient `web.archive.org` connection failures/503s under normal
   sequential use — confirmed recoverable on retry, not state-specific. Without this, a real
   year's archive can silently look empty and get skipped.
-- **Channels per record** (corn states): `corn_pct_{planted,emerged,silking,dough,dented,
-  mature,harvested}`, `corn_condition_pct_{good,excellent}`, `days_suitable_per_week` — 9
-  channels, `freq: "1w"`. Kansas (winter wheat) swaps the stage set for
-  `winter_wheat_pct_{planted,emerged,jointing,headed,coloring,mature,harvested}` +
-  condition + days-suitable, 10 channels.
-- **Per-channel nulls are real and expected — verified against the raw source, not a bug.**
-  Each growth-stage channel is a cascading S-curve: NASS stops surveying "percent planted" once
-  it saturates near 100% (e.g. Iowa corn 2003: real rows only exist 04-13→06-01, ending at 99% —
-  no more rows published after), then "percent emerged" takes over, then "silking," etc. Any
-  single channel is null outside its own real reporting window, but across a record's full
-  window at least one channel has real data every week — confirmed directly against
-  `.cache/progress_condition_state_weekly.tsv`, not inferred.
+- **Channels per record** (corn states, 21 channels, `freq: "1w"`):
+  - **Growth stages** (7, cascading — see the null note below): `corn_pct_{planted,emerged,
+    silking,dough,dented,mature,harvested}`.
+  - **Condition** (5, full rating): `corn_condition_pct_{very_poor,poor,fair,good,excellent}`.
+  - **Dense weekly backbone** (9): `days_suitable_per_week`, `topsoil_moisture_pct_{very_short,
+    short,adequate,surplus}`, `subsoil_moisture_pct_{very_short,short,adequate,surplus}`.
+
+  Kansas (winter wheat) swaps the 7 stage channels for `winter_wheat_pct_{planted,emerged,
+  jointing,headed,coloring,mature,harvested}` and uses the `winter_wheat_condition_pct_*` set;
+  the 9-channel dense backbone (fieldwork + soil moisture) is identical, since moisture is a
+  state-level field measure, not crop-specific.
+- **The soil-moisture + full-condition channels are the "dense backbone" (added 2026-07-29).**
+  Originally each record carried only the growth-stage channels plus good/excellent condition,
+  which made it mostly-null by construction (each stage is surveyed only during its own
+  few-week window). NASS actually surveys **topsoil/subsoil moisture and days-suitable every
+  week of the season** and the weekly narrative recites them verbatim ("Topsoil moisture was
+  rated 1 percent very short, 8 percent short, 78 percent adequate, and 13 percent surplus") —
+  those 9 channels are 84-100% dense and give every record a continuous weekly trajectory.
+  Completing the 5-way condition rating (adding very-poor/poor/fair to the existing
+  good/excellent) adds a further ~68%-dense band. Overall null fraction dropped **57.8% → 36.2%**
+  across the demo; the growth-stage channels remain sparse on purpose (see next bullet). These
+  channels were already in the cached bulk file — no new fetching.
+- **Per-channel nulls in the *growth-stage* channels are real and expected — verified against
+  the raw source, not a bug.** Each growth-stage channel is a cascading S-curve: NASS stops
+  surveying "percent planted" once it saturates near 100% (e.g. Iowa corn 2003: real rows only
+  exist 04-13→06-01, ending at 99% — no more rows published after), then "percent emerged" takes
+  over, then "silking," etc. Any single stage channel is null outside its own real reporting
+  window — but the dense backbone above means every week still has a real weekly series;
+  confirmed directly against `.cache/progress_condition_state_weekly.tsv`, not inferred. (The
+  only genuinely thin weeks left are ~0.5% of record-weeks at the very start/end of a season,
+  where NASS published only fieldwork-days before planting or after harvest — a real source gap.)
 - **Best-effort extraction, occasional residual fragment** (same documented tier as #49/#50
   Richmond Fed): a handful of records carry a short embedded district-breakdown table remnant
   (e.g. "Seedbed, primary preparation completed 96 96 96") or a stray masthead/letterhead
@@ -110,9 +142,11 @@ narration — a different USDA/NASS report family entirely.
 {
   "text": "Soybean Harvest Over 80 Percent Complete\nAgricultural Summary: Last week was another big week for soybean harvest as 28 percent of the state's soybeans were harvested...\n\n<ts></ts>",
   "timeseries": [
-    {"values": [19.0, 64.0, 79.0, 94.0, "... 24 more real weekly values ..."], "unit": "corn_pct_planted", "freq": "1w"},
-    {"values": [null, null, 38.0, 68.0, "..."], "unit": "corn_pct_emerged", "freq": "1w"},
-    {"values": [2.4, 5.1, 6.2, null, "..."], "unit": "days_suitable_per_week", "freq": "1w"}
+    {"values": [null, 3.0, 28.0, 56.0, "... cascading stage, null outside its window ..."], "unit": "corn_pct_planted", "freq": "1w"},
+    {"values": [null, null, null, 0.0, "..."], "unit": "corn_pct_emerged", "freq": "1w"},
+    {"values": [null, null, null, null, "... condition, ~68% dense ..."], "unit": "corn_condition_pct_good", "freq": "1w"},
+    {"values": [3.7, 2.0, 3.2, 4.3, "... days-suitable, 100% dense ..."], "unit": "days_suitable_per_week", "freq": "1w"},
+    {"values": [52.0, 58.0, 70.0, 78.0, "... topsoil moisture, 100% dense weekly backbone ..."], "unit": "topsoil_moisture_pct_adequate", "freq": "1w"}
   ],
   "task_type": "world_knowledge",
   "text_quality": "real",
@@ -131,15 +165,44 @@ narration — a different USDA/NASS report family entirely.
 
 ## Key open issues
 
-- **Scale not yet fully measured.** This demo caps at 8/state to show breadth; real per-state
-  depth ranges 8-29 clean-text years × ~30-45 real weeks/season. A full run (`max_records:
-  null`) across these 12 states, then all ~40-44 states that run a real weekly program, is needed
-  to pin down the exact count (scouted estimate: ~25-28k at full 40-44-state scope — see
-  `docs/scouting_build_queue.md`). Only 12 of the real ~40-44 states are wired up so far.
-- **Only 12 states implemented.** Adding a sibling state is mostly a `StateConfig` entry in
-  `scripts/state_sources.py` (base folder, commodity/stage channel list, clean-text start
-  year) — the fetch/extract/pairing pipeline is shared. (Kentucky needed one small addition,
-  `year_folder_fmt`, for its nested `cw{yy}/` folder convention — see above.)
+- **Ceiling — GROUND-TRUTH from an all-state archive count (2026-07-29), not a projection.**
+  A record is one **state-week** (multi-commodity = multi-channel in one record, WASDE-style, so
+  commodities enrich channels but do NOT multiply the count). An all-state scout counted the real
+  archived weekly-report PDFs per state: **38,953 across all 48 states** (30 addable states =
+  25,749; 12 already-wired = 13,204; 6 New England = 0). Applying honest haircuts (≈80% parse to a
+  clean dated report that joins the series, ≈90% survive the clean-text/garbled-tail scope):
+  - **Healthy long-series records** (window ≥ 20 wk, the quality bar): **~11.5–13.5k** — the
+    ground-truth count and the earlier per-week projection agree.
+  - **All weeks incl. short early-season windows**: **~25–27k** (matches the original scouting
+    estimate, which counted every week).
+
+  The binding constraint is clean-text availability per state (series go back to 1981; text is the
+  limit). The ~11.5–13.5k / ~25–27k figures are the **full-scope max** (all 48 states + floors
+  pushed to each archive's true start). **As currently configured — the 39 wired states at their
+  conservative confirmed-clean floors — the realistic yield is ~8.6k healthy (~18k all-weeks)**;
+  that's what a server `max_records: null` run produces today. The `output/` demo caps at 8/state
+  to show breadth.
+- **39 of 48 real-program states wired** (12 originally + 27 in the all-state rollout). Adding a
+  sibling state is mostly a `StateConfig` entry in `scripts/state_sources.py` (folder, commodity/
+  stage channel list, clean-text start year) — the discovery/fetch/extract/pairing pipeline is
+  shared. **9 states deliberately NOT wired**, documented at the end of `STATE_CONFIGS`: AZ, FL, NV
+  (cotton/peanut/hay-primary — ~0 corn, only thin/no winter wheat; need a new crop-stage channel
+  set, not just a config entry) and the 6 New England states (CT/MA/ME/NH/RI/VT — crop progress
+  is published through a shared *regional* office, so per-state Wayback folders are empty).
+- **Layout-agnostic discovery (`discover_all`), added in the all-state rollout.** The original
+  per-year `{prefix}/{year}/` query only found reports nested under a 4-digit year folder — an
+  all-state ground round revealed ~half the states organize recent reports differently: flat in the
+  folder root (Texas `.../Crop_Progress_&_Condition/txcw4111.pdf`), `prevCW/{year}/` (Texas older),
+  `{year}_PDF/` (Georgia 2007), or `cw{yy}/` (Kentucky). The build now discovers the WHOLE folder
+  once and buckets each report by its OWN parsed week-ending date, so the on-disk layout is
+  irrelevant. This lifted the ground round from 18/39 → 30/39 states emitting (the remaining 9 were
+  transient Wayback query failures during the parallel run, not missing data — every one has a
+  confirmed archive in the scout; e.g. Kentucky isolated-tests clean at 674 candidates).
+- **Clean-text start years for the 27 rollout states are conservative confirmed-clean floors.**
+  Each is the earliest year a fetched sample actually parsed to clean dated prose; the archived-PDF
+  counts show most archives run deeper, but the earlier years were not all confirmed clean (Wayback
+  flakiness during scouting + per-state garbled/scanned boundaries not checked the way the first 12
+  were). A server build can extend each backward after confirming the earlier years parse clean.
 - **Wisconsin's 2001-2014 depth is real but currently unrecoverable.** Those years' reports omit
   the year from their "week ending" line, so the date parser either falls back to the release
   date (which can differ from the true week-ending Sunday) or fails outright — either way the

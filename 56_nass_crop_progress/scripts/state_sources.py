@@ -94,6 +94,36 @@ def cdx_list_year_pdfs(prefix: str, year: int, year_folder_fmt: str = "{year}") 
     return out
 
 
+def cdx_list_all_pdfs(prefix: str) -> Optional[list[tuple[str, str]]]:
+    """Whole-folder CDX query: every real (status-200) PDF captured anywhere under `prefix/`,
+    across ALL years and subfolder layouts at once. This is layout-agnostic -- it catches reports
+    whether they sit in `{year}/`, `prevCW/{year}/`, `{year}_PDF/`, `cw{yy}/`, or flat in the
+    folder root -- unlike the per-year `cdx_list_year_pdfs`, which only finds `{year}/`-nested
+    files and silently returned 0 for states like Texas (flat-root `txcw4111.pdf`) and Georgia
+    (`2007_PDF/`) even though their archives are large and real. The caller parses each report's
+    OWN embedded week-ending date, so the on-disk layout doesn't matter for correctness.
+
+    Returns None (not []) if the query itself failed, so the caller can distinguish a genuinely
+    empty archive from a transient Wayback failure; retried inside `_http_get`.
+    """
+    q = (f"{CDX_API}?url={prefix}/&matchType=prefix&output=json"
+         f"&filter=statuscode:200&collapse=urlkey&limit=20000")
+    raw = _http_get(q, timeout=60)
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw.decode("utf-8", "replace"))
+    except Exception:
+        return None
+    rows = data[1:] if data else []
+    out = []
+    for row in rows:
+        ts, url = row[1], row[2]
+        if url.lower().endswith(".pdf"):
+            out.append((ts, url))
+    return out
+
+
 def fetch_wayback_raw(timestamp: str, original_url: str) -> Optional[bytes]:
     """Fetch the archived byte-identical content (id_ modifier = no Wayback toolbar injection)."""
     url = f"https://web.archive.org/web/{timestamp}id_/{original_url}"
@@ -360,18 +390,36 @@ class StateConfig:
     year_folder_fmt: str = "{year}"  # per-year folder naming scheme; Kentucky uses "cw{yy}"
 
     def discover_year(self, year: int) -> list[tuple[str, str]]:
-        """Every state's whole archive (all naming eras) is discoverable the same way: list
-        every real (status-200) PDF Wayback ever captured under this state's hub folder(s) for
-        the given year, then let the caller fetch+parse each one's own embedded date -- no need
-        to solve each state's internal filename/week-numbering scheme. Several candidate base
-        folders are checked because states don't agree on one: Iowa's modern (2018+) reports
-        moved to a shared "Crop_Report" folder while its own 2003-2017 reports (and Illinois's
-        current reports) stay under "Crop_Progress_&_Condition"; Michigan/Kentucky's *live* site
-        (but not, so far, their Wayback archive) uses "State_Crop_Progress_and_Condition"."""
+        """Per-year discovery under `{prefix}/{year_folder}/`. Kept for back-compat / targeted
+        single-year smoke tests, but NOTE it only finds reports nested under a year-shaped
+        subfolder; `discover_all` (below) is the layout-agnostic default the build now uses,
+        because an all-state ground round found many states (Texas, Georgia, ...) whose recent
+        reports sit flat in the folder root or under `prevCW/{year}`, `{year}_PDF`, etc. -- which
+        this per-year query silently missed (returned 0)."""
         hits: list[tuple[str, str]] = []
         for prefix in self.base_prefixes:
             hits.extend(cdx_list_year_pdfs(prefix, year, self.year_folder_fmt))
         return hits
+
+    def discover_all(self) -> tuple[list[tuple[str, str]], bool]:
+        """Layout-agnostic discovery: every real PDF captured anywhere under the state's hub
+        folder(s), across all years/subfolder schemes at once, deduped by URL (keeping the
+        earliest 200 timestamp per URL). The caller parses each report's own embedded
+        week-ending date and buckets by that, so no per-state folder-layout knowledge is needed.
+
+        Returns (candidates, ok). `ok` is False if EVERY base-folder query failed (transient
+        Wayback error) -- distinct from a genuinely empty archive (ok True, empty list) -- so a
+        build won't mistake a Wayback outage for "this state has no data"."""
+        seen: dict[str, str] = {}
+        any_ok = False
+        for prefix in self.base_prefixes:
+            res = cdx_list_all_pdfs(prefix)
+            if res is None:
+                continue  # this folder-variant query failed; try the others
+            any_ok = True
+            for ts, url in res:
+                seen.setdefault(url, ts)
+        return [(ts, url) for url, ts in seen.items()], any_ok
 
 
 def _hubs(state_folder: str) -> list:
@@ -391,13 +439,47 @@ def _hubs(state_folder: str) -> list:
     ]
 
 
+_CONDITION_CLASSES = ["VERY POOR", "POOR", "FAIR", "GOOD", "EXCELLENT"]
+
+
+def _condition_channels(commodity_short: str, unit_prefix: str) -> list[Channel]:
+    """Full 5-way condition rating (very poor -> excellent). NASS surveys crop condition every
+    week the crop is in the ground -- far denser than the cascading growth-stage PROGRESS
+    channels (each stage is only surveyed during its own ~few-week window) -- and the weekly
+    narrative recites all five classes verbatim ("rated 8 percent poor, 45 percent fair, 44
+    percent good, and 3 percent excellent"). Originally only good+excellent were emitted; the
+    other three are equally real, equally recited, and add both density and alignment coverage.
+    good/excellent keep their original unit names for continuity with earlier output."""
+    return [
+        Channel(f"{commodity_short} - CONDITION, MEASURED IN PCT {cls}",
+                f"{unit_prefix}_condition_pct_{cls.lower().replace(' ', '_')}")
+        for cls in _CONDITION_CLASSES
+    ]
+
+
+def _soil_moisture_channels() -> list[Channel]:
+    """Topsoil + subsoil moisture, 4 classes each (very short/short/adequate/surplus). NOT
+    crop-specific -- reported once per state per week regardless of commodity -- and surveyed
+    EVERY week of the season (confirmed 100% dense across a full Iowa 2003 season, vs. 21-24%
+    for the growth-stage channels). The weekly narrative recites them verbatim ("Topsoil
+    moisture was rated 1 percent very short, 8 percent short, 78 percent adequate, and 13
+    percent surplus"). These are the channels that make each record a genuinely dense weekly
+    series rather than a mostly-null per-stage cascade -- so they anchor every state/commodity."""
+    return [
+        Channel(f"SOIL, {layer} - MOISTURE, MEASURED IN PCT {cls}",
+                f"{layer.lower()}_moisture_pct_{cls.lower().replace(' ', '_')}")
+        for layer in ("TOPSOIL", "SUBSOIL")
+        for cls in ("VERY SHORT", "SHORT", "ADEQUATE", "SURPLUS")
+    ]
+
+
 def _corn_channels() -> list[Channel]:
     stages = ["PLANTED", "EMERGED", "SILKING", "DOUGH", "DENTED", "MATURE"]
     chans = [Channel(f"CORN - PROGRESS, MEASURED IN PCT {s}", f"corn_pct_{s.lower()}") for s in stages]
     chans.append(Channel("CORN, GRAIN - PROGRESS, MEASURED IN PCT HARVESTED", "corn_pct_harvested"))
-    chans.append(Channel("CORN - CONDITION, MEASURED IN PCT GOOD", "corn_condition_pct_good"))
-    chans.append(Channel("CORN - CONDITION, MEASURED IN PCT EXCELLENT", "corn_condition_pct_excellent"))
+    chans += _condition_channels("CORN", "corn")
     chans.append(Channel("FIELDWORK - DAYS SUITABLE, MEASURED IN DAYS / WEEK", "days_suitable_per_week"))
+    chans += _soil_moisture_channels()
     return chans
 
 
@@ -405,10 +487,9 @@ def _wheat_channels() -> list[Channel]:
     stages = ["PLANTED", "EMERGED", "JOINTING", "HEADED", "COLORING", "MATURE", "HARVESTED"]
     chans = [Channel(f"WHEAT, WINTER - PROGRESS, MEASURED IN PCT {s}", f"winter_wheat_pct_{s.lower()}")
              for s in stages]
-    chans.append(Channel("WHEAT, WINTER - CONDITION, MEASURED IN PCT GOOD", "winter_wheat_condition_pct_good"))
-    chans.append(Channel("WHEAT, WINTER - CONDITION, MEASURED IN PCT EXCELLENT",
-                          "winter_wheat_condition_pct_excellent"))
+    chans += _condition_channels("WHEAT, WINTER", "winter_wheat")
     chans.append(Channel("FIELDWORK - DAYS SUITABLE, MEASURED IN DAYS / WEEK", "days_suitable_per_week"))
+    chans += _soil_moisture_channels()
     return chans
 
 
@@ -439,3 +520,62 @@ STATE_CONFIGS: dict[str, StateConfig] = {
                        channels=_corn_channels(), clean_text_start_year=2005, base_prefixes=_hubs("Kentucky"),
                        year_folder_fmt="cw{yy:02d}"),
 }
+
+# --- Second-wave bulk rollout (2026-07-29): 27 more states wired from an all-state archive scout.
+# Each state's Wayback archive was confirmed to exist (real status-200 PDF count in parens below)
+# and `clean_text_start_year` is a CONFIRMED-CLEAN floor -- the earliest year a fetched sample
+# actually parsed to clean dated crop-progress prose. These floors are deliberately CONSERVATIVE:
+# the archived-PDF counts show most archives run substantially deeper, but the earlier years were
+# not all confirmed clean (Wayback was flaky during scouting, and per-state garbled/scanned-image
+# boundaries were NOT checked the way the first 12 states were). A full server build can extend
+# each floor backward after confirming the earlier years parse clean (the per-state garbled-boundary
+# check). Commodity is the state's headline crop that actually has PROGRESS data (corn everywhere it
+# has >=300 rows; California is winter wheat -- corn is 0 there). The dense soil-moisture backbone
+# is crop-agnostic, so every record is a healthy weekly series regardless of the stage-channel crop.
+# base_prefixes uses the shared _hubs() 4-variant list (the build finds whichever folder each state
+# actually uses); none of these needed KY's cw{yy} nesting.
+# (alpha, NASS folder name, commodity_label, channels-builder, clean_text_start_year)
+_SECOND_WAVE = [
+    ("AL", "Alabama",        "corn",         _corn_channels,  2007),   # 827 PDFs
+    ("AR", "Arkansas",       "corn",         _corn_channels,  2012),   # 794
+    ("CA", "California",     "winter wheat", _wheat_channels, 2005),   # 1422; corn=0, winter wheat=1872
+    ("CO", "Colorado",       "corn",         _corn_channels,  2006),   # 916
+    ("DE", "Delaware",       "corn",         _corn_channels,  2005),   # 749
+    ("GA", "Georgia",        "corn",         _corn_channels,  2015),   # 603; NO clean sample parsed -> verify
+    ("ID", "Idaho",          "corn",         _corn_channels,  2004),   # 650
+    ("LA", "Louisiana",      "corn",         _corn_channels,  2019),   # 733
+    ("MD", "Maryland",       "corn",         _corn_channels,  2005),   # 742
+    ("MS", "Mississippi",    "corn",         _corn_channels,  2001),   # 1179
+    ("MT", "Montana",        "corn",         _corn_channels,  2005),   # 904
+    ("NC", "North_Carolina", "corn",         _corn_channels,  2016),   # 267
+    ("ND", "North_Dakota",   "corn",         _corn_channels,  2005),   # 884
+    ("NJ", "New_Jersey",     "corn",         _corn_channels,  2015),   # 884; NO clean sample parsed -> verify
+    ("NM", "New_Mexico",     "corn",         _corn_channels,  2005),   # 1103
+    ("NY", "New_York",       "corn",         _corn_channels,  2015),   # 980; NO clean sample parsed -> verify
+    ("OK", "Oklahoma",       "corn",         _corn_channels,  2005),   # 829
+    ("OR", "Oregon",         "corn",         _corn_channels,  2005),   # 554
+    ("SC", "South_Carolina", "corn",         _corn_channels,  2006),   # 906
+    ("SD", "South_Dakota",   "corn",         _corn_channels,  2006),   # 764
+    ("TN", "Tennessee",      "corn",         _corn_channels,  2014),   # 734
+    ("TX", "Texas",          "corn",         _corn_channels,  2003),   # 1902
+    ("UT", "Utah",           "corn",         _corn_channels,  2018),   # 877
+    ("VA", "Virginia",       "corn",         _corn_channels,  2021),   # 820
+    ("WA", "Washington",     "corn",         _corn_channels,  2001),   # 759
+    ("WV", "West_Virginia",  "corn",         _corn_channels,  2002),   # 267
+    ("WY", "Wyoming",        "corn",         _corn_channels,  2006),   # 910
+]
+for _alpha, _folder, _label, _chans, _start in _SECOND_WAVE:
+    STATE_CONFIGS[_alpha] = StateConfig(
+        alpha=_alpha, name=_folder.replace("_", " "), commodity_label=_label,
+        channels=_chans(), clean_text_start_year=_start, base_prefixes=_hubs(_folder),
+    )
+
+# Deferred, NOT wired (documented so the omission is deliberate, not an oversight):
+#   AZ, FL, NV -- cotton/peanut/hay-primary states with ~0 corn and only thin/no winter-wheat
+#     PROGRESS; they need a new crop-stage channel set (_cotton_channels/_peanut_channels), not
+#     just a StateConfig. Their soil-moisture backbone alone would still validate, but crop-stage
+#     alignment (the point of the dataset) would be absent, so they wait for the channel-set work.
+#   CT, MA, ME, NH, RI, VT -- New England: crop progress is published through a shared regional
+#     office (Statistics_by_State/New_England/), so per-state folders have zero archive. Low-value
+#     (maple/fruit/hay) and would need the regional-report structure handled separately.
+
