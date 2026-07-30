@@ -1,42 +1,66 @@
 # USDA NASS state-level "Crop Progress and Condition" -> CPT world-knowledge JSONL
 #
-# One record = one state's one real weekly report: the report's own narrative (Agricultural
-# Summary + weather narrative) paired with an expanding within-season window of that state's
-# primary-commodity progress/condition/fieldwork channels (season start -> current week).
+# One record = one state's one real weekly report: that report's own narrative (Agricultural
+# Summary + state weather narrative; letterhead, per-station weather tables and column headers
+# stripped) paired with a TRAILING 52-reported-week window of that state's crop progress /
+# condition / soil-moisture / fieldwork channels, ending at the report's own week.
+#
+# The pipeline is three stages, because the network cost is ~40k Wayback PDF fetches and every
+# design question downstream of it should be answerable without re-paying that:
+#
+#   1. python scripts/harvest_text.py discover        # Wayback CDX, per state -> .cache/candidates/
+#      python scripts/harvest_text.py fetch           # raw PDFs -> .cache/pdf/   (the expensive one)
+#   2. python scripts/prep_series.py                  # Quick Stats bulk -> .cache/series_index.pkl
+#      python scripts/extract_text.py                 # cached PDFs -> .cache/text/  (local, minutes)
+#   3. python scripts/build_corpus.py --out output/nass_crop_progress_cpt.jsonl
 #
 # Series: USDA NASS Quick Stats bulk flat file, free, NO API KEY --
-#   https://www.nass.usda.gov/datasets/  (qs.crops_*.txt.gz, ~1GB; auto-downloaded + cached in
-#   .cache/ on first run, filtered to state-level weekly PROGRESS/CONDITION/DAYS SUITABLE rows).
+#   https://www.nass.usda.gov/datasets/  (qs.crops_*.txt.gz, ~480MB gzipped).
 #
-# Text: fetched live + via the Wayback Machine, per state (scripts/state_sources.py) -- every
-#   state runs its own field office with its own idiosyncratic archive/naming convention.
-#   Scope is deliberately "clean born-digital text only" (Faisal's call, 2026-07-26): states/
-#   years that are scanned-image or OCR-garbled (e.g. Illinois pre-2018, Nebraska pre-2003) are
-#   excluded rather than OCR'd, to avoid any risk of non-verbatim "recited" text.
+# Text: Wayback Machine only. Historical reports are NOT on the live NASS site any more (spot
+#   checks across the archive return 404 for everything but the most recent files), so the
+#   archive is the sole route and its rate limit is the build's binding cost.
 #
-# License: US federal government work, public domain (17 U.S.C. Sec 105).
-#
-# Quick start:
-#   pip install -r requirements.txt
-#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
-#   python scripts/build_cpt_jsonl.py                              # demo (96)
-#   python scripts/build_cpt_jsonl.py --set output.max_records=null  # full run, all 12 states
+# License: US federal government work, public domain (17 U.S.C. Sec 105) -- but see
+#   `meta.nonfederal_narrative`: many states' weather narrative is contributed by the *State*
+#   Climatologist or a state department of agriculture, which §105 does not cover. Flagged per
+#   record for a licensing call, not silently included or dropped.
 
-# Which states to build (subset of scripts/state_sources.py:STATE_CONFIGS). null = all.
+# Which states to build. null = every state that emits records (48; the six New England states
+# are configured but deliberately non-emitting -- see scripts/state_sources.py).
 states: null
 
-# Real clean-text start year per state is enforced in state_sources.py regardless of this;
-# these only let you narrow the range further for a smoke test.
-start_year: null
-end_year: null
+# --- window -------------------------------------------------------------------------------------
+# trailing: the last N *reported* weeks ending at this report's week, crossing season boundaries.
+# season:   expanding within-season (season start -> this week). Kept selectable so the comparison
+#           below stays reproducible, but NOT the default -- see README "Why a trailing window".
+window: trailing
+trailing_weeks: 52     # measured choice: season length runs 34 reported weeks (New England) to
+                       # 52-53 (Florida), so 52 is the SHORTEST window that spans a full annual
+                       # crop cycle in every state, and it reaches the year-ago week the narrative
+                       # compares against (Iowa: lag 28-39 reported weeks, median 35). Record
+                       # count is completely flat in this parameter (measured 26->104 weeks: 773
+                       # records at every setting), so length trades only against series
+                       # duplication -- 24.7x here, below the shipped 26_ics209 (32x) and
+                       # 11_eia (52x).
 
-output:
-  max_records: 96          # demo cap across all states combined (8/state x 12 states); null = full run
-  min_window_weeks: 20     # drop records whose trailing window is too short to be a genuinely
-                            # long series (a full season runs ~30-45 weeks; this keeps only the
-                            # back ~half+ of each season). Combined with processing each season's
-                            # weeks latest-first (build_cpt_jsonl.py), a capped run keeps the
-                            # longest windows a season offers rather than the earliest-qualifying
-                            # (shortest) ones.
-  min_text_chars: 200      # drop records whose cleaned narrative is suspiciously short
-                            # (extraction failure, not a real short report)
+# --- quality gates ------------------------------------------------------------------------------
+min_text_chars: 200      # drop records whose cleaned narrative is suspiciously short (extraction
+                         # failure, not a real short report)
+max_text_chars: 20000    # drop documents that aren't a single weekly report. Measured: exactly 12
+                         # of 19,058 harvested reports exceed this (0.06%), all whole-season
+                         # compilations (WI cw2002.pdf) or monthly summaries (ID Monthly_Feb_2016)
+                         # -- they carry a valid week-ending date so nothing upstream rejects them,
+                         # but their text spans a season while the window ends at one week.
+                         # p99.9 of real reports is 13,918 chars.
+max_null_frac: 0.75      # health gate: drop records whose window is mostly gaps
+min_commodity_weeks: 150 # a commodity needs this much weekly history in a state before it
+                         # contributes channels; below it, it adds a near-empty channel to every
+                         # record of that state without adding signal
+min_window_weeks: 20     # only used by `window: season`
+
+# NOTE: there is deliberately no per-state `clean_text_start_year` floor any more. The old
+# hand-curated floors (Iowa 2003, Illinois 2018, ...) were conservative guesses at where each
+# archive stops being scanned-image or OCR-garbled, and they cost real records. `extract_text.py`
+# measures garbling per document instead, so each state now reaches as far back as its text
+# actually parses clean.

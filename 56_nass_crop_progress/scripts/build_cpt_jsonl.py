@@ -1,5 +1,24 @@
 #!/usr/bin/env python3
-"""Build CPT world-knowledge records for USDA/NASS state-level "Crop Progress and Condition"
+"""SUPERSEDED 2026-07-30 — do not run; kept for provenance. See `build_corpus.py`.
+
+This is the original single-pass builder that produced the 96-record demo. It is retained so the
+defects the README documents can be traced to real code, but running it would reproduce them:
+
+  * It filters the Quick Stats bulk file to `{PROGRESS, CONDITION, DAYS SUITABLE}`, which OMITS
+    `MOISTURE` — so all eight soil-moisture channels (the "dense backbone") match nothing and are
+    dropped by the `all(v is None)` skip below. README §1.1.
+  * Expanding within-season window plus a `min_window_weeks` floor that discards 53% of all
+    reports. README §2.
+  * Fetches via `state_sources._http_get`, whose retry path treats a Wayback throttle as a
+    permanent failure (81 of 88 Iowa PDFs). README §1.2.
+  * Re-fetches every PDF on every run, re-paying the ~40k-request network cost per iteration.
+
+Replaced by the three-stage pipeline in the README's "Pipeline" section. A guard at the bottom of
+this module exits if it is executed directly.
+
+--- original docstring follows ---
+
+Build CPT world-knowledge records for USDA/NASS state-level "Crop Progress and Condition"
 weekly reports.
 
 One record = one state's one real weekly report: the report's own narrative text (state
@@ -329,4 +348,14 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Guard: this builder is superseded (see module docstring). It would silently rebuild the
+    # corpus with no soil-moisture channels and a window that discards half the reports, so it
+    # refuses to run rather than quietly producing a worse output than the shipped one.
+    sys.exit(
+        "build_cpt_jsonl.py is SUPERSEDED and will not run — it reproduces four documented "
+        "defects (see module docstring).\nUse:\n"
+        "  python scripts/harvest_text.py discover && python scripts/harvest_text.py fetch\n"
+        "  python scripts/prep_series.py && python scripts/extract_text.py\n"
+        "  python scripts/build_corpus.py --config config.example.yaml "
+        "--out output/nass_crop_progress_cpt.jsonl --report output/run_report.json"
+    )

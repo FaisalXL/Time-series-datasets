@@ -1,18 +1,72 @@
 {
-  "emitted": 96,
-  "skipped_no_series": 0,
-  "skipped_short_text": 0,
-  "skipped_short_window": 23,
-  "cdx_candidates_seen": 994,
   "config": {
+    "config": "config.example.yaml",
     "states": null,
-    "start_year": null,
-    "end_year": null,
-    "output": {
-      "max_records": 96,
-      "min_window_weeks": 20,
-      "min_text_chars": 200
-    }
+    "window": "trailing",
+    "trailing_weeks": 52,
+    "min_window_weeks": 20,
+    "min_text_chars": 200,
+    "min_commodity_weeks": 150,
+    "max_commodities": 8,
+    "max_text_chars": 20000,
+    "max_null_frac": 0.75,
+    "measure": false,
+    "out": "output/nass_crop_progress_cpt.jsonl",
+    "report": "output/run_report.json"
   },
-  "total_records": 96
+  "results": {
+    "trailing": {
+      "emitted": 25600,
+      "skip_no_series_week": 3746,
+      "skip_short_window": 48,
+      "skip_short_text": 2,
+      "skip_long_text": 5,
+      "skip_no_channels": 0,
+      "skip_too_sparse": 68,
+      "nonfederal_narrative": 2753,
+      "window_weeks": {
+        "min": 52,
+        "median": 52.0,
+        "max": 52,
+        "mean": 52
+      },
+      "null_frac": {
+        "median": 0.4799,
+        "mean": 0.4617
+      },
+      "channels_per_record": {
+        "min": 10,
+        "median": 63.0,
+        "max": 104
+      },
+      "text_chars": {
+        "min": 242,
+        "median": 3744.0,
+        "max": 19514
+      },
+      "duplication": {
+        "emitted_real_points": 39738810,
+        "unique_state_week_channel": 1936204,
+        "ratio": 20.52
+      },
+      "alignment_tier": {
+        "recites": 12862,
+        "describes": 12738
+      },
+      "recited_groups": {
+        "topsoil_moisture": 9219,
+        "subsoil_moisture": 7509,
+        "pastureland_condition": 3492,
+        "corn_condition": 2450,
+        "soybeans_condition": 2094,
+        "winter_wheat_condition": 2020,
+        "upland_cotton_condition": 861,
+        "peanuts_condition": 743,
+        "sorghum_condition": 601,
+        "oats_condition": 442,
+        "blueberries_condition": 243,
+        "tobacco_condition": 240
+      }
+    }
+  }
 }

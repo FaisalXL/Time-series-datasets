@@ -134,27 +134,40 @@ def fetch_live(url: str) -> Optional[bytes]:
     return _http_get(url, timeout=30)
 
 
+# An optional day-of-week between the keyword and the date. Louisiana writes every week as
+# "Week Ending Sunday, May 15, 2011", which the original pattern could not match at all -- it cost
+# all 283 of Louisiana's reports, and they were indistinguishable downstream from "no date here".
+_DOW = r"(?:(?:Sun|Mon|Tues|Tue|Wednes|Wednes|Thurs|Thur|Fri|Satur|Sat)day\.?,?\s+)?"
 _WEEK_ENDING_RE = re.compile(
-    r"week ending:?\s+([A-Za-z]+\.?\s+\d{1,2},?\s+\d{4})", re.IGNORECASE
+    rf"week ending:?\s+{_DOW}([A-Za-z]+\.?\s+\d{{1,2}},?\s+\d{{4}})", re.IGNORECASE
 )
-# Some states (e.g. Ohio) only give the year via a separate numeric "Week Ending MM/DD/YY"
-# table line -- the narrative's own "week ending May 21" sentence omits the year entirely.
+# Numeric form. Separator may be / . or - : Nebraska's historical era writes "Week Ending 12-3-51".
 _WEEK_ENDING_NUMERIC_RE = re.compile(
-    r"week ending:?\s+(\d{1,2})/(\d{1,2})/(\d{2,4})", re.IGNORECASE
+    rf"week ending:?\s+{_DOW}(\d{{1,2}})[/.-](\d{{1,2}})[/.-](\d{{2,4}})", re.IGNORECASE
 )
+# Year-less form: "WEEK ENDING JULY 16", "week ending May 21". Real and common (Ohio's narrative,
+# Indiana's older era, and Wisconsin 2001-2014 -- which the README recorded as unrecoverable
+# depth). The year is recovered from elsewhere in the document by `_resolve_yearless`.
+_WEEK_ENDING_NO_YEAR_RE = re.compile(
+    rf"week ending:?\s+{_DOW}([A-Za-z]+)\.?\s+(\d{{1,2}})(?![\d/.-])", re.IGNORECASE
+)
+_ANY_YEAR_RE = re.compile(r"\b(19[3-9]\d|20[0-4]\d)\b")
 # Indiana's oldest era (~1997-2000) states the date bare, top-of-document, with no "week
 # ending"/"released:" keyword anywhere nearby (e.g. "August 7, 2000\nReleased: Monday, 3PM" --
 # "Released:" is followed by a day-of-week + time, not a date). Restricted to the first few
 # lines only, to avoid matching an unrelated date mentioned later in the body prose.
 _BARE_DATE_RE = re.compile(r"([A-Za-z]+\.?\s+\d{1,2},?\s+\d{4})")
-_MONTHS = {
-    m.lower(): i
-    for i, m in enumerate(
-        ["", "January", "February", "March", "April", "May", "June", "July",
-         "August", "September", "October", "November", "December"]
-    )
-    if m
-}
+_MONTH_NAMES = ["", "January", "February", "March", "April", "May", "June", "July",
+                "August", "September", "October", "November", "December"]
+# Full names plus the abbreviations states actually print. Idaho writes "Week Ending: Aug 13,
+# 2006"; with full names only, the pattern matched and then the month lookup silently failed, so
+# the report landed in `no_date` looking like it had no date at all.
+_MONTHS = {m.lower(): i for i, m in enumerate(_MONTH_NAMES) if m}
+for _i, _m in enumerate(_MONTH_NAMES):
+    if not _m:
+        continue
+    _MONTHS.setdefault(_m[:3].lower(), _i)
+_MONTHS["sept"] = 9
 
 
 def parse_week_ending(text: str) -> Optional[dt.date]:
@@ -176,11 +189,25 @@ def parse_week_ending(text: str) -> Optional[dt.date]:
         mm, dd, yy = m2.groups()
         year = int(yy)
         if year < 100:
-            year += 2000 if year < 70 else 1900
+            # Pivot on "not in the future" rather than a fixed cut. A fixed <70 -> 2000s rule read
+            # Nebraska's "Week Ending 12-3-51" as 2051.
+            year = year + 2000 if year + 2000 <= dt.date.today().year else year + 1900
         try:
             return dt.date(year, int(mm), int(dd))
         except ValueError:
             pass
+
+    # An explicit "week ending <Month> <Day>" with the year omitted, resolved from a year stated
+    # elsewhere in the document. This runs BEFORE the bare-date fallback: the bare-date rule scans
+    # the head of the document and will happily return the *release* date ("Issued July 18, 2022")
+    # when the real week-ending line sits just below it.
+    m4 = _WEEK_ENDING_NO_YEAR_RE.search(text)
+    if m4:
+        mon = _MONTHS.get(m4.group(1).rstrip(".").lower())
+        if mon:
+            d = _resolve_yearless(text, mon, int(m4.group(2)))
+            if d:
+                return d
 
     m3 = _BARE_DATE_RE.search(text[:200])
     if m3:
@@ -197,6 +224,83 @@ def parse_week_ending(text: str) -> Optional[dt.date]:
     return None
 
 
+def count_week_ending_dates(text: str, limit: int = 12) -> int:
+    """How many *distinct* week-ending dates the document states.
+
+    Used to reject documents that are not a single weekly report. Two real kinds turn up in these
+    archives and both parse a perfectly good date (the first one they mention), so nothing upstream
+    catches them:
+
+      * whole-season compilations -- Wisconsin `cwan2001.pdf` / `cw2002.pdf`, 71-80k chars
+        containing every week of the year;
+      * monthly summaries -- Idaho `Monthly_Feb_2016.pdf`, ~50k chars.
+
+    Paired naively, each becomes a record whose text covers a whole season while its series window
+    ends at one arbitrary week — a real alignment defect, not just an oversized record. Counting
+    distinct dates is layout- and state-independent, unlike matching filenames. A genuine weekly
+    report states one date (occasionally two, when it prints the prior week alongside).
+    """
+    found: set[dt.date] = set()
+    for m in _WEEK_ENDING_RE.finditer(text):
+        raw = m.group(1).replace(",", "").strip().split()
+        if len(raw) == 3:
+            mon = _MONTHS.get(raw[0].rstrip(".").lower())
+            if mon:
+                try:
+                    found.add(dt.date(int(raw[2]), mon, int(raw[1])))
+                except ValueError:
+                    pass
+        if len(found) >= limit:
+            break
+    for m in _WEEK_ENDING_NUMERIC_RE.finditer(text):
+        mm, dd, yy = m.groups()
+        y = int(yy)
+        if y < 100:
+            y = y + 2000 if y + 2000 <= dt.date.today().year else y + 1900
+        try:
+            found.add(dt.date(y, int(mm), int(dd)))
+        except ValueError:
+            pass
+        if len(found) >= limit:
+            break
+    return len(found)
+
+
+def _resolve_yearless(text: str, mon: int, day: int) -> Optional[dt.date]:
+    """Recover the year for a "week ending <Month> <Day>" line that omits it.
+
+    Candidate years are the 4-digit years the document itself states (release line, volume line,
+    table headers). These reports' weeks end on a **Sunday**, which disambiguates almost every case
+    on its own: a given month/day falls on a Sunday only about one year in seven, so among a
+    handful of candidates usually exactly one qualifies. Without a unique Sunday-consistent
+    candidate we return None rather than guess -- a wrong year silently mis-joins the record to
+    another season's series, which is far worse than dropping the report.
+    """
+    years = []
+    for m in _ANY_YEAR_RE.finditer(text[:3000]):
+        y = int(m.group(1))
+        if y not in years:
+            years.append(y)
+    if not years:
+        return None
+    sundays = []
+    for y in years:
+        try:
+            d = dt.date(y, mon, day)
+        except ValueError:
+            continue
+        if d.weekday() == 6:          # Sunday
+            sundays.append(d)
+    if len(sundays) == 1:
+        return sundays[0]
+    if not sundays and len(years) == 1:
+        try:
+            return dt.date(years[0], mon, day)
+        except ValueError:
+            return None
+    return None
+
+
 def _reconstruct_column(words: list) -> str:
     lines: dict[int, list] = {}
     for w in words:
@@ -209,31 +313,64 @@ def _reconstruct_column(words: list) -> str:
     return "\n".join(out)
 
 
-def _has_consistent_gutter_width(words: list, best_x: float) -> bool:
-    """A genuine printed two-column gutter is a fixed physical margin: its width is nearly
-    constant across the dozens of rows that span it (confirmed on a real 2003 Iowa two-column
-    page: ~46% of rows land within +-3pt of the median gap width, e.g. a tight 15-18pt cluster).
-    A false-positive gutter -- a low-crossing x found in ordinary justified single-column text,
-    where the "gap" at that x is just whatever word-boundary happens to fall there per line --
-    has no such consistency (confirmed on a 2024 Kentucky single-column page real two-column
-    detection would have corrupted: 0/34 rows within +-3pt of the median, gaps scattered
-    2-360pt). Requiring consistency (not just a low crossing ratio) distinguishes the two.
+def find_gutter(words: list, page_width: float) -> Optional[float]:
+    """Locate a real two-column gutter by projection profile, or return None.
+
+    Replaces a pair of hand-tuned heuristics that traded one error for the other. The original
+    rule was "the vertical line crossed by the fewest words"; that fired on ordinary justified
+    single-column pages, so a `_has_consistent_gutter_width` test was added requiring >=35% of
+    straddling-row gaps to sit within +-3pt of their median. That test then produced the opposite
+    error -- it rejects genuine two-column pages whose gutter width varies, e.g. Iowa
+    2012-04-01 page 0 (crossing 0.48%, word mass balanced 397/433, unmistakably two columns)
+    scored `consistent=False` and fell back to row-order extraction, which interleaves the
+    columns mid-sentence: "...eager to plant their crop for the upcoming crop year. Warm
+    Provided by Harry Hillaker, State Climatologist".
+
+    What actually separates the two cases is *physical*, and the earlier scouting had already
+    measured it: a printed gutter is a continuous empty vertical band 15-18pt wide, while a
+    coincidental alignment of word gaps in justified text is only a point or two wide. So find
+    the widest contiguous band that essentially no word crosses, and require it to be a
+    plausible physical margin with real text on both sides. No threshold here is tuned to a
+    single page: the band-width floor is a typographic fact, and the balance floor just says
+    "both columns contain text".
     """
+    if not words:
+        return None
+    # Crossing is counted per *text row*, not per word. A real gutter is still crossed by the
+    # page's few full-width elements -- a banner heading, a district table that spans both
+    # columns -- so a word-level "empty band" test finds nothing (measured on Iowa 2012-04-01:
+    # the true gutter region never drops below 4 crossing words out of 830). Per row, those same
+    # full-width elements are a small minority, and the separation is unambiguous: the real
+    # two-column pages show a 10-12pt band under 15% row-crossing, single-column pages show none.
     rows: dict[int, list] = {}
     for w in words:
         rows.setdefault(round(w["top"] / 3), []).append(w)
-    gaps = []
-    for row_words in rows.values():
-        left_x1s = [w["x1"] for w in row_words if w["x1"] <= best_x]
-        right_x0s = [w["x0"] for w in row_words if w["x0"] >= best_x]
-        if left_x1s and right_x0s:
-            gaps.append(min(right_x0s) - max(left_x1s))
-    if len(gaps) < 10:
-        return False  # too few rows straddle the gutter to trust it's a real column boundary
-    gaps.sort()
-    median = gaps[len(gaps) // 2]
-    frac_consistent = sum(1 for g in gaps if abs(g - median) <= 3) / len(gaps)
-    return frac_consistent >= 0.35
+    row_list = list(rows.values())
+    if len(row_list) < 12:
+        return None
+    lo, hi = int(page_width * 0.25), int(page_width * 0.75)
+    empty: list[bool] = []
+    for x in range(lo, hi):
+        crossing = sum(1 for rw in row_list if any(w["x0"] < x < w["x1"] for w in rw))
+        empty.append(crossing / len(row_list) <= 0.15)
+    # widest contiguous empty run
+    best_len = best_start = 0
+    cur_start = None
+    for i, e in enumerate(empty + [False]):
+        if e and cur_start is None:
+            cur_start = i
+        elif not e and cur_start is not None:
+            if i - cur_start > best_len:
+                best_len, best_start = i - cur_start, cur_start
+            cur_start = None
+    if best_len < 10:                              # narrower than any real printed gutter
+        return None
+    gx = lo + best_start + best_len / 2.0
+    left = sum(1 for w in words if (w["x0"] + w["x1"]) / 2 < gx)
+    right = len(words) - left
+    if min(left, right) < 0.25 * len(words):       # a margin, not a column boundary
+        return None
+    return gx
 
 
 def _extract_page_text(page) -> str:
@@ -253,28 +390,19 @@ def _extract_page_text(page) -> str:
     candidate line is crossed by many words, or the low-crossing one isn't a consistent width)
     and falls back to plain top-to-bottom extraction.
     """
-    w = page.width
     words_for_detection = [wd for wd in page.extract_words() if wd["top"] > 100]
     if len(words_for_detection) < 20:
         return page.extract_text() or ""
 
-    best_x, best_crossing = None, len(words_for_detection) + 1
-    for i in range(300, 700, 4):
-        x = i / 1000 * w
-        crossing = sum(1 for wd in words_for_detection if wd["x0"] < x < wd["x1"])
-        if crossing < best_crossing:
-            best_x, best_crossing = x, crossing
-
-    if best_crossing / len(words_for_detection) >= 0.02:
-        return page.extract_text() or ""  # no clean gutter found -> single column
-    if not _has_consistent_gutter_width(words_for_detection, best_x):
-        return page.extract_text() or ""  # low-crossing x isn't a real fixed-width gutter
+    gx = find_gutter(words_for_detection, page.width)
+    if gx is None:
+        return page.extract_text() or ""  # genuinely single column
 
     # Exclude the masthead band (letterhead/address/title, top <= 110) from the column
     # reconstruction entirely -- it spans both columns' width and, if left in, gets shuffled
     # into whichever column its centered words happen to land in, corrupting both.
-    left = [w for w in words_for_detection if (w["x0"] + w["x1"]) / 2 < best_x]
-    right = [w for w in words_for_detection if (w["x0"] + w["x1"]) / 2 >= best_x]
+    left = [w for w in words_for_detection if (w["x0"] + w["x1"]) / 2 < gx]
+    right = [w for w in words_for_detection if (w["x0"] + w["x1"]) / 2 >= gx]
     return _reconstruct_column(left) + "\n\n" + _reconstruct_column(right)
 
 
@@ -301,11 +429,26 @@ _MASTHEAD_RE = re.compile(
     r"^United States Department|^National Agricultural Statistics|"
     r"^U\.?S\.?\s+Department of Agriculture|Department of Agriculture\s*$|"
     r"^AGRICULTURAL\s*$|^STATISTICS\s*$|^SERVICE\b|^KANSAS\s*$|Fact Finders|"
-    r"Cooperating with|Field Office|^To access NASS|"
+    r"Cooperating with|In Cooperation with|Field Office|^To access NASS|Media Contact|"
     r"^\d+\s+\w[\w.'\s]*\s+(?:Street|St\.?|Ste\.?|Suite|Blvd\.?|Mall|Walnut)|"
     r"^Mall\s+\w|,\s*[A-Z]{2}\s+\d{5}(-\d{4})?\b)",
     re.IGNORECASE,
 )
+
+
+def _looks_like_prose(stripped: str) -> bool:
+    """True when a line reads as a real sentence fragment rather than table furniture.
+
+    Cheap and deliberately conservative: several ordinary alphabetic words, and predominantly
+    lower-case letters. Table headers and station rows are short, upper-case, or number-dense.
+    """
+    words = [w for w in re.findall(r"[A-Za-z']{2,}", stripped)]
+    if len(words) < 6:
+        return False
+    alpha = [c for c in stripped if c.isalpha()]
+    if not alpha:
+        return False
+    return sum(1 for c in alpha if c.islower()) / len(alpha) > 0.75
 
 
 def _is_tabular_line(line: str) -> bool:
@@ -317,9 +460,16 @@ def _is_tabular_line(line: str) -> bool:
     total = max(len(stripped.replace(" ", "")), 1)
     if digits / total > 0.30 and letters < 20:
         return True
-    upper_marker_hit = any(marker in stripped.upper() for marker in _TABLE_HEADER_MARKERS)
-    if upper_marker_hit:
-        return True
+    # ⚠️ The marker test is a substring match, so it fires on ordinary prose that happens to use
+    # the word: "TEMPERATURE" matches inside "Temperatures for the week as a whole averaged...",
+    # "PRECIPITATION" inside "The statewide average precipitation was 0.17 inches...". These are
+    # weather narratives -- half of every record's text is exactly such sentences -- and the
+    # unguarded test was discarding them. Measured on a 60-report Iowa sample: 560 real prose
+    # lines dropped on marker hits alone. Requiring the line NOT to read as prose keeps the
+    # genuine all-caps header rows ("STATION PRECIPITATION TEMPERATURE") that this is for.
+    if any(marker in stripped.upper() for marker in _TABLE_HEADER_MARKERS):
+        if not _looks_like_prose(stripped):
+            return True
     # A weather-station row: "Station Name <temp>" or "Station Name <hi> <lo>" -- Titlecase
     # words followed by only 1-2 short numbers, no other prose content.
     return bool(_STATION_ROW_RE.match(stripped))
@@ -329,10 +479,88 @@ def _is_masthead_line(line: str) -> bool:
     return bool(_MASTHEAD_RE.search(line.strip()))
 
 
+# A dot-leader table row: "Lowden .............. 77 36 52 11" / "Oats planted ...... 56 57 55 64".
+_DOT_LEADER_RE = re.compile(r"^\s*(.{2,40}?)\s*\.{3,}\s*([\d\s.,+-]+)$")
+
+# Vocabulary of agricultural terms, used to tell the two kinds of dot-leader row apart. Built from
+# the channel vocabulary itself (see `ag_vocabulary`) so it tracks whatever commodities the source
+# publishes instead of being a hand-maintained list.
+_AG_EXTRA = {
+    "range", "pasture", "pastureland", "topsoil", "subsoil", "soil", "moisture", "days",
+    "suitable", "fieldwork", "field", "work", "crop", "crops", "condition", "progress",
+    "planted", "emerged", "harvested", "seedbed", "tillage", "acreage",
+}
+_AG_VOCAB: set[str] = set(_AG_EXTRA)
+
+
+def ag_vocabulary(short_descs) -> set[str]:
+    """Words that mark a table row as *crop* data rather than weather-station data.
+
+    Both arrive as dot-leader rows, and they must be treated differently: the per-station weather
+    table is noise (and is AWIS-copyrighted third-party content in many states' reports), while the
+    crop-progress table row states the very percentages that are the series -- for some states the
+    numbers appear only there and not in a prose sentence. Deriving the vocabulary from the
+    SHORT_DESC strings being paired against keeps the two apart without a hand-kept crop list and
+    without discarding recitation.
+    """
+    # Commodity heads only, >=4 chars. Including the "MEASURED IN PCT <class>" words pulled in
+    # colour and rating adjectives (red, pink, green, good, fair, poor), and a colour word is
+    # enough to make a place name look agricultural -- the weather station "Red Oak ..... 86 41
+    # 63 19" survived on "red". Heads alone still cover the rows that matter, because a crop
+    # table row names its crop ("Oats planted", "Range & Pasture").
+    stop = {"excl", "incl", "totals", "other", "open", "measured", "harvested", "prev"}
+    vocab = set(_AG_EXTRA)
+    for sd in short_descs:
+        head = sd.split(" - ", 1)[0]
+        for tok in re.findall(r"[A-Za-z]{4,}", head):
+            t = tok.lower()
+            if t not in stop:
+                vocab.add(t)
+    return vocab
+
+
+def set_ag_vocabulary(vocab: set[str]) -> None:
+    global _AG_VOCAB
+    _AG_VOCAB = set(_AG_EXTRA) | {v.lower() for v in vocab}
+
+
+def _is_station_row(line: str) -> bool:
+    """A dot-leader row whose label names no agricultural term -> a weather-station data row."""
+    m = _DOT_LEADER_RE.match(line)
+    if not m:
+        return False
+    label, nums = m.group(1), m.group(2)
+    if len(re.findall(r"\d+", nums)) < 2:
+        return False
+    words = {w.lower() for w in re.findall(r"[A-Za-z]{3,}", label)}
+    if not words:
+        return True
+    return not (words & _AG_VOCAB)
+
+
 _TABLE_HEADER_WORDS_RE = re.compile(
     r"^\s*(Item|Districts?|State\b|Percent(\s+Percent)+|Days(\s+Days)+|HI\s*LO?\s*$|"
     r"Last\s+Last|Week\s+Year(\s+mal)?|Very\s*$|Poor\b.*Fair.*Good.*Excellent|"
     r"NW\s+NC\s+NE|WC\s+C\s+EC|SW\s+SC\s+SE|NA\s*=\s*[Nn]ot)",
+)
+# Column-unit header rows, which survive once the numbers beneath them are stripped:
+# "(Percent) (Percent) (Percent) ..." or "(Days) (Days) ...", possibly clipped at a column edge.
+_UNIT_HEADER_RE = re.compile(
+    r"^[\s\W]*(\(?\s*(?:Percent|Pct|Days|Inches|Degrees)\s*\)?[\s,]*){2,}$", re.IGNORECASE,
+)
+# District abbreviation header rows anywhere in the line ("EC SW SC SE Week Year"), not just at
+# the start -- the anchored alternatives above miss them whenever the row begins mid-table.
+_DISTRICT_ABBR_RE = re.compile(
+    r"\b(NW|NC|NE|WC|EC|SW|SC|SE|C)\b(\s+\b(NW|NC|NE|WC|EC|SW|SC|SE|C)\b){2,}",
+)
+# Legend / column-definition lines printed beneath the weather table. Grammatically prose, so the
+# prose guard keeps them, but they define the stripped table's columns rather than narrating
+# anything: "Precipitation (rain, melted snow or ice) in inches. Precipitation Days =",
+# "Days with precipitation of 0.01 inch or more. Air Temperatures in Degrees".
+_LEGEND_RE = re.compile(
+    r"(Precipitation\s*\(rain|Precipitation\s+Days\s*=|Air\s+Temperatures?\s+in\s+Degrees|"
+    r"DFN\s*=|GDD\s*=|Departure\s+from\s+[Nn]ormal|"
+    r"^\s*Days\s+with\s+precipitation\s+of|Growing\s+Degree\s+Days\s+base)",
 )
 _REVERSED_MARKERS = ("POSTAGE", "PERIODICALS", "POSTMASTER", "NEWSPAPER", "SUBSCRIPTION",
                      "MAILING OFFICE", "ADDITIONAL", "WALNUT", "ISSN", "PUBLISHED WEEKLY",
@@ -340,6 +568,13 @@ _REVERSED_MARKERS = ("POSTAGE", "PERIODICALS", "POSTMASTER", "NEWSPAPER", "SUBSC
 _ATTRIBUTION_RE = re.compile(
     r"^\s*(Fahrenheit\.?\s*Copyright|Copyright\s+\d{4}|[A-Z]+,?\s*Inc\.?\s*All Rights Reserved|"
     r"All Rights Reserved\.?\s*$|Degrees Fahrenheit\.?\s*Copyright)",
+)
+# Bare district row-labels left behind once a district table's numbers are stripped
+# ("North West District", "East Central District", ...) -- a label column, not narrative.
+_DISTRICT_LABEL_RE = re.compile(
+    r"^\s*(North|South|East|West|Central|North\s?West|North\s?East|South\s?West|South\s?East|"
+    r"North\s?Central|South\s?Central|East\s?Central|West\s?Central)(\s+(Central|District))?\s*$",
+    re.IGNORECASE,
 )
 
 
@@ -363,9 +598,14 @@ def clean_narrative(pages: list[str]) -> str:
         ln for ln in lines
         if not _is_tabular_line(ln)
         and not _is_masthead_line(ln)
+        and not _is_station_row(ln)
         and not _TABLE_HEADER_WORDS_RE.search(ln)
         and not _looks_reversed_boilerplate(ln)
         and not _ATTRIBUTION_RE.search(ln)
+        and not _DISTRICT_LABEL_RE.match(ln)
+        and not _UNIT_HEADER_RE.match(ln)
+        and not _DISTRICT_ABBR_RE.search(ln)
+        and not _LEGEND_RE.search(ln)
     ]
     text = "\n".join(kept)
     # Collapse excess blank lines from the line-level filtering above.
@@ -388,6 +628,16 @@ class StateConfig:
     clean_text_start_year: int  # earliest year confirmed clean born-digital text (scouting)
     base_prefixes: list = field(default_factory=list)  # candidate Wayback CDX folder prefixes
     year_folder_fmt: str = "{year}"  # per-year folder naming scheme; Kentucky uses "cw{yy}"
+    # Where this state's narratives come from, when not its own archive. Only New England uses
+    # this: six states share one regional publication, so the PDFs are fetched once under the
+    # "NEWENG" pool instead of six times.
+    text_pool: str | None = None
+    # False for the New England regional pool itself, which is a text source with no series.
+    emits_records: bool = True
+
+    @property
+    def pool(self) -> str:
+        return self.text_pool or self.alpha
 
     def discover_year(self, year: int) -> list[tuple[str, str]]:
         """Per-year discovery under `{prefix}/{year_folder}/`. Kept for back-compat / targeted
@@ -570,12 +820,75 @@ for _alpha, _folder, _label, _chans, _start in _SECOND_WAVE:
         channels=_chans(), clean_text_start_year=_start, base_prefixes=_hubs(_folder),
     )
 
-# Deferred, NOT wired (documented so the omission is deliberate, not an oversight):
-#   AZ, FL, NV -- cotton/peanut/hay-primary states with ~0 corn and only thin/no winter-wheat
-#     PROGRESS; they need a new crop-stage channel set (_cotton_channels/_peanut_channels), not
-#     just a StateConfig. Their soil-moisture backbone alone would still validate, but crop-stage
-#     alignment (the point of the dataset) would be absent, so they wait for the channel-set work.
-#   CT, MA, ME, NH, RI, VT -- New England: crop progress is published through a shared regional
-#     office (Statistics_by_State/New_England/), so per-state folders have zero archive. Low-value
-#     (maple/fruit/hay) and would need the regional-report structure handled separately.
+# --- Third wave (2026-07-30): the nine states previously documented as deferred.
+# Both reasons for deferring them turned out to be removable, and one of the two was an artifact
+# of a throttled scout rather than a fact about the source:
+#
+#   AZ, FL, NV were deferred as needing "a new crop-stage channel set, not just a config entry".
+#     That was true of the hand-written _corn_channels/_wheat_channels design; channel selection is
+#     now derived from the series index (scripts/channels.py), so a state needs no per-commodity
+#     code at all. They report large weekly series -- AZ upland cotton 1,660 weeks, FL peanuts 966,
+#     NV pastureland 944 -- and their archives are large (AZ 1,225 PDFs, FL 1,354, NV 210).
+#     ⚠️ An earlier concurrent probe returned 0 PDFs for all three, which is what "~0 corn" got
+#     conflated with; re-probed under the shared rate limiter they are anything but empty.
+#
+#   CT, MA, ME, NH, RI, VT were deferred because "per-state Wayback folders have zero archive".
+#     The per-state folders are indeed empty -- but the shared regional office publishes under
+#     `New_England_includes/`, which holds 979 archived PDFs, and Quick Stats still carries
+#     per-STATE weekly series for all six (~870 weeks of pastureland/apples/potatoes each). The
+#     regional report is fetched ONCE into the `NEWENG` pool and the six states read their text
+#     from it (see `text_pool`), rather than fetching the same PDFs six times.
+#
+#   ⚠️ New England was investigated and then EXCLUDED again, on alignment rather than availability
+#     -- see the note under `_NEW_ENGLAND` below. The archive is real and is harvested; what is
+#     missing is a series the regional prose is actually about.
+_THIRD_WAVE = [
+    ("AZ", "Arizona", None),
+    ("FL", "Florida", None),
+    ("NV", "Nevada", None),
+]
+for _alpha, _folder, _pool in _THIRD_WAVE:
+    STATE_CONFIGS[_alpha] = StateConfig(
+        alpha=_alpha, name=_folder.replace("_", " "), commodity_label="derived",
+        channels=[], clean_text_start_year=1979, base_prefixes=_hubs(_folder),
+        text_pool=_pool,
+    )
+
+# The six New England states: archive found, records NOT emitted.
+#
+# The blocker documented previously ("per-state Wayback folders are empty") is true but was not the
+# real one. The shared regional office publishes 979 archived reports under `New_England_includes/`,
+# and Quick Stats carries per-STATE weekly series for all six (~870 weeks each). So both halves
+# exist -- but they are not about each other:
+#
+#   * The regional report's prose states REGIONAL aggregates: "there were 5.7 days available for
+#     field work across New England. Pasture condition was rated 12% poor, 20% fair, 58% good, and
+#     10% excellent." Those numbers are not any one state's.
+#   * Quick Stats has no New England aggregate to pair that prose with. Checked exhaustively across
+#     the whole file: WEEKLY rows exist at AGG_LEVEL `STATE` (3,352,511), `NATIONAL` (120,649) and
+#     `REGION : SUB-STATE` (6,713, entirely Colorado potato districts). There is no New England
+#     region row.
+#   * Per-state content in the report is table-only and thin -- rows like "Maine 5 5 5 Fair/Good",
+#     a few numbers and a qualitative rating, with no 5-way percentage breakdown.
+#
+# Pairing regional prose with a single state's 52-week window would be grounding in name only --
+# the schema's "metadata dressed up as language grounding" case -- so these six are excluded. The
+# reports stay harvested so a future pass can revisit if NASS publishes a regional series.
+_NEW_ENGLAND = [("CT", "Connecticut"), ("MA", "Massachusetts"), ("ME", "Maine"),
+                ("NH", "New_Hampshire"), ("RI", "Rhode_Island"), ("VT", "Vermont")]
+for _alpha, _folder in _NEW_ENGLAND:
+    STATE_CONFIGS[_alpha] = StateConfig(
+        alpha=_alpha, name=_folder.replace("_", " "), commodity_label="derived",
+        channels=[], clean_text_start_year=1979, base_prefixes=_hubs(_folder),
+        text_pool="NEWENG", emits_records=False,
+    )
+
+# The shared New England regional office. Not a state: it owns no series of its own, it exists so
+# the 979 regional reports are discovered and fetched exactly once. `series_state` is None, so the
+# build never tries to emit records for "NEWENG" itself.
+STATE_CONFIGS["NEWENG"] = StateConfig(
+    alpha="NEWENG", name="New England (regional office)", commodity_label="derived",
+    channels=[], clean_text_start_year=1979,
+    base_prefixes=_hubs("New_England_includes"), emits_records=False,
+)
 
