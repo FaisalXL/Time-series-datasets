@@ -1,0 +1,121 @@
+# USDA FAS GAIN attaché reports → CPT world-knowledge JSONL
+#
+# Record = one GAIN report's own VERBATIM narrative paired with the multi-channel PSD balance
+# sheet(s) that narrative discusses. Sibling of built WASDE #41 (same PSD backbone) but
+# COUNTRY-GRANULAR: WASDE #41 builds only "U.S. ..." tables, so the foreign-post series here are
+# structurally net-new (see `dedup` below).
+#
+# THE VINTAGE SPLICE (the core design, measured 2026-07-30 -- see README "Vintage splice"):
+#   PSD Online bulk gives decades of annual history but reflects the CURRENT vintage; USDA keeps
+#   revising the recent/forecast years AFTER a report ships. Measured on MX2026-0012: settled years
+#   matched the report exactly (8/8 for 2024), but the forecast year had drifted past BOTH of the
+#   report's own columns (Total Slaughter 2026: report 7,200/7,225 -> PSD now 7,550).
+#   => series = PSD bulk for settled years  +  the report's OWN table values for its table years.
+#   Naively pairing live PSD would silently mismatch exactly the years the prose is about.
+#
+# FORECAST-NOT-MEASURED: GAIN prose is forecast-DOMINANT (every Report Highlights / Executive
+# Summary leads with the coming marketing year). Handled exactly like WASDE #41: the forecast year
+# is the series' TERMINAL point, and the text is the contemporaneous first-party forecast, so no
+# future-value leakage. Do NOT strip the forecast -- that would break text<->series alignment.
+
+data:
+  gain_download: "https://apps.fas.usda.gov/newgainapi/api/Report/DownloadReportByFileName?fileName={file_name}"
+  # NOTE: the www.fas.usda.gov/data/gain-report/... direct PDF path 403s; this API path works.
+  psd_zip: "https://apps.fas.usda.gov/psdonline/downloads/psd_{group}_csv.zip"
+  cache_dir: ".cache"
+
+# WASDE #41 de-duplication (build approved 2026-07-30 on condition of this pass).
+# Measured: WASDE #41's six commodities are ALL "U.S. ..." tables (its world tables were
+# deliberately NOT built), so foreign-post GAIN series do not collide with it. This guard exists so
+# the full run cannot silently re-ship a WASDE cell if a US-country PSD series is ever pulled in.
+dedup:
+  wasde_countries: ["United States"]
+  wasde_commodities:
+    - "Wheat"
+    - "Corn"
+    - "Oilseed, Soybean"
+    - "Rice, Milled"
+    - "Cotton"
+    - "Sugar, Centrifugal"
+
+text:
+  min_chars: 350          # below this the "narrative" is a caption/stub -> drop (no_prose)
+  max_chars: 5000
+  drop_lines:             # first-party boilerplate, not narrative
+    - "^THIS REPORT CONTAINS ASSESSMENTS"
+    - "^STATEMENTS OF OFFICIAL U\\.S\\."
+    - "^OFFICIAL DATA CAN BE ACCESSED AT"
+    - "^Not official USDA data"
+    - "^Source:"
+    - "^Figure \\d"
+    - "^Table \\d"
+    - "^\\(1000\\b"                      # wrapped table unit fragments, e.g. '(1000 HEAD)'
+    - "^(HEAD|MT|MT CWE|CWE|HA|MT/HA)\\)$"
+
+series:
+  freq: "1y"              # PSD market years are annual
+  min_points: 12          # need real depth; GAIN commodities typically give 40-67 annual points
+
+output:
+  path: "output/fas_gain_cpt.jsonl"
+  run_report: "output/run_report.json"
+  max_records: null
+
+# ---------------------------------------------------------------------------------------------
+# Reports. The DEMO pins two reports that between them cover BOTH layout families and BOTH
+# year conventions found in the wild (see README "Two record shapes"). The server enumerates the
+# full archive instead of pinning -- the per-post layout variance below is the main eng risk.
+# ---------------------------------------------------------------------------------------------
+reports:
+  # --- Family A: livestock-style. Narrative is INTERLEAVED per commodity (prose follows each
+  #     PSD table), bordered tables, CALENDAR-year columns => one record PER COMMODITY.
+  - file_name: "Livestock and Products Semi-annual_Mexico City_Mexico_MX2026-0012.pdf"
+    report_number: "MX2026-0012"
+    country: "Mexico"            # must match PSD Country_Name
+    post: "Mexico City"
+    psd_group: "livestock"
+    published: "2026-02-26"
+    region: "MX"
+    record_shape: "per_commodity"
+    commodities:
+      - {slug: "cattle", table_title: "Animal Numbers, Cattle", psd_commodity: "Animal Numbers, Cattle"}
+      - {slug: "beef",   table_title: "Meat, Beef and Veal",    psd_commodity: "Meat, Beef and Veal"}
+      - {slug: "swine",  table_title: "Animal Numbers, Swine",  psd_commodity: "Animal Numbers, Swine"}
+      - {slug: "pork",   table_title: "Meat, Swine",            psd_commodity: "Meat, Swine"}
+
+  # --- Family B: oilseeds-style. Narrative is organized BY TOPIC (Production / Trade / Exports),
+  #     each paragraph discussing ALL oilseeds together, with every PSD table grouped at the end
+  #     under "PSD Data Statistics"; borderless tables, MARKETING-year columns ("2026/2027").
+  #     Pairing this prose per-commodity would re-ship one paragraph under 3 labels = the
+  #     boilerplate-reuse / "no fake scale" ban in SCHEMA.md (same reason WASDE #41 refused to
+  #     split sorghum/barley/oats out of its COARSE GRAINS paragraph).
+  #     => ONE record per narrative section, channels = UNION of the commodities it discusses.
+  - file_name: "Oilseeds and Products Annual_Kyiv_Ukraine_UP2026-0011.pdf"
+    report_number: "UP2026-0011"
+    country: "Ukraine"
+    post: "Kyiv"
+    psd_group: "oilseeds"
+    published: "2026-04-01"
+    region: "UA"
+    record_shape: "multi_commodity"
+    sections:
+      - slug: "oilseed_production"
+        prose_heading: "^Production$"
+        psd_commodities: ["Oilseed, Sunflowerseed", "Oilseed, Soybean", "Oilseed, Rapeseed"]
+        attributes: ["Area Harvested", "Production", "Yield", "Crush", "Exports", "Ending Stocks"]
+
+# Report-table row label -> PSD Attribute_Description. GAIN renders friendlier labels than the
+# PSD database uses; everything not resolved here is counted in run_report.unmapped_labels so the
+# server can see coverage rather than silently dropping channels.
+attribute_aliases:
+  "total cattle beg stocks": "Beginning Stocks"
+  "total beginning stocks": "Beginning Stocks"
+  "production calf crop": "Production"
+  "production pig crop": "Production"
+  "ending inventories": "Ending Stocks"
+  "total imports": "Imports"
+  "total exports": "Exports"
+  "my imports": "Imports"
+  "my exports": "Exports"
+  "human dom consumption": "Human Dom. Consumption"
+  "slaughter reference": "Slaughter (Reference)"
