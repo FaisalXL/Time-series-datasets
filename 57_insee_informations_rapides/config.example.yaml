@@ -1,0 +1,51 @@
+# INSEE "Informations Rapides" (France) -> CPT world-knowledge JSONL.
+#
+# One record = one release's VERBATIM ENGLISH narrative + a trailing window of the exact series it
+# recites. ENGLISH-ONLY is enforced in code (only /en/ URLs are fetched, and an English-language
+# guard drops any release lacking a real English edition -- INSEE doesn't publish English for all).
+#
+# Series: INSEE BDM open SDMX (keyless), https://bdm.insee.fr/series/sdmx/data/SERIES_BDM/{idbank}
+# Text:   insee.fr/en/statistiques/{id}; release IDs discovered via Wayback CDX (site is a JS SPA).
+# License: Etalab Open Licence 2.0 (CC-BY-equivalent; tagged cc-by-4.0 closest schema fit,
+#          real license preserved in meta.true_license).
+#
+# Quick start (demo uses the pinned seed_ids so it runs fast without CDX):
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --config config.example.yaml
+#   python ../schema/validate.py output/ --strict
+
+# Anchor indicator = Consumer Price Index. Add sibling indicators (industrial production, GDP,
+# household consumption, PPI, ...) by pointing `title_contains` at their English title phrase and
+# `idbanks` at their BDM series -- the pipeline is shared. That indicator federation is what takes
+# this from CPI-only (~hundreds) toward the multi-thousand corpus scale.
+indicator:
+  key: cpi
+  title_contains: "consumer price"      # English title filter, e.g. "In July 2025, consumer prices..."
+  window_months: 24
+  idbanks:
+    cpi_all_items_index_base2015: "001759970"    # national CPI, all households, all items, base 2015
+    hicp_all_items_index_base2015: "001759971"   # Harmonised Index of Consumer Prices, base 2015
+
+min_text_chars: 300
+
+# CDX discovery range (used only when seed_ids is null).
+year_from: 2018
+year_to: 2026
+
+# Demo seed: known English CPI Informations Rapides release IDs (flash + definitive; the build
+# dedupes per reference month, preferring the richer definitive). Set to null for full CDX
+# discovery across all ~6,800 archived English releases (server-side full run).
+seed_ids:
+  - 3307940    # 2018 (older English edition; confirms depth)
+  - 8558560    # 2025-03 definitive
+  - 8598808    # 2025-06 flash
+  - 8608796    # 2025-06 definitive
+  - 8630008    # 2025-07 definitive
+  - 8662070    # 2025-10 flash
+  - 8667363    # 2025-10 definitive
+  - 8672064    # 2025-11 flash
+  - 8726812    # 2025-12 definitive
+  - 8974215    # 2026-03 definitive
+
+output:
+  max_records: null        # null = all discovered; server full run sets seed_ids: null too
