@@ -387,6 +387,47 @@ def detect_alignment(text: str, channels: list[dict]) -> tuple[str, list[dict]]:
     return ("recites" if evidence else "describes"), evidence[:6]
 
 
+_SUPERLATIVE_HIGH = re.compile(r"\b(highest|largest|record[- ]high|all-time high)\b", re.I)
+_SUPERLATIVE_LOW = re.compile(r"\b(lowest|smallest|record[- ]low|all-time low)\b", re.I)
+
+
+def check_superlatives(text: str, chans_full: list[dict], evidence: list[dict]) -> list[dict]:
+    """A 'highest/lowest ... on record' claim is a claim about ALL history, not just the shipped
+    window -- so it must be checked against the full spliced series (chans_full), not the trimmed
+    one. Caught on MX2026-0012: 'Mexico exported approximately 1.25 million head ... in 2024, the
+    highest level on record' sits next to a channel (same 'Exports' attribute as the report's own
+    table) whose real MY2023 value (1,295) exceeds the claimed MY2024 record (1,250) -- and MY2023
+    cannot be windowed away because it's independently text-named (the drought-date mention).
+    This is a correctness defect, not a coverage one: shipping it pairs a verbatim claim with data
+    that refutes it. Flagged, not silently dropped -- a human call on scope/vintage is needed.
+    """
+    flags = []
+    by_unit = {c["unit"]: c for c in chans_full}
+    for e in evidence:
+        idx = text.find(e["quoted_as"])
+        if idx < 0:
+            continue
+        window = text[max(0, idx - 90): idx + 90]
+        high, low = _SUPERLATIVE_HIGH.search(window), _SUPERLATIVE_LOW.search(window)
+        if not (high or low):
+            continue
+        ch = by_unit.get(e["channel"])
+        if not ch:
+            continue
+        pairs = [(y, v) for y, v in zip(ch["years"], ch["values"]) if v is not None]
+        if not pairs:
+            continue
+        extreme_year, extreme_val = (max(pairs, key=lambda p: p[1]) if high
+                                     else min(pairs, key=lambda p: p[1]))
+        if abs(extreme_val - e["value"]) > 1e-6:
+            flags.append({
+                "channel": e["channel"], "claim_type": "highest" if high else "lowest",
+                "claimed_year": e["market_year"], "claimed_value": e["value"],
+                "actual_extreme_year": extreme_year, "actual_extreme_value": extreme_val,
+            })
+    return flags
+
+
 # ---------------------------------------------------------------------------- build
 def build_channels(psd_vals, psd_units, country, commodity, table, aliases, scfg, stats):
     """Splice: PSD bulk settled history + the report's own table years (vintage-exact tail)."""
@@ -434,6 +475,60 @@ def build_channels(psd_vals, psd_units, country, commodity, table, aliases, scfg
     return channels
 
 
+def apply_window(chans: list[dict], text: str, scfg: dict) -> tuple[list[dict], dict]:
+    """Trim every channel to a COMMON year window, dropping PSD's missing-as-zero prefix.
+
+    Two separate corrections, both measured on MX2026-0012:
+
+    1. PSD encodes pre-coverage years as a literal 0.0000 (Mexico cattle `Production` is 0 for
+       MY1960-1971, `Cow Slaughter` 0 for MY1960-1974). Those are NOT real observations -- Mexico
+       did not slaughter zero cows in 1968 -- so shipping them would teach false facts. The series
+       starts at the first year every kept channel is genuinely populated.
+
+    2. The narrative only ever discusses the last few market years, so a full 67-point history is
+       mostly unreferenced context. `window_mode: text_span` bounds the series to the years the
+       prose actually names (+ `context_years`), which is what keeps text and series commensurate.
+    """
+    info: dict = {}
+    # (1) common start: latest first-genuinely-populated year across channels
+    starts = []
+    for ch in chans:
+        nz = next((y for y, v in zip(ch["years"], ch["values"]) if v not in (0.0, None)), None)
+        starts.append(nz if nz is not None else ch["years"][0])
+    common = max(starts)
+    info["zero_prefix_trimmed_to"] = common
+
+    # (2) window
+    mode = scfg.get("window_mode") or "all"
+    start = common
+    if mode == "text_span":
+        yrs = sorted({int(y) for y in re.findall(r"\b(19\d{2}|20[0-4]\d)\b", text)})
+        yrs = [y for y in yrs if common <= y <= max(c["years"][-1] for c in chans)]
+        if yrs:
+            start = max(common, min(yrs) - int(scfg.get("context_years", 0)))
+    elif isinstance(scfg.get("window"), int):
+        last = max(c["years"][-1] for c in chans)
+        start = max(common, last - scfg["window"] + 1)
+    info["window_mode"] = mode
+
+    out = []
+    for ch in chans:
+        keep = [(y, v) for y, v in zip(ch["years"], ch["values"]) if y >= start]
+        if len(keep) < scfg["min_points"]:      # back off rather than emit a stub
+            keep = [(y, v) for y, v in zip(ch["years"], ch["values"]) if y >= common][
+                -max(scfg["min_points"], len(keep)):]
+        ch = dict(ch)
+        ch["years"] = [y for y, _ in keep]
+        ch["values"] = [v for _, v in keep]
+        out.append(ch)
+    lens = {len(c["values"]) for c in out}
+    if len(lens) != 1:                          # schema: same-freq channels must be equal length
+        n = min(lens)
+        for c in out:
+            c["years"], c["values"] = c["years"][-n:], c["values"][-n:]
+    return out, info
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--config", default=str(PKG_ROOT / "config.example.yaml"))
@@ -457,7 +552,8 @@ def main() -> int:
     stats = {"reports": 0, "tables_found": 0, "candidates": 0, "emitted": 0,
              "recites": 0, "describes": 0, "channels_emitted": 0, "no_prose": 0,
              "short_series": 0, "no_psd_series": 0, "no_table": 0, "wasde_skipped": 0,
-             "official_fallbacks": 0, "unmapped_labels": {}}
+             "official_fallbacks": 0, "unmapped_labels": {}, "coverage_pct": [],
+             "superlative_contradictions": 0, "superlative_dropped": 0}
     records, psd_cache = [], {}
 
     for rep in cfg["reports"]:
@@ -522,8 +618,22 @@ def main() -> int:
                     stats["no_prose"] += 1
                     continue
 
+                chans_full = chans
+                chans, win = apply_window(chans, text, scfg)
                 alignment, evidence = detect_alignment(text, chans)
+                superlative_flags = check_superlatives(text, chans_full, evidence)
+                stats["superlative_contradictions"] += len(superlative_flags)
+                if superlative_flags and tcfg.get("drop_on_superlative_contradiction", True):
+                    # conservative default: a verbatim 'highest/lowest on record' claim next to
+                    # data that refutes it is a correctness defect (self-contradiction), not a
+                    # coverage one -- drop rather than ship it, same posture as the fake-alignment
+                    # kills (openFDA/NHTSA/CFPB/WHO Cholera) elsewhere in this corpus.
+                    stats["superlative_dropped"] += 1
+                    continue
                 years = sorted({y for c in chans for y in c["years"]})
+                text_years = sorted({int(y) for y in re.findall(r"\b(19\d{2}|20[0-4]\d)\b", text)})
+                described = [y for y in text_years if years[0] <= y <= years[-1]]
+                stats["coverage_pct"].append(round(100 * len(described) / len(years), 1))
                 ts = [{"values": c["values"], "unit": c["unit"], "freq": c["freq"]} for c in chans]
                 rec = emit_record(
                     text=text.rstrip() + "\n\n<ts></ts>",
@@ -552,6 +662,10 @@ def main() -> int:
                         "splice_year": chans[0]["splice_year"],
                         "report_table_years": tabs[0]["years"],
                         "recite_evidence": evidence,
+                        "superlative_flags": superlative_flags,
+                        "text_years_named": text_years,
+                        "series_years_described_pct": round(100 * len(described) / len(years), 1),
+                        "window": win,
                         "series_note": (
                             "annual PSD balance sheet, vintage-spliced: PSD Online bulk for settled "
                             f"market years (< {chans[0]['splice_year']}) + this report's OWN table "

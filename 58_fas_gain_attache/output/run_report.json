@@ -32,7 +32,16 @@
       "Oilseed, Rapeseed :: Area Planted (1000 HA)": 1,
       "Oilseed, Rapeseed :: Feed Waste Dom.": 1,
       "Oilseed, Rapeseed :: Total Dom. Cons. (1000 MT)": 1
-    }
+    },
+    "coverage_pct": [
+      66.7,
+      50.0,
+      66.7,
+      42.9,
+      33.3
+    ],
+    "superlative_contradictions": 1,
+    "superlative_dropped": 0
   },
   "config_snapshot": {
     "data": {
@@ -56,6 +65,7 @@
     "text": {
       "min_chars": 350,
       "max_chars": 5000,
+      "drop_on_superlative_contradiction": false,
       "drop_lines": [
         "^THIS REPORT CONTAINS ASSESSMENTS",
         "^STATEMENTS OF OFFICIAL U\\.S\\.",
@@ -70,10 +80,12 @@
     },
     "series": {
       "freq": "1y",
-      "min_points": 12
+      "window_mode": "text_span",
+      "context_years": 2,
+      "min_points": 3
     },
     "output": {
-      "path": "output/fas_gain_cpt.jsonl",
+      "path": "output/_flagmode.jsonl",
       "run_report": "output/run_report.json",
       "max_records": null
     },

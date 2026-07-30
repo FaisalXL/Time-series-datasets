@@ -41,6 +41,15 @@ dedup:
 text:
   min_chars: 350          # below this the "narrative" is a caption/stub -> drop (no_prose)
   max_chars: 5000
+  # Superlative guard (added 2026-07-30): a "highest/lowest ... on record" claim is checked
+  # against the channel's FULL spliced history, not just the shipped window -- caught on
+  # MX2026-0012, "exported ... 1.25 million head ... in 2024, the highest level on record" sits
+  # next to the same "Exports" attribute whose real MY2023 value (1,295) exceeds it. Not fixable
+  # by windowing (2023 is independently text-named via the drought-date mention). Correctness
+  # defect, not a coverage one -> drop by default, same posture as this corpus's other
+  # fake-alignment kills (openFDA/NHTSA/CFPB/WHO Cholera). Set false to ship + inspect
+  # `meta.superlative_flags` instead (e.g. while investigating a scope/vintage explanation).
+  drop_on_superlative_contradiction: true
   drop_lines:             # first-party boilerplate, not narrative
     - "^THIS REPORT CONTAINS ASSESSMENTS"
     - "^STATEMENTS OF OFFICIAL U\\.S\\."
@@ -54,7 +63,15 @@ text:
 
 series:
   freq: "1y"              # PSD market years are annual
-  min_points: 12          # need real depth; GAIN commodities typically give 40-67 annual points
+  # WINDOW POLICY (decided 2026-07-30 after a coverage audit -- see README "Commensurability").
+  # Full/long PSD history left text and series badly incommensurate: prose names only 1-6 market
+  # years, so a 40-67 point series was 3-13% "described" by the text -- and worse, a long window
+  # actively CONTRADICTS verbatim claims (MX2026-0012 calls 2024 exports "the highest level on
+  # record" at 1,250; the full series has five later/earlier years above that, 1995-2020). GAIN is
+  # WIDE (13-18 channels), not deep -- text_span accepts that profile instead of hiding it.
+  window_mode: "text_span"   # bound the series to the years the prose actually names
+  context_years: 2           # + this many years of surrounding context
+  min_points: 3            # back off to this floor rather than emit a stub (was 12 pre-audit)
 
 output:
   path: "output/fas_gain_cpt.jsonl"
@@ -119,3 +136,11 @@ attribute_aliases:
   "my exports": "Exports"
   "human dom consumption": "Human Dom. Consumption"
   "slaughter reference": "Slaughter (Reference)"
+
+# --- window policy (added 2026-07-30 after a coverage audit) -----------------------------------
+# Full PSD history left text and series badly incommensurate: the prose names only 1-6 market
+# years, so a 67-point series was 2-9% "described". window_mode bounds the series to what the text
+# actually discusses. Also drops PSD's missing-as-zero prefix (see apply_window docstring).
+#   all        -> full populated history (deep, but mostly unreferenced)
+#   text_span  -> only the years the prose names, + context_years  (commensurate)
+#   window: N  -> last N market years

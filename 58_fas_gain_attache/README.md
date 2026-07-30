@@ -1,6 +1,7 @@
 # 58 — USDA FAS GAIN attaché reports → CPT world-knowledge records
 
-**Status: DEMO BUILT + VERIFIED (2026-07-30). 5 records, 56 channels, 5/5 pass `validate.py --strict`.**
+**Status: DEMO BUILT + VERIFIED (2026-07-30, revised same day after a commensurability audit).
+4 records, 43 channels, 4/4 pass `validate.py --strict`.**
 Awaiting Faisal's clear → then the server does the full archive run.
 
 One record = a GAIN report's own **verbatim narrative** paired with the **multi-channel PSD balance
@@ -8,15 +9,24 @@ sheet** that narrative discusses. GAIN is the *country-granular* sibling of buil
 same PSD backbone, but #41 builds only `U.S. ...` tables, so foreign-post series here are
 structurally net-new.
 
+> **Correction to the original pass:** the initial demo shipped 5 records at full PSD depth
+> (40–67 points) and described that as a strength. A commensurability audit (prompted by a direct
+> question: *does the text strongly align with the series, and is the series longer than what the
+> text describes?*) found the answer was no — mean coverage was **13%**, and one record paired a
+> verbatim "highest on record" claim with data that contradicted it. Both are fixed below. **GAIN's
+> honest profile is WIDE, not deep: 13–18 channels × ~3–14 commensurate years**, not 40–67-point
+> depth. See "Commensurability" and "Superlative guard".
+
 | | |
 |---|---|
 | Text | USDA FAS GAIN attaché reports (PDF, digital/text-extractable — no OCR) |
 | Series | PSD Online bulk CSV (`apps.fas.usda.gov/psdonline/downloads/psd_<group>_csv.zip`) |
 | License | `public-domain-us-gov` — US-federal work product, 17 U.S.C. §105 |
-| Alignment | `recites` 4/5 · `describes` 1/5 (demo) |
+| Alignment | `recites` 3/4 · `describes` 1/4 (demo, post-guard) |
 | Freq | `1y` (PSD market years) |
-| Depth | **40–67 annual points** per channel (Mexico cattle 1960→2026; Ukraine oilseeds 1987→2026) |
-| Demo | 2 reports → 5 records, 7–18 channels each |
+| Depth | **3–14 points per channel**, windowed to the years the text actually names (+2 yrs context) |
+| Coverage | mean **48%** of shipped series-years are named in the text (was 13% at full depth) |
+| Demo | 2 reports → 4 records (1 dropped by the superlative guard), 4–14 channels each |
 
 ## Quickstart
 
@@ -29,6 +39,51 @@ python ../schema/validate.py output/fas_gain_cpt.jsonl --strict
 Downloads are cached under `.cache/` (git-ignored): GAIN PDFs and the PSD bulk zips.
 
 ---
+
+## Commensurability (window policy — decided 2026-07-30)
+
+At annual frequency, GAIN prose only ever discusses the last 1–6 market years — so a full
+40–67-point PSD history is mostly context the text never touches. Measured before the fix: mean
+**13%** of a shipped series' years were named in the paired text (min 3.3%); the rest was real but
+unreferenced history.
+
+`config.series.window_mode: text_span` bounds each record's series to the years the text actually
+names (`+ context_years: 2`), and separately trims PSD's missing-as-zero prefix (PSD encodes
+pre-coverage years as a literal `0.0000` — Mexico cattle `Production` is `0.0` for MY1960–1971;
+that is not a real observation of zero calves, so it's dropped, not shipped). Result: mean
+coverage **48%**, depth 3–14 points/channel.
+
+This was a genuine trade-off, not a free win — GAIN **cannot be both commensurate and deep** at
+annual frequency with a 3-year narrative horizon. The corpus accepts GAIN as **wide** (13–18
+channels/record) rather than **deep**, which is a real downgrade from how this package was
+originally pitched (see status note above). `min_points: 3` is the floor the window backs off to
+rather than emit a shorter stub.
+
+## Superlative guard (a correctness defect, not a coverage one)
+
+Windowing fixed *unreferenced* depth, but tracing one claim exposed something the window can't
+fix: **`MX2026-0012` states "Mexico exported approximately 1.25 million head to the United States
+in 2024, the highest level on record."** The paired channel is the *same* `Exports` attribute the
+report's own table uses (no scope mismatch) — and its real MY2023 value is **1,295**, exceeding
+the claimed 2024 "record" of 1,250; the true all-time max in the spliced history is **1,658
+(1995)**. This can't be windowed away, because 2023 is independently named in the same paragraph
+(the drought-date range "2023–2024"), so any window containing that sentence also contains the
+contradicting year.
+
+Root cause is unresolved — plausibly a scope difference Post didn't make explicit (e.g. "to the
+United States" vs. PSD's broader `Total Exports`), or a revision of MY2023 after the report shipped
+(the vintage-drift risk isn't only in the *forecast* year — see below — it can, apparently, still
+touch a year we'd otherwise call "settled"). Either way, shipping a verbatim superlative next to
+data that refutes it is a self-contradicting record, the same class of failure this corpus already
+kills other candidates for (openFDA/NHTSA/CFPB/WHO Cholera).
+
+`check_superlatives()` matches `highest/largest/record-high` and `lowest/smallest/record-low`
+language around an already-verified recited value, then checks it against the **full** spliced
+history (not just the shipped window, since a "record" claim is about all history). A hit is
+recorded in `meta.superlative_flags` (channel, claimed year/value, actual extreme year/value) and,
+by default (`text.drop_on_superlative_contradiction: true`), **the record is dropped** —
+conservative on purpose. Set it `false` to ship + inspect flagged records instead, e.g. while
+investigating whether it's a scope artifact. 1/5 demo records were dropped this way.
 
 ## The vintage splice (the core design — do not simplify this away)
 
@@ -69,8 +124,8 @@ future-value leakage. Recorded per record in `meta.forecast_caveat`.
 
 | shape | layout | example | records |
 |---|---|---|---|
-| `per_commodity` | prose **interleaved** after each commodity's table; bordered tables; **calendar**-year columns | livestock (`MX2026-0012`) | 1 per commodity (4) |
-| `multi_commodity` | prose organized **by topic** (Production/Trade/Exports) discussing all commodities together; every PSD table grouped at the end under "PSD Data Statistics"; borderless tables; **marketing**-year columns (`2026/2027`) | oilseeds (`UP2026-0011`) | 1 per section, channels = union (18 ch) |
+| `per_commodity` | prose **interleaved** after each commodity's table; bordered tables; **calendar**-year columns | livestock (`MX2026-0012`) | 1 per commodity (4, 1 dropped by the superlative guard → 3 shipped) |
+| `multi_commodity` | prose organized **by topic** (Production/Trade/Exports) discussing all commodities together; every PSD table grouped at the end under "PSD Data Statistics"; borderless tables; **marketing**-year columns (`2026/2027`) | oilseeds (`UP2026-0011`) | 1 per section, channels = union (18 ch pre-window) |
 
 The second shape is a deliberate **anti-fake-scale** choice. Pairing that topical prose per
 commodity would re-ship one paragraph under three labels — the boilerplate-reuse ban in
@@ -147,6 +202,11 @@ sets the true number. Server must also confirm current-template depth (how far b
 * **Prose anchors are per-family config** (`prose_heading`, or prose-after-table). A 2–3k
   reports/yr run needs a generalized section locator; layout variance across ~90 posts is the
   single biggest unknown in this package.
+* **The MX2026-0012 "highest on record" contradiction's root cause is unresolved** (scope artifact
+  vs. a settled-year revision — see "Superlative guard"). Worth a small follow-up: pull an older
+  archived vintage of the Mexico cattle PSD table (e.g. via Wayback) to see whether MY2023 exports
+  read lower at the time the report was written, which would confirm settled-year vintage drift
+  rather than a Post reporting error.
 * `datasets/README.md` still needs a row for this package (shared file — flagged separately, not
   edited here).
 
