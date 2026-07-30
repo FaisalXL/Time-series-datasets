@@ -1,15 +1,11 @@
 # NOAA Fisheries Stock Assessments (Stock SMART) -> CPT world-knowledge JSONL
 #
-# One record = one (stock, assessment) pair: the assessment's own final report (real PDF,
-# narrative text) paired with that stock's own historical time series (catch, fishing
-# mortality, recruitment, abundance/biomass) through the assessment's last data year.
-# alignment=recites/describes (assessment reports narrate stock status/trends directly off
-# their own tables). text_quality "real".
-#
-# Verified previously (docs/scouting_build_queue.md #7): a fresh stock (Georges Bank Haddock)
-# matched an entire 8-year table cell-for-cell. Re-confirmed 2026-07-25: Acadian redfish's own
-# assessment carries 71 real years (1934-2004) of catch/Fmort/recruitment/biomass -- far
-# deeper than the 24-32-period baseline other packages target.
+# One record = one (stock, assessment) pair: the assessment report's own STATUS NARRATIVE
+# about that stock, paired with that stock's own historical time series (catch, fishing
+# mortality, recruitment, abundance/biomass) through the assessment's terminal data year.
+# alignment is measured per record (recites when the prose quotes a channel's terminal value,
+# else describes) and controlled by permutation -- see run_report.json "alignment".
+# text_quality "real": every character is the report's own prose, nothing generated.
 #
 # Series + report-file discovery: NOAA's Stock SMART "sis_servlet" / "data-export-servlet" JSON
 #   API (reverse-engineered from the public NOAA-EDAB/stocksmart R package's
@@ -17,16 +13,17 @@
 #   apps-st.fisheries.noaa.gov/sis/docServlet?fileAction=download&fileId=N (linked via the
 #   summary export's XLSX hyperlink relationships, not the visible cell text).
 #
-# License filter (NOT a blanket public-domain claim -- see NOTION_PAGE.md): excludes
-#   Jurisdiction values that are internationally co-published (Atlantic HMS -- ICCAT-linked;
-#   IPHC -- a US/Canada joint commission) or state-level (ASMFC -- an interstate compact, not
-#   a federal NOAA jurisdiction). Verified directly against the live jurisdiction distribution
-#   (3,527 real stock-assessment rows fetched and counted), not assumed.
+# License filter (NOT a blanket public-domain claim -- see README): excludes Jurisdiction
+#   values that are internationally co-published (Atlantic HMS -- ICCAT-linked; IPHC -- a
+#   US/Canada joint commission) or state-level (ASMFC -- an interstate compact, not a federal
+#   NOAA jurisdiction). Verified directly against the live jurisdiction distribution
+#   (3,528 real stock-assessment rows fetched and counted), not assumed.
 #
 # Quick start:
+#   python scripts/fetch_reports.py <cands.json>   # optional: warm the PDF cache (~8 GB)
 #   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
-#   python scripts/build_cpt_jsonl.py                                  # demo (50)
-#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build
+#   python scripts/build_cpt_jsonl.py                                  # full build
+#   python scripts/build_cpt_jsonl.py --set output.max_records=50      # 50-record demo
 
 data:
   api_base: "https://apps-st.fisheries.noaa.gov/stocksmart/"
@@ -46,17 +43,30 @@ data:
     - "SAFMC / GMFMC"
     - "NEFMC / MAFMC"
     - "PFMC / WPFMC"
-  # excluded, confirmed real: "Atlantic HMS" (~79 rows, ICCAT-linked international species),
-  # "IPHC" (~10 rows, US/Canada joint international commission),
-  # "ASMFC" (~2 rows, interstate compact, not a federal NOAA jurisdiction).
+  # excluded, confirmed real: "Atlantic HMS" (79 rows, ICCAT-linked international species),
+  # "IPHC" (10 rows, US/Canada joint international commission),
+  # "ASMFC" (2 rows, interstate compact, not a federal NOAA jurisdiction).
 
   min_points: 8          # need a real multi-year series, not a single-point stub
-  min_year: 1800          # sanity floor when trimming leading empty years
-  # Skip reports longer than this -- almost always multi-stock omnibus documents (e.g. the
-  # 362-page "Review of Ocean Salmon Fisheries") where pairing the WHOLE doc with one stock's
-  # series dilutes alignment (most of the text is about other stocks). Prefers tighter,
-  # single/few-stock assessment reports. See NOTION_PAGE.md.
-  max_report_pages: 80
+  min_year: 1800         # sanity floor when trimming leading empty years
+
+  # Window start policy. Candidate starts are the channels' own start years, tried
+  # deepest-first; the first one whose null fraction stays inside this budget wins. 0.0
+  # reproduces the demo's max-of-mins behaviour (null-free but truncating: it discarded
+  # 13,676 real year-observations across the universe, up to 103 years on one assessment);
+  # 1.0 is a pure union window (7.0% nulls). Measured at 0.20: median depth 29 -> 31 years,
+  # 1,308 assessments at >=32 points (vs 1,192), 3.0% nulls.
+  null_budget: 0.20
+
+  # How to treat a report file that Stock SMART links from rows for MORE THAN ONE stock.
+  # This replaces the demo's `max_report_pages: 80` filter, which rested on the theory that
+  # long reports are multi-stock -- measured false: 107 of 274 sampled SINGLE-stock reports
+  # exceed 80 pages (max 2,445), while file-sharing identifies omnibus documents exactly,
+  # from the source's own metadata: 1,410 distinct files back 3,088 rows, so 1,842 rows
+  # (59.7%) sit on a file shared with a DIFFERENT stock.
+  #   "drop"   -- emit nothing for those rows (the shipped setting; see README for why)
+  #   "scoped" -- try to isolate the stock's own chapter via repex.locate_scope
+  omnibus_mode: "drop"
 
   cache_dir: ".cache"
   user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
@@ -69,13 +79,19 @@ data:
   source_url: "https://www.fisheries.noaa.gov/resource/tool-app/stock-smart"
 
 text:
-  min_text_chars: 400
-  # No templated intro: <ts></ts> is appended directly to the real scraped assessment-report
-  # text, nothing generated in between.
+  # Floor on the extracted narrative. Below ~600 chars what survives extraction is a title
+  # page or a single stub sentence rather than a status narrative.
+  min_text_chars: 600
+  # Ceiling, applied at a sentence boundary. The narrative sections are far shorter than this
+  # in the median (~2.8k chars); the cap only binds on benchmark assessments that narrate at
+  # length.
+  max_text_chars: 24000
+  # No templated intro and no channel-naming sentence: <ts></ts> follows the report's own
+  # prose and nothing else. Provenance lives in `meta`.
 
 output:
   output_path: output/noaa_stock_assessments_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
-  max_records: 50            # demo cap. null = full build
+  max_records: null          # null = full build; set an int for a demo cap
   indent: null

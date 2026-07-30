@@ -1,16 +1,68 @@
 {
   "stats": {
     "entities": 427,
-    "summary_rows": 3527,
-    "after_jurisdiction_filter": 3088,
-    "no_report_link": 348,
-    "report_fetch_failed": 0,
-    "report_too_large": 169,
-    "short_text": 0,
-    "no_timeseries": 10,
-    "short_window": 0,
-    "emitted": 50,
-    "invalid": 0
+    "summary_rows": 3528,
+    "jurisdiction_excluded": 91,
+    "missing_ids": 0,
+    "no_report_link": 349,
+    "candidates": 3088,
+    "report_not_pdf": 19,
+    "no_text_layer": 2,
+    "omnibus_unscoped": 1842,
+    "omnibus_scoped": 0,
+    "short_text": 261,
+    "no_timeseries": 96,
+    "short_window": 4,
+    "duplicate_text": 19,
+    "invalid": 0,
+    "emitted": 845
+  },
+  "reconcile": {
+    "rows_balance": {
+      "summary_rows": 3528,
+      "sum_of_parts": 3528,
+      "ok": true
+    },
+    "candidate_balance": {
+      "candidates": 3088,
+      "sum_of_parts": 3088,
+      "ok": true
+    }
+  },
+  "alignment": {
+    "n": 845,
+    "text_chars": {
+      "min": 620,
+      "median": 3757,
+      "max": 21174
+    },
+    "series_points": {
+      "min": 8,
+      "median": 39,
+      "max": 149,
+      "ge_24": 714,
+      "ge_32": 602,
+      "ge_43": 360
+    },
+    "channels": {
+      "min": 1,
+      "median": 4,
+      "max": 4
+    },
+    "timesteps": 36550,
+    "datapoints": 123199,
+    "null_pct": 2.623,
+    "distinct_texts": 845,
+    "distinct_series_id": 845,
+    "recites": 250,
+    "describes": 595,
+    "recite_rate_pct": 29.6,
+    "permutation_control_pct": 3.2,
+    "structural": {
+      "period_end_eq_series_terminal_pct": 100.0,
+      "all_channels_equal_length_pct": 100.0,
+      "terminal_point_non_null_pct": 100.0
+    }
   },
   "config_snapshot": {
     "data": {
@@ -31,7 +83,8 @@
       ],
       "min_points": 8,
       "min_year": 1800,
-      "max_report_pages": 80,
+      "null_budget": 0.2,
+      "omnibus_mode": "drop",
       "cache_dir": ".cache",
       "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
       "request_delay_s": 0.3,
@@ -42,13 +95,14 @@
       "source_url": "https://www.fisheries.noaa.gov/resource/tool-app/stock-smart"
     },
     "text": {
-      "min_text_chars": 400
+      "min_text_chars": 600,
+      "max_text_chars": 24000
     },
     "output": {
       "output_path": "output/noaa_stock_assessments_cpt.jsonl",
       "report_path": "output/run_report.json",
       "samples_path": "samples/example_output.jsonl",
-      "max_records": 50,
+      "max_records": null,
       "indent": null
     }
   },
