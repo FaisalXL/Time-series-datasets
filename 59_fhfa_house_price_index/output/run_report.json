@@ -1,0 +1,73 @@
+{
+  "dataset": "fhfa_house_price_index",
+  "stats": {
+    "reports": 2,
+    "emitted": 2,
+    "recites": 2,
+    "describes": 0,
+    "no_narrative": 0,
+    "short_series": 0,
+    "superlative_flags": 0,
+    "superlative_dropped": 0,
+    "checks_matched": [
+      5,
+      6
+    ],
+    "checks_total": [
+      6,
+      6
+    ]
+  },
+  "config_snapshot": {
+    "data": {
+      "master_csv": "https://www.fhfa.gov/hpi/download/monthly/hpi_master.csv",
+      "report_url": "https://www.fhfa.gov/reports/house-price-index/{year}/{month}",
+      "cache_dir": ".cache"
+    },
+    "series": {
+      "freq": "1m",
+      "window": 24,
+      "min_points": 12,
+      "places": [
+        "United States",
+        "New England Division",
+        "Middle Atlantic Division",
+        "South Atlantic Division",
+        "East South Central Division",
+        "West South Central Division",
+        "East North Central Division",
+        "West North Central Division",
+        "Mountain Division",
+        "Pacific Division"
+      ],
+      "hpi_type": "traditional",
+      "hpi_flavor": "purchase-only",
+      "frequency": "monthly",
+      "level": "USA or Census Division",
+      "value_field": "index_sa"
+    },
+    "text": {
+      "end_anchor": "Tables and graphs",
+      "min_chars": 200,
+      "max_chars": 2000,
+      "drop_on_superlative_contradiction": true
+    },
+    "output": {
+      "path": "output/fhfa_hpi_cpt.jsonl",
+      "run_report": "output/run_report.json",
+      "max_records": null
+    },
+    "reports": [
+      {
+        "year": 2026,
+        "month": 4,
+        "published": "2026-06-30"
+      },
+      {
+        "year": 2026,
+        "month": 5,
+        "published": "2026-07-28"
+      }
+    ]
+  }
+}

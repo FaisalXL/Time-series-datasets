@@ -1,0 +1,76 @@
+# FHFA House Price Index monthly reports -> CPT world-knowledge JSONL
+#
+# Record = one monthly HPI report's own VERBATIM narrative paired with the multi-channel index
+# series (US + 9 census divisions) it discusses. Measured-history only (no forecast language),
+# so no WASDE/GAIN-style forecast-caveat is needed here.
+#
+# WHY THE MONTHLY PAGE, NOT THE "NEWS RELEASE" SLUG URL: the news-release URL is an unpredictable
+# slugified headline (e.g. ".../fhfa-house-price-index-up-0.3-percent-in-may-...") -- the same
+# enumeration problem GAIN hit. The `/reports/house-price-index/{year}/{month}` page carries the
+# SAME narrative (verified 2026-08-03: identical MoM/YoY/division sentences) under a PREDICTABLE
+# URL, so a full run can construct URLs directly instead of needing a report-list API.
+#
+# WHY MONTHLY, NOT QUARTERLY: the quarterly report page's own HTML text is thin (verified: 4
+# sentences, national-only -- no division/state/metro breakdown in the page text itself; that
+# detail lives in a PDF attachment). The monthly page carries real division-level prose in HTML
+# (2 MoM extremes + 2 YoY extremes + the national figures), so it is the richer, directly
+# text-extractable source. Quarterly + the PDF attachments are a documented headroom item, not
+# built here (see README "Headroom").
+#
+# VINTAGE-REVISION RISK (real, stated by FHFA itself): monthly reports often include a sentence
+# like "The previously reported 0.1 percent price change in March was revised upward to 0.2
+# percent" -- FHFA's repeat-sales index revises its OWN recent history every release. The demo
+# pairs each report against the CURRENT master.csv (minimal drift for a same-day build); a full
+# historical run needs per-release vintage archiving, same discipline as `ons_awe`/GAIN.
+
+data:
+  master_csv: "https://www.fhfa.gov/hpi/download/monthly/hpi_master.csv"
+  report_url: "https://www.fhfa.gov/reports/house-price-index/{year}/{month}"
+  cache_dir: ".cache"
+
+series:
+  freq: "1m"
+  window: 24          # trailing months of context ending at the report month (WASDE precedent)
+  min_points: 12
+  # Places to ship as channels -- must match hpi_master.csv place_name exactly.
+  places:
+    - "United States"
+    - "New England Division"
+    - "Middle Atlantic Division"
+    - "South Atlantic Division"
+    - "East South Central Division"
+    - "West South Central Division"
+    - "East North Central Division"
+    - "West North Central Division"
+    - "Mountain Division"
+    - "Pacific Division"
+  hpi_type: "traditional"
+  hpi_flavor: "purchase-only"
+  frequency: "monthly"
+  level: "USA or Census Division"
+  value_field: "index_sa"   # seasonally adjusted -- matches what the narrative recites
+
+text:
+  # narrative-start anchors, tried in order (some releases open "Washington, D.C. -- ...", others
+  # open directly with "U.S. house prices ..." -- confirmed both forms exist, see build script)
+  end_anchor: "Tables and graphs"
+  min_chars: 200
+  max_chars: 2000
+  drop_on_superlative_contradiction: true   # same guard as #58, kept as cheap insurance
+
+output:
+  path: "output/fhfa_hpi_cpt.jsonl"
+  run_report: "output/run_report.json"
+  max_records: null
+
+# Demo reports -- year/month here is the INDEX month being described (e.g. month:4 = April data).
+# The script derives the actual report_url from this as index_month + 2 (FHFA's publication lag,
+# confirmed 2026-08-03: the "2026/6" page's own narrative is about April data). Server enumerates
+# {year}/{month} directly off this same +2 rule instead of pinning (see README).
+reports:
+  - year: 2026
+    month: 4
+    published: "2026-06-30"
+  - year: 2026
+    month: 5
+    published: "2026-07-28"
