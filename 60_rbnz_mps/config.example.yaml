@@ -1,0 +1,78 @@
+# RBNZ Monetary Policy Statements -> CPT world-knowledge JSONL
+#
+# Record = one MPS's own VERBATIM overview narrative paired with the multi-channel macro series
+# (OCR, unemployment, headline/tradables/non-tradables inflation, GDP, TWI) it discusses.
+#
+# ACCESS: rbnz.govt.nz returned HTTP 403 to direct fetches during scouting (2026-08-03) -- this
+# reads as a bot-wall, not simple rate-limiting (deep-research5 separately noted RBNZ restricts
+# automated scraping to ~1 req/min for bots). Verified working alternative: Wayback Machine has
+# live-crawled snapshots of both the MPS page AND its co-published data XLSX -- this demo sources
+# from Wayback captures. A full run should either use Wayback throughout, or a real headless
+# browser paced to RBNZ's own stated ~1/min limit; either is an access-method choice, not a
+# redistribution-license issue (RBNZ's terms grant reproduction with attribution).
+#
+# THE "CURRENT QUARTER" SPLIT (found 2026-08-03, a real per-series distinction, not a detail):
+# the data pack's "Feb MPS" column (the release's OWN vintage) runs from measured history straight
+# into the Bank's own OCR/inflation/unemployment PROJECTION -- no visual break. Verified against
+# the Feb-2026 MPS text: OCR's row for Q1 2026 (the statement's own quarter) = 2.25%, EXACTLY the
+# announced decision ("agreed to hold the OCR to 2.25%") -- that row is a real current DECISION,
+# not a forecast. But unemployment/inflation's Q1 2026 row is a genuine forward projection; the
+# text's own quoted values (unemployment 5.4%, inflation 3.1%) match the PRIOR quarter (Q4 2025)
+# instead -- the last quarter with real outturn data. All quarterly channels are windowed to the
+# SAME end-quarter (the statement's own quarter) to satisfy the schema's equal-length-per-freq
+# rule; for series where that final point is itself a projection, treat it under the same
+# forecast-not-measured caveat already established for WASDE #41 / GAIN #58 (terminal point = the
+# Bank's own contemporaneous forecast, text is contemporaneous -> no future-value leakage).
+
+data:
+  mps_page_url: "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement/monetary-policy-statement-filtered-listing-page/{year}/{slug}"
+  wayback_available: "http://archive.org/wayback/available?url={url}"
+  cache_dir: ".cache"
+
+series:
+  quarterly_freq: "1q"
+  quarterly_window: 24     # trailing quarters (WASDE precedent), ending at the statement's own quarter
+  daily_freq: "1d"
+  daily_window: 90          # trailing days of TWI context
+  min_points: 8
+  # sheet -> (label, [column names to ship as separate channels], is_gdp_like)
+  sheets:
+    "i.1":  {unit: "ocr_pct", cols: null}
+    "2.11": {unit: "unemployment_rate_pct", cols: null}
+    "2.15": {unit_prefix: "inflation", cols: ["Headline", "Non-tradables", "Tradables"]}
+    # NOTE: 2.1 "Production GDP" is a REAL LEVEL in chain-linked 2009/10 NZD billions, NOT a QoQ
+    # growth rate (verified: values ~49bn in 2008 rising to ~70-77bn by 2026 -- a level series).
+    "2.1":  {unit: "production_gdp_real_2009_10_nzd_bn", cols: null}
+    "3.10": {unit: "twi_index", cols: null, daily: true}
+
+text:
+  min_chars: 300
+  max_chars: 2500
+  drop_on_superlative_contradiction: true
+
+license:
+  # RBNZ site terms: "This material may be reproduced and used without the specific permission of
+  # the Bank, subject to [acknowledge RBNZ as source; reproduce accurately; exclude third-party
+  # copyright]" -- a custom reproduction-with-attribution grant, not a standard CC license, so no
+  # exact enum match in schema/cpt_record.schema.json. Tagged closest-fit "cc-by-4.0", true grant
+  # recorded verbatim in meta.true_license (same pattern used for INSEE #57's Etalab license).
+  tag: "cc-by-4.0"
+  true_license: "RBNZ reproduction-with-attribution (custom grant, terms of use, not CC)"
+  attribution_required: "Reserve Bank of New Zealand - Te Putea Matua"
+
+output:
+  path: "output/rbnz_mps_cpt.jsonl"
+  run_report: "output/run_report.json"
+  max_records: null
+
+# Demo statement. Full run enumerates the quarterly cadence (Feb/May/Aug/Nov since ~1999) instead
+# of pinning -- see README "Scale" for the archive-depth finding.
+statements:
+  - published: "2026-02-18"
+    quarter_label: "Feb MPS"
+    current_quarter_date: "01/03/2026"     # this statement's own quarter in the data pack
+    page_wayback_ts: "20260727004610"
+    page_url: "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement/monetary-policy-statement-filtered-listing-page/2026/feb-182/monetary-policy-statement-february-2026"
+    data_xlsx_wayback_ts: "20260727004610"
+    data_xlsx_url: "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2026/feb-180226/mpsfeb26-data.xlsx"
+    region: "NZ"

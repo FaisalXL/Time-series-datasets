@@ -1,0 +1,81 @@
+{
+  "dataset": "rbnz_mps",
+  "stats": {
+    "statements": 1,
+    "emitted": 1,
+    "recites": 1,
+    "describes": 0,
+    "no_narrative": 0,
+    "short_series": 0,
+    "superlative_flags": 0,
+    "superlative_dropped": 0
+  },
+  "config_snapshot": {
+    "data": {
+      "mps_page_url": "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement/monetary-policy-statement-filtered-listing-page/{year}/{slug}",
+      "wayback_available": "http://archive.org/wayback/available?url={url}",
+      "cache_dir": ".cache"
+    },
+    "series": {
+      "quarterly_freq": "1q",
+      "quarterly_window": 24,
+      "daily_freq": "1d",
+      "daily_window": 90,
+      "min_points": 8,
+      "sheets": {
+        "i.1": {
+          "unit": "ocr_pct",
+          "cols": null
+        },
+        "2.11": {
+          "unit": "unemployment_rate_pct",
+          "cols": null
+        },
+        "2.15": {
+          "unit_prefix": "inflation",
+          "cols": [
+            "Headline",
+            "Non-tradables",
+            "Tradables"
+          ]
+        },
+        "2.1": {
+          "unit": "production_gdp_real_2009_10_nzd_bn",
+          "cols": null
+        },
+        "3.10": {
+          "unit": "twi_index",
+          "cols": null,
+          "daily": true
+        }
+      }
+    },
+    "text": {
+      "min_chars": 300,
+      "max_chars": 2500,
+      "drop_on_superlative_contradiction": true
+    },
+    "license": {
+      "tag": "cc-by-4.0",
+      "true_license": "RBNZ reproduction-with-attribution (custom grant, terms of use, not CC)",
+      "attribution_required": "Reserve Bank of New Zealand - Te Putea Matua"
+    },
+    "output": {
+      "path": "output/rbnz_mps_cpt.jsonl",
+      "run_report": "output/run_report.json",
+      "max_records": null
+    },
+    "statements": [
+      {
+        "published": "2026-02-18",
+        "quarter_label": "Feb MPS",
+        "current_quarter_date": "01/03/2026",
+        "page_wayback_ts": "20260727004610",
+        "page_url": "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement/monetary-policy-statement-filtered-listing-page/2026/feb-182/monetary-policy-statement-february-2026",
+        "data_xlsx_wayback_ts": "20260727004610",
+        "data_xlsx_url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2026/feb-180226/mpsfeb26-data.xlsx",
+        "region": "NZ"
+      }
+    ]
+  }
+}
