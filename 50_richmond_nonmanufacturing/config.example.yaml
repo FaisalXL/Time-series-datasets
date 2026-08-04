@@ -1,64 +1,98 @@
-# Richmond Fed Fifth District Survey of Service Sector Activity (Non-Manufacturing) → CPT
+# Richmond Fed Fifth District Survey of Service Sector Activity (Non-Manufacturing) → CPT JSONL
 #
-# One record = one release month: the monthly release narrative (which recites the
-# diffusion-index readings) paired with a trailing window of those indices. The prose
-# *describes* the series → "describes" (value-reciting, EIA/BLS-tier). text_quality "real".
+# One record = (data month × the release's own narrative block): that block of the release
+# prose, verbatim, paired with a trailing 36-month window of exactly the indicators the
+# block names, ending on the month the release reports. alignment is measured per record
+# ("recites" when the prose quotes a channel's terminal value, else "describes").
+# text_quality "real" — nothing in the text is generated; <ts></ts> is appended directly
+# to the Bank's own words and provenance lives in meta.
 #
-# Sibling of 49_richmond_manufacturing (same bank, same site structure, same plumbing) —
-# swaps the "manufacturing" segment for "non-manufacturing" and the mfg_ workbook/PDFs for
-# the nmf_ (formerly svc_) ones. Family map: docs/fed_surveys_discovery.md.
+# ⚠ THE SERIES IS NOT THE PUBLISHED WORKBOOK. The release's own Technical Notes say why:
+#   "Seasonal adjustment factors are recalculated every July and the entire series is
+#   revised."  Measured: the value a release printed still equals today's
+#   nmf_historicaldata.xlsx in only 26.5% of cells (2018-23: 11-21%; 2026: 100%), median
+#   drift 2.0 index points. So the series is the AS-FIRST-PUBLISHED vintage, stitched from
+#   each release's own results table. Run `--audit-vintage` to reproduce the number and
+#   `--audit-overlap` for the stitch's own consistency check.
+#
+# One of the Federal Reserve regional business surveys (see docs/fed_surveys_discovery.md).
+# Sibling: 49_richmond_manufacturing — same bank, same document shapes, identical
+# scripts; everything that differs between them lives in this file.
 #
 # License: Federal Reserve Bank publications are U.S. public domain / freely reusable.
-# ⚠ The index SERIES are also on FRED (Oliver's #9); the novel element is the pairing.
 #
 # Quick start:
 #   pip install -r requirements.txt        # + poppler (pdftotext)
+#   python scripts/harvest.py                                # fetch releases (cached)
 #   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
-#   python scripts/build_cpt_jsonl.py                                  # demo (50)
-#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build (~100)
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null   # full build
 
 data:
   bank: "Federal Reserve Bank of Richmond"
   survey_title: "Fifth District Survey of Service Sector Activity"
   district: 5
   domain: "non-manufacturing"
+  region: "US"
+  survey_key: "svc"                 # selects the filename vocabulary in scripts/richsrc.py
+  dataset_name: "richmond_nonmanufacturing"
+  series_id_prefix: "rich_svc"
+  license_tag: "public-domain-us-gov"
 
-  # Diffusion-index workbook (.xlsx; stdlib-parsed). DATE col = Excel serial; monthly,
-  # from Nov-1993. SA current-conditions columns are sa_svc_*_c.
-  data_xlsx_url: "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/non-manufacturing/data/nmf_historicaldata.xlsx"
-
-  # Release PDFs named by RELEASE DATE (~4th Tuesday) under /{YYYY}/pdf/. The filename
-  # prefix changed from `svc_` (2018–2025) to `nmf_` (late-2025→), so the build probes
-  # BOTH prefixes. No clean archive listing → compute the candidate date + probe nearby days.
-  pdf_dir_template: "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/non-manufacturing/{year}/pdf/{prefix}_{mm}_{dd}_{yy}.pdf"
-  pdf_prefixes: ["nmf", "svc"]
-
-  # SA current-month diffusion channels (workbook column -> channel name). The narrative
-  # leads with revenues + demand. (ave_workwk has no SA column, so it is omitted.)
-  channels:
-    - {col: "sa_svc_revs_sales_c",     name: "revenues"}
-    - {col: "sa_svc_demand_c",         name: "demand"}
-    - {col: "sa_svc_emp_c",            name: "employment"}
-    - {col: "sa_svc_ave_wage_c",       name: "wages"}
-    - {col: "sa_svc_local_bus_cond_c", name: "local_business_conditions"}
-    - {col: "sa_svc_capital_expnd_c",  name: "capital_expenditures"}
-
-  min_points: 2              # expanding window: full index history to the release month (>= this many points)
-  min_text_year: 2017        # release PDFs only exist ~2018+; skip older months
   # canonical originating page (schema v1 `source` must be a URL)
-  source_url: "https://www.richmondfed.org/region_communities/regional_data_analysis/surveys/service_sector"
+  source_url: "https://www.richmondfed.org/research/regional_economy/surveys_of_business_conditions/service_sector"
+
+  # The Bank's published (revised) workbook. Used ONLY by --audit-vintage, never as the
+  # record series. Cached under its own name so the cache is self-describing.
+  data_xlsx_url: "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/non-manufacturing/data/nmf_historicaldata.xlsx"
+  workbook_cache_name: "nmf_historicaldata.xlsx"
+
+  # Window: 36 months, the same size 47_philadelphia_mbos and 48_dallas_tmos settled on,
+  # and comfortably above the model's 32-point patch. Every emitted channel is exactly
+  # this long; a channel over the null budget drops the record rather than being padded.
+  window_months: 36
+  max_null_fraction: 0.15
+
+  # The data-month convention FLIPPED inside the 2005-2007 gap: a 1997-2004 release
+  # reports month M-1 (the January 2000 release tables December 1999), a 2008+ release
+  # reports M. Nothing here is used unless a release's table carries no month labels at
+  # all — `--audit-convention` measures the rule from the tables' own headings.
+  modern_era_start: "2005-01"
+  data_month_offset_by_era: {retired: 1, modern: 0}
+
   cache_dir: ".cache"
-  user_agent: "CPT-dataset-research faisal@usc.edu"
+  user_agent: "CPT-dataset-research flnu@usc.edu"
   request_delay_s: 0.3
   timeout_s: 60
 
+  # channel → (current-conditions column, six-months-ahead column) in the published
+  # workbook. --audit-vintage only; prices are NSA in the workbook, as in the release.
+  workbook_columns:
+    revenues:                    ["sa_svc_revs_sales_c", "sa_svc_revs_sales_e"]
+    demand:                      ["sa_svc_demand_c", "sa_svc_demand_e"]
+    employment:                  ["sa_svc_emp_c", "sa_svc_emp_e"]
+    wages:                       ["sa_svc_ave_wage_c", "sa_svc_ave_wage_e"]
+    average_workweek:            ["sa_svc_ave_workwk_c", "sa_svc_ave_workwk_e"]
+    local_business_conditions:   ["sa_svc_local_bus_cond_c", "sa_svc_local_bus_cond_e"]
+    capital_expenditures:        ["sa_svc_capital_expnd_c", "sa_svc_capital_expnd_e"]
+    equipment_software_spending: ["sa_svc_equip_sftw_expnd_c", "sa_svc_equip_sftw_expnd_e"]
+    services_expenditures:       ["sa_svc_bus_svcs_expnd_c", "sa_svc_bus_svcs_expnd_e"]
+    skills_availability:         ["sa_svc_nec_skls_avail_c", "sa_svc_nec_skls_avail_e"]
+    prices_paid:                 ["nsa_svc_pct_chg_prcs_pd_c", "nsa_svc_pct_chg_prcs_pd_e"]
+    prices_received:             ["nsa_svc_prcs_recd_c", "nsa_svc_prcs_recd_e"]
+    # The retail_* / nonretail_* channels the 1997-2018 releases printed have NO column in
+    # today's workbook -- the Bank restructured the survey and dropped the split -- which is
+    # a second, independent reason the record series has to come from the releases
+    # themselves. They are simply absent from --audit-vintage.
+
 text:
-  min_text_chars: 200
-  # No templated ts_intro: <ts></ts> is appended directly to the real scraped release
-  # narrative, nothing is generated.
+  # 120 chars, matching 47_philadelphia_mbos. The 2018+ releases write short paragraphs, so
+  # this floor is what most of the dropped block units are; `drop_short_text` in the run
+  # report is the exact cost of the choice.
+  min_text_chars: 120
 
 output:
   output_path: output/richmond_nonmanufacturing_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
-  max_records: 50
+  max_records: null                 # null = full build
+  indent: null

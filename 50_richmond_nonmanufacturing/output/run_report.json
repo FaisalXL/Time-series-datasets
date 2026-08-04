@@ -1,77 +1,118 @@
 {
+  "stats": {
+    "release_date_from_filename_only": 14,
+    "release_date_corrected_from_document": 1,
+    "releases_merged_after_date_correction": 18,
+    "releases_seen": 308,
+    "releases_with_table": 292,
+    "releases_with_blocks": 308,
+    "block_units": 1257,
+    "drop_no_indicator_named": 177,
+    "channel_dropped_over_null_budget": 1302,
+    "drop_sparse_or_short_window": 301,
+    "drop_release_no_table": 16,
+    "drop_blocks_no_table": 81,
+    "drop_short_text": 22,
+    "emitted": 757
+  },
+  "reconcile": {
+    "block_units": 1338,
+    "accounted": 1338,
+    "balances": true
+  },
+  "recites": 246,
+  "describes": 511,
+  "figures_in_text": 2870,
+  "figures_not_in_own_series": 271,
   "survey": "Fifth District Survey of Service Sector Activity",
   "bank": "Federal Reserve Bank of Richmond",
-  "window": "expanding (full index history to each release month)",
-  "channels": [
-    "revenues",
-    "demand",
-    "employment",
-    "wages",
-    "local_business_conditions",
-    "capital_expenditures"
-  ],
-  "stats": {
-    "months_with_window": 50,
-    "emitted": 50,
-    "no_text": 0,
-    "short_text": 0,
-    "short_window": 0,
-    "invalid": 0
-  },
+  "dataset": "richmond_nonmanufacturing",
+  "window": "trailing 36 months, as-published vintage",
   "config_snapshot": {
     "data": {
       "bank": "Federal Reserve Bank of Richmond",
       "survey_title": "Fifth District Survey of Service Sector Activity",
       "district": 5,
       "domain": "non-manufacturing",
+      "region": "US",
+      "survey_key": "svc",
+      "dataset_name": "richmond_nonmanufacturing",
+      "series_id_prefix": "rich_svc",
+      "license_tag": "public-domain-us-gov",
+      "source_url": "https://www.richmondfed.org/research/regional_economy/surveys_of_business_conditions/service_sector",
       "data_xlsx_url": "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/non-manufacturing/data/nmf_historicaldata.xlsx",
-      "pdf_dir_template": "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/non-manufacturing/{year}/pdf/{prefix}_{mm}_{dd}_{yy}.pdf",
-      "pdf_prefixes": [
-        "nmf",
-        "svc"
-      ],
-      "channels": [
-        {
-          "col": "sa_svc_revs_sales_c",
-          "name": "revenues"
-        },
-        {
-          "col": "sa_svc_demand_c",
-          "name": "demand"
-        },
-        {
-          "col": "sa_svc_emp_c",
-          "name": "employment"
-        },
-        {
-          "col": "sa_svc_ave_wage_c",
-          "name": "wages"
-        },
-        {
-          "col": "sa_svc_local_bus_cond_c",
-          "name": "local_business_conditions"
-        },
-        {
-          "col": "sa_svc_capital_expnd_c",
-          "name": "capital_expenditures"
-        }
-      ],
-      "min_points": 2,
-      "min_text_year": 2017,
-      "source_url": "https://www.richmondfed.org/region_communities/regional_data_analysis/surveys/service_sector",
+      "workbook_cache_name": "nmf_historicaldata.xlsx",
+      "window_months": 36,
+      "max_null_fraction": 0.15,
+      "modern_era_start": "2005-01",
+      "data_month_offset_by_era": {
+        "retired": 1,
+        "modern": 0
+      },
       "cache_dir": ".cache",
-      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "user_agent": "CPT-dataset-research flnu@usc.edu",
       "request_delay_s": 0.3,
-      "timeout_s": 60
+      "timeout_s": 60,
+      "workbook_columns": {
+        "revenues": [
+          "sa_svc_revs_sales_c",
+          "sa_svc_revs_sales_e"
+        ],
+        "demand": [
+          "sa_svc_demand_c",
+          "sa_svc_demand_e"
+        ],
+        "employment": [
+          "sa_svc_emp_c",
+          "sa_svc_emp_e"
+        ],
+        "wages": [
+          "sa_svc_ave_wage_c",
+          "sa_svc_ave_wage_e"
+        ],
+        "average_workweek": [
+          "sa_svc_ave_workwk_c",
+          "sa_svc_ave_workwk_e"
+        ],
+        "local_business_conditions": [
+          "sa_svc_local_bus_cond_c",
+          "sa_svc_local_bus_cond_e"
+        ],
+        "capital_expenditures": [
+          "sa_svc_capital_expnd_c",
+          "sa_svc_capital_expnd_e"
+        ],
+        "equipment_software_spending": [
+          "sa_svc_equip_sftw_expnd_c",
+          "sa_svc_equip_sftw_expnd_e"
+        ],
+        "services_expenditures": [
+          "sa_svc_bus_svcs_expnd_c",
+          "sa_svc_bus_svcs_expnd_e"
+        ],
+        "skills_availability": [
+          "sa_svc_nec_skls_avail_c",
+          "sa_svc_nec_skls_avail_e"
+        ],
+        "prices_paid": [
+          "nsa_svc_pct_chg_prcs_pd_c",
+          "nsa_svc_pct_chg_prcs_pd_e"
+        ],
+        "prices_received": [
+          "nsa_svc_prcs_recd_c",
+          "nsa_svc_prcs_recd_e"
+        ]
+      }
     },
     "text": {
-      "min_text_chars": 200
+      "min_text_chars": 120
     },
     "output": {
       "output_path": "output/richmond_nonmanufacturing_cpt.jsonl",
       "report_path": "output/run_report.json",
       "samples_path": "samples/example_output.jsonl",
-      "max_records": 50
+      "max_records": null,
+      "indent": null
     }
   },
   "dry_run": false
