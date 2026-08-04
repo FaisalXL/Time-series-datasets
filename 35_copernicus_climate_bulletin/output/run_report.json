@@ -1,34 +1,58 @@
 {
-  "generated_at": "2026-07-24T19:04:24Z",
-  "start_month": "2019-01",
-  "end_month": "2026-07",
-  "themes": [
-    "temperature",
-    "sea_ice"
-  ],
   "stats": {
-    "attempted": 182,
-    "emitted": 119,
-    "skipped_no_page": 2,
-    "skipped_short_text": 0,
-    "skipped_ts": 61,
-    "skipped_validation": 0
+    "bulletins": 352,
+    "section_units": 1042,
+    "channel_dropped_short_or_null_end": 33,
+    "emitted": 825,
+    "emit::hydrological": 365,
+    "channel_dropped_terminal_not_reported_month": 696,
+    "drop_all_channels_unusable": 57,
+    "drop_duplicate_text": 5,
+    "drop_no_series_for_section": 135,
+    "noseries::hydrological/hydro_4month": 36,
+    "noseries::hydrological/rh_monthly": 10,
+    "noseries::sea_ice/sie_calendar_month": 34,
+    "emit::sea_ice": 194,
+    "channel_dropped_over_null_budget": 1,
+    "drop_short_text": 20,
+    "noseries::temperature/sat_calendar_month": 38,
+    "noseries::temperature/sat_12month": 5,
+    "noseries::temperature/sat_allmonths": 10,
+    "emit::temperature": 266,
+    "noseries::temperature/sst_daily": 2
   },
-  "per_theme": {
-    "temperature": 63,
-    "sea_ice": 56
+  "reconcile": {
+    "section_units": 1042,
+    "accounted": 1042,
+    "balances": true
   },
-  "validation_errors": [],
+  "provider": "Copernicus Climate Change Service (C3S) / ECMWF",
+  "bulletin": "C3S Climate Bulletin",
+  "dataset": "copernicus_climate_bulletin",
   "config_snapshot": {
     "data": {
-      "start_month": "2019-01",
+      "first_month": "2015-01",
+      "start_month": "2015-01",
       "end_month": null,
       "base_url": "https://climate.copernicus.eu",
       "themes": [
         "temperature",
-        "sea_ice"
+        "sea_ice",
+        "hydrological"
       ],
       "sea_ice_window_years": null,
+      "provider": "Copernicus Climate Change Service (C3S) / ECMWF",
+      "bulletin_name": "C3S Climate Bulletin",
+      "dataset_name": "copernicus_climate_bulletin",
+      "series_id_prefix": "c3s",
+      "region": "GLOBAL",
+      "license_tag": "cc-by-4.0",
+      "true_license": "Copernicus licence (free reuse with attribution to C3S/ECMWF)",
+      "window_months": 120,
+      "window_days": 365,
+      "min_points": 32,
+      "max_null_fraction": 0.1,
+      "require_terminal_is_reported_month": true,
       "html_cache_dir": ".cache/html",
       "csv_cache_dir": ".cache/csv",
       "request_delay_s": 1.0,

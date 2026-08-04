@@ -1,116 +1,199 @@
-# Copernicus C3S Monthly Climate Bulletin → CPT
+# Copernicus C3S Climate Bulletin → CPT
 
-> **Status: Built** — **117 records** (temperature 62 + sea ice 55; **2021 → May 2026**), all validated, 0 NaN, uniform 2 channels/record, consistent 1991-2020 baseline. Covers two Copernicus file-naming eras (current `C3S_Bulletin_`* + mid-era `ts_*_anomaly_*`).
+> **Status: ✅ Finalized — 825 records** (was a 119-record bank, 6.9×). This was the last
+> banked-but-uninspected package, so the **Banked** bucket is now empty.
 
-**What it is:** The Copernicus Climate Change Service (C3S) monthly Climate Bulletin, built as **two record types** (one per theme, one record per month per theme):
+**What it is:** one record = **(theme × reported month × the bulletin's own narrative section)**
+— that section's prose, verbatim, paired with the series behind *that section's own figure*.
+C3S publishes the CSV for every figure it draws, so the numbers are the ones the prose was
+written against; there is no third-party series to reconcile and no as-published-vs-revised
+question of the `47/48/49/50` kind.
 
-- **Temperature** — the "Surface air temperature" narrative + global & European anomalies (both vs 1991–2020).
-- **Sea ice** — the "Sea ice cover" narrative + Arctic & Antarctic extent anomalies.
+| | |
+|---|---:|
+| Records | **825** |
+| Timesteps / datapoints | 83,167 / 358,705 |
+| Records ≥ 32 points | **100%** |
+| Nulls | **0.00%** |
+| Channels per record | median 2, max 16 |
+| Reported-month span | **2017-04 → 2026-06** (100 distinct months) |
+| Text | median **1,211 chars**, 825/825 distinct |
+| `alignment` | 152 `recites` / 673 `describes` (measured per record) |
+| Themes | hydrological 365 · temperature 266 · sea ice 194 |
 
-*(Hydrological variables were evaluated and excluded — the prose there is mostly about precipitation & soil moisture, but only relative humidity is published as a downloadable series, so the text↔series alignment would be broken. See Key issues.)*
+---
 
-**Scale:** 117 records span **2021 → present** (temperature from 2021-01, sea ice from 2021-06). Bulletins exist back to ~~2017, but only the **1991-2020-baseline** era (~~2021+) is included so anomalies are directly comparable across records; pre-2021 bulletins used a different baseline and file layout (see Key issues). Each record carries the **full available history through its release** (an expanding window): the ERA5 temperature series run back to 1940/1979 and sea ice to 1979, so every record recites its series in full rather than a fixed trailing slice.
+## The three findings that define this build
 
-### 🔎 Examples
+### 1. The bulletin has three themes; only two were built
 
-- **Temperature** — text: [Surface air temperature for May 2026](https://climate.copernicus.eu/surface-air-temperature-may-2026) · time series (CSV): [global monthly anomaly](https://climate.copernicus.eu/sites/default/files/2026-06/C3S_Bulletin_temp_202605_Fig1b_timeseries_anomalies_ref1991-2020_global_allmonths_DATA.csv)
-- **Sea ice** — text: [Sea ice cover for May 2026](https://climate.copernicus.eu/sea-ice-cover-may-2026) · time series (CSV): [Arctic extent anomaly](https://climate.copernicus.eu/sites/default/files/2026-06/C3S_Bulletin_seaice_202605_Fig1_Arctic_monthly_extent_anomalies_May_DATA.csv)
+The **bulletin navigation on every page** names them: Surface air temperature, Sea ice cover,
+**Hydrological variables**. The third was never built. It is 111 months with its own figure
+data — global and European relative humidity monthly since 1979, plus four-month means of
+precipitation, soil moisture, temperature and humidity for **four European sub-regions**
+(NW/NE/SW/SE) — and it is now the largest theme in the package at 365 records.
 
+### 2. The universe is 352 theme-months, not 180
 
+Enumerated from the Wayback CDX (1,588 dated bulletin URLs) and confirmed live. Six URL slugs
+across the eras, each **tried** per month rather than assumed, so the boundaries are measured
+output rather than constants that can be silently wrong:
 
-#### 📄 Text — bulletin narrative (per theme)
+| theme | slugs | months | span |
+|---|---|--:|---|
+| temperature | `surface-air-temperature`, `average-surface-air-temperatures` | 129 | **2015-08** → 2026-06 |
+| sea ice | `sea-ice-cover`, `sea-ice` | 112 | 2017-03 → 2026-06 |
+| hydrological | `precipitation-relative-humidity-and-soil-moisture`, `…-soil-moisture-and-river-flow` | 111 | 2017-04 → 2026-06 |
 
+**352 pages harvested, 0 unresolved fetches**; 65 months absent at source (all before a
+theme's first bulletin). The banked build's `start_month: 2019-01` lost 41 months.
 
-|                |                                                                                                                                                                                                                                   |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **What**       | Genuine ECMWF/C3S analytical prose — global/European rankings, exact anomaly values, regional breakdowns, seasonal (boreal-spring) and SST/El-Niño sections (temperature); Arctic/Antarctic rankings + regional detail (sea ice). |
-| **Source**     | `climate.copernicus.eu/surface-air-temperature-{month}-{year}` and `.../sea-ice-cover-{month}-{year}`                                                                                                                             |
-| **Format**     | HTML → tag-stripped main content; figure captions ("Data source: ERA5. Credit: C3S/ECMWF"), nav and boilerplate removed. Temp ~4k–11k chars; sea ice ~3k–4.6k chars.                                                              |
-| `text_quality` | `"real"`                                                                                                                                                                                                                          |
+### 3. Each page is natively sectioned — a topic × period grid
 
+`<h2>` names the topic, `<h3>` the period, giving **1,042 sections across 352 theme-months
+(~3.0/month)** where the banked build emitted one record per page. That is the corpus audit's
+"≈1.9 topics/bulletin" explained and fixed.
 
+Two `<h3>`s on one page routinely carry the *same* text — "July 2025" appears under Global
+average, European average *and* Regional overview — so a section is only unique together with
+its parent, and the key carries both.
 
+### And the expanding window is gone
 
-#### 📈 Time series — ERA5 anomalies (per theme)
+The banked temperature records carried **505–1038 monthly points**, re-shipping ERA5's whole
+history every month. The bulletin's headline claim is a *rank within a calendar month* ("the
+sixth warmest January on record") and C3S publishes exactly that series — one point per year
+for that month, **1940→present**. A section about the reported month now gets the series its
+claim is about: bounded, aligned, and 86 points deep. The sea-ice half already worked this
+way; this generalises it.
 
+| series family | records | median points | stride |
+|---|--:|--:|---|
+| `rh_monthly` | 241 | 120 | monthly |
+| `sie_calendar_month` | 194 | 44.5 | annual (one July per year, 1979→) |
+| `sat_allmonths` | 130 | 120 | monthly |
+| `hydro_4month` | 124 | 120 | monthly |
+| `sat_12month` | 67 | 120 | monthly |
+| `sat_calendar_month` | 46 | 86 | annual (1940→) |
+| `sst_daily` | 23 | 365 | daily |
 
-|                   |                                                                                                                                                        |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **What / source** | Per-bulletin CSVs, discovered from each page's own hrefs (robust to Copernicus filename/folder changes). Built from ERA5 reanalysis.                   |
-| **Temperature**   | `freq 1m`, **expanding window** — the full continuous monthly series from its start through the release month                                          |
-| **Sea ice**       | `freq 1y`, **this-calendar-month-across-years** (e.g. every May 1979→report year) — matches the ranking prose ("ranked fourth lowest *for the month*") |
+---
 
+## Alignment — measured (`--audit-alignment`)
 
+**Structural: 825/825 on all four** — every channel exactly `meta.n_points` long · terminal
+point non-null · exactly one `<ts></ts>` · the series ends on the month the bulletin reports.
 
-| Record type | Channel (`unit`)                       | Meaning                                        |
-| ----------- | -------------------------------------- | ---------------------------------------------- |
-| temperature | `global_sat_anomaly_degc_1991_2020`    | Global surface-air-temp anomaly vs 1991–2020   |
-| temperature | `europe_sat_anomaly_degc_1991_2020`    | European-land anomaly vs 1991–2020             |
-| sea_ice     | `arctic_sie_anomaly_mkm2_1991_2020`    | Arctic sea-ice extent anomaly (million km²)    |
-| sea_ice     | `antarctic_sie_anomaly_mkm2_1991_2020` | Antarctic sea-ice extent anomaly (million km²) |
+That last one is a hard requirement, not an observation: bulletins sometimes link an earlier
+month's figure CSV alongside their own, and without the check this month's prose would be
+paired with another month's terminal point (696 channel-candidates were rejected by it).
 
+**A stated rank reproduces from the series it is a claim about.** On the 92 sections that make
+exactly one rank claim: **52.2% exact, 89.1% within one place**. 87 further sections make
+several rank claims about different quantities and are *not scored* — an automated reader
+cannot attribute them to one channel, and hand-checking showed that scoring them measures the
+reader rather than the pairing (the 2020-10 Arctic record is exactly right — terminal −2.978,
+matching the prose's "3.0 million km² below", ranked 1st of 42 as the prose says — yet the
+multi-claim reader scored it a miss).
 
-> **Note:** for each theme the narrative directly describes its own series (rankings, anomaly values) — tight, source-native alignment.
+**Stated above/below average agrees with the terminal sign in 471/640 = 73.6%**, against a 50%
+chance baseline.
 
-**Record shape — temperature** (real, May 2026; arrays abbreviated). The `<ts></ts>` tag is
-appended directly to the real scraped narrative — **no framing/bridging sentence is generated**;
-every word before the tag is verbatim C3S/ECMWF prose:
+**Tier, with a permutation control:** the prose quotes a channel's terminal value in
+**18.4%**, against **5.8%** for the same channel set from *another* month (+12.6 pp).
 
-```json
-{
-  "text": "May 2026 was the second-warmest May globally. ... The global average temperature for May 2026 was 15.81°C, 0.55°C above the 1991-2020 average ... <ts></ts>",
-  "timeseries": [
-    {"values": [-0.9455, -0.8582, "...", 0.5503], "unit": "global_sat_anomaly_degc_1991_2020", "freq": "1m"},
-    {"values": [-6.873, -4.6792, "...", 0.5994], "unit": "europe_sat_anomaly_degc_1991_2020", "freq": "1m"}
-  ],
-  "task_type": "world_knowledge", "text_quality": "real",
-  "theme": "temperature", "data_month": "2026-05", "series_start": "1940-01", "n_points": 1037,
-  "report_url": "https://climate.copernicus.eu/surface-air-temperature-may-2026",
-  "dataset": "copernicus_climate_bulletin", "source": "climate.copernicus.eu", "series_id": "c3s_temperature_2026-05"
-}
-```
+⚠️ **Value quotation is weak here, and the reason is the source, not the pairing: 52% of the
+figures the prose states are not values in the record's series.** Characterised rather than
+hidden — the residual is dominated by quantities an aggregate anomaly series cannot hold:
 
-**Record shape — sea ice** (real, May 2026; arrays abbreviated, annual). The `<ts></ts>` tag is
-appended directly to the real scraped narrative — **no framing/bridging sentence is generated**;
-every word before the tag is verbatim C3S/ECMWF prose:
+- **local extremes** — "exceeding 10 °C above average in the Ross Sea sector" (the record's
+  channel is the global or European mean)
+- **other periods** — a monthly section quoting the 12-month or calendar-year figure
+- **impact reporting** — "200 mm of rain", "1300 lives", "33 million people"
+- **absolute magnitudes** — "17.9 million km², which is 0.2 million km² below average": the
+  *anomaly* is in the series, the absolute is a different quantity
 
-```json
-{
-  "text": "Arctic sea ice extent ranked fourth lowest for May ... Antarctic sea ice extent ranked seventh lowest for May ... <ts></ts>",
-  "timeseries": [
-    {"values": ["...", -0.1212, -0.2797, -0.5754], "unit": "arctic_sie_anomaly_mkm2_1991_2020", "freq": "1y"},
-    {"values": ["...", -0.9000, -0.9946, -0.9238], "unit": "antarctic_sie_anomaly_mkm2_1991_2020", "freq": "1y"}
-  ],
-  "task_type": "world_knowledge", "text_quality": "real",
-  "theme": "sea_ice", "data_month": "2026-05", "calendar_month": "May", "n_years": 49,
-  "report_url": "https://climate.copernicus.eu/sea-ice-cover-may-2026",
-  "dataset": "copernicus_climate_bulletin", "source": "climate.copernicus.eu", "series_id": "c3s_sea_ice_2026-05"
-}
-```
+Coordinates, the 1.5 °C policy threshold, durations and impact units are excluded from the
+count outright (they cannot be anomaly readings); the classes above are genuinely quoted
+values that the section's own aggregate series correctly does not contain. **This package's
+alignment evidence is the structural guarantees, the rank check and the sign check — not a
+value-quotation rate.**
 
-**Key issues:**
+---
 
-- **No generated text.** An earlier version of this build appended a templated closing sentence
-  (for both the temperature and sea-ice record types) to introduce the series before `<ts></ts>`.
-  That sentence was not from the Copernicus/C3S bulletin — it was synthesized by the build script.
-  Fixed 2026-07-24: `<ts></ts>` is now appended directly to the real bulletin narrative with
-  nothing generated in between.
-- **Two cadences by design:** temperature is monthly (`1m`, expanding full-history window); sea ice is annual (`1y`, this-month-across-years, full history to the report year) because that's the only clean per-bulletin series *and* it's what the ranking prose describes.
-- **Hydrological excluded** — precip/soil-moisture (the bulk of that theme's prose) are maps-only; only relative humidity is a downloadable series, so the pairing would be mismatched. Revisit only if precip/soil-moisture series are sourced from the Climate Data Store (heavier, separate pipeline).
-- **Mild leakage** — the prose states the latest anomaly values, which are the final TS points (standard text-describes-TS; flag for Charon if a stricter variant is wanted).
-- **Two file-naming eras handled; pre-2021 excluded on purpose** — Copernicus renamed its bulletin CSVs several times. The builder matches **both** current (`C3S_Bulletin_*_allmonths_DATA.csv` / `C3S_Bulletin_seaice_`*) and mid-era (`ts_1month_anomaly_Global_*_1991-2020`, `ts_{Month}_anomaly_{Arctic,Antarctic}_OSI-SAF_sie_*_1991-2020`) files, discovered from each page's own hrefs. **Pre-2021** bulletins used a **1981-2010 baseline** and different layout — excluded so all 117 records share one comparable 1991-2020 baseline (adding them would need per-record baseline tagging). Dropped the current-only pre-industrial channel so temperature is a uniform 2 channels across eras. `pdf`-free — HTML + CSV only.
-- **Overlap with NOAA** (entry 6 in `new_datasets.md`) — same global-temperature phenomenon; distinct methodology (ERA5 reanalysis, 1991–2020 baseline, European channel, sea-ice). Keep both tagged, or pick one.
+## Reconcile (the build raises if it does not balance)
 
-**Run:**
+352 bulletins → 1,042 sections.
+**1,042 = 825 emitted + 135 no-series-for-section + 57 all-channels-unusable + 20 short-text
++ 5 duplicate-text ✓**
+
+---
+
+## Defects fixed at inspection
+
+| # | Defect | Effect |
+|---|---|---|
+| 1 | Hydrological theme never built | +365 records |
+| 2 | `start_month: 2019-01`; record unit = whole page | 180 → 352 theme-months; 1 → ~3 records per bulletin |
+| 3 | Expanding 505–1038-point window | replaced by the calendar-month series the ranking prose is about |
+| 4 | **`"arctic" in "antarctic"` is `True`** | all 112 Antarctic figure files were classified as Arctic; the Antarctic channel would have vanished into the Arctic's |
+| 5 | **A period-range key parsed *wrongly* rather than failing** — one era keys a 4-month mean as `197901 to 197904` | the reader took `to` and the end-month as data values. Now keyed on the range end, matching the convention the modern files state |
+| 6 | Figure numbers churn (`Fig1b`/`Fig3b`/`Fig6b` are all `global_allmonths`) | matching moved to the descriptive part of the filename; a figure-number matcher loses whole eras |
+| 7 | Monthly data stamped `1940-01-01` was labelled daily | 40 files were publishing freq `1d` for a monthly series; frequency is now inferred from the key set |
+| 8 | Column names change case and code across eras (`Global`/`global`, `tp`→`MTPR`) | published 1 channel where the file held 2, and named four distinct variables identically |
+| 9 | Whitespace-delimited files with opaque names (`Data_for_month_10_2017_plot_5.csv`) | returned nothing until classification moved to the file's own title line |
+| 10 | `_unit_name` ignored the column | multi-column files produced duplicate unit names, which `--strict` rejects: **358 records were being lost** |
+| 11 | **A combined Arctic+Antarctic file was attached wholesale** | the Antarctic record carried an `antarctic_arctic` channel — the cross-contamination the per-section design exists to prevent. Region-named columns are now restricted to the record's own region (0 remain) |
+| 12 | **Baseline was *assumed* to be 1991-2020 when the filename lacked one** | the older sea-ice files are 1981-2010. Since Antarctic sea ice declined, the same month is a *negative* anomaly against 1981-2010 and *positive* against 1991-2020 — the wrong label inverted the sign relative to the prose. Now read from the file's own header |
+| 13 | **"More rows wins" picked the wrong *quantity*** | a bulletin links both an extent file (`CIE`) and an area file (`CIA`); row count chose area, pairing "0.8 million km² below … third lowest July extent" with an area anomaly of −0.38. The named quantity now ranks ahead of coverage |
+| 14 | Series baseline vs the baseline the prose quotes | the section's own text names its reference period; that now drives file selection |
+| 15 | Captions | identified structurally (C3S italicises them — holds in 379/380 paragraphs), never by keyword. 0 caption leakage and 0 script blobs in the output |
+
+---
+
+## Exhaustion and the real ceiling
+
+**The wall is figure data, not narrative.** C3S began publishing downloadable figure CSVs at
+**2017-03/04** (sea ice, hydrological) and **2017-11** (temperature):
+
+| theme | pages | with figure data | without |
+|---|--:|--:|---|
+| temperature | 129 | 101 | 26 pre-2018 + 2024-08/09 |
+| sea ice | 112 | 108 | 2024-08, 2024-09, 2025-01, 2025-03 |
+| hydrological | 111 | 107 | 2024-08, 2024-09, 2025-01, 2026-06 |
+
+- ⚠️ **The 26 pre-2018 temperature bulletins have narrative but no figure data at all**, so
+  they cannot be paired. That is the ceiling, and it is a source fact — the pages are cached,
+  so if C3S ever backfills the data the build picks them up with no code change.
+- ⚠️ **A handful of recent months (2024-08/09, 2025-01, 2025-03, 2026-06) also link no CSV** —
+  those pages embed their figures through a JS component instead. Worth re-checking
+  periodically; `harvest.py --report` shows it.
+- **1,473 of 1,506 linked figure CSVs are cached.** Of the 33 outstanding, 3 are `http_404`
+  and 2 are the site's HTML shell (missing at source); the rest are connection errors, which
+  a re-run of `--csvs` retries — a network failure is never recorded as an absent file.
+
+---
+
+## Run
 
 ```bash
 pip install -r requirements.txt
-python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=4   # smoke test
-python scripts/build_cpt_jsonl.py                                        # demo (24 records)
-python scripts/build_cpt_jsonl.py --set output.max_records=null          # full build (~260)
-python scripts/build_cpt_jsonl.py --set data.themes=[temperature]        # one theme only
+python scripts/harvest.py --pages            # 352 bulletin pages, all slugs tried
+python scripts/harvest.py --csvs --workers 4  # every figure CSV the pages link
+python scripts/harvest.py --report            # coverage, slug eras, unresolved fetches
+python scripts/build_cpt_jsonl.py
+python scripts/build_cpt_jsonl.py --audit-alignment   # everything in the section above
+python scripts/build_cpt_jsonl.py --audit-vintage     # ERA5 revision between bulletins
 ```
 
-**Output:** `output/copernicus_climate_bulletin_cpt.jsonl` + `output/run_report.json` (`samples/` gitignored; `.cache/` holds page HTML + CSVs so reruns are free).
+**Scripts:** `c3ssrc.py` universe/slug map · `harvest.py` polite cached fetch (thread pool over
+one shared rate limiter) · `c3sdata.py` figure-CSV parsing + family classification ·
+`c3ssec.py` HTML sectioning, caption rule, figure/rank/sign extraction · `polite_fetch.py`
+(ported from `56`).
 
-**Sources:** [C3S Climate Bulletin](https://climate.copernicus.eu/climate-bulletin) (ERA5 reanalysis) · License: Copernicus, free reuse with attribution.
+**License:** Copernicus licence — free reuse with attribution to C3S/ECMWF. Tagged
+`cc-by-4.0` as the closest schema-enum fit, with the real licence in `meta.true_license`
+(the `52_statcan_daily` convention).
+
+**Sources:** [C3S Climate Bulletin](https://climate.copernicus.eu/climate-bulletins) ·
+[about the data and analysis](https://climate.copernicus.eu/climate-bulletin-about-data-and-analysis).

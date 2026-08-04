@@ -1,576 +1,793 @@
 #!/usr/bin/env python3
-"""Build CPT world-knowledge JSONL from the Copernicus C3S Monthly Climate Bulletin.
+"""Build CPT world-knowledge JSONL from the Copernicus C3S Climate Bulletin.
 
-Two record types (one per theme), one record per month per theme:
-  - temperature: the "Surface air temperature for {month}" narrative paired with the
-    EXPANDING full monthly history of global/European anomalies (ERA5) from the series
-    start through the release month (a growing window, not a fixed trailing slice).
-  - sea_ice: the "Sea ice cover for {month}" narrative paired with Arctic + Antarctic
-    extent anomalies for that calendar month across years (this-month-across-years,
-    full history to the report year — which is exactly what the ranking prose describes).
+One record = **(theme x reported month x the bulletin's own narrative section)**: that
+section's prose, verbatim, paired with the series behind *that section's own figure* --
+C3S publishes the CSV for every figure it draws, so the numbers are the ones the prose was
+written against, with no third-party series to reconcile.
 
-Text is scraped from each bulletin page's HTML (analytical prose only — figure
-captions/nav stripped). Time-series CSVs are discovered from the page's own hrefs
-(robust to Copernicus filename/folder changes), then parsed. Both themes carry the
-full available history through each release rather than a fixed-length window.
+Three things changed from the banked build:
 
-Examples:
+1. **The hydrological theme was missing entirely.** The bulletin navigation on every page
+   names three themes -- Surface air temperature / Sea ice cover / Hydrological variables --
+   and only two were built. Hydrological is 111 months with its own figure data: global and
+   European relative humidity monthly since 1979, plus four-month means of precipitation,
+   soil moisture, temperature and humidity for four European sub-regions.
+
+2. **The text era started 41 months late and the record unit was the whole page.** The
+   universe runs **2015-08 -> 2026-06** across six URL slugs (see `c3ssrc`), not 2019-01, and
+   each page is natively sectioned as a topic x period grid which the banked build collapsed
+   into one record -- the corpus audit measured it at ~1.9 topics per bulletin.
+
+3. **The temperature series was an expanding window** of 505-1038 monthly points, re-shipping
+   the whole ERA5 history every month. The bulletin's headline claim is a *rank within a
+   calendar month* ("the sixth warmest January on record") and C3S publishes exactly that
+   series -- one point per year for that month, 1940->present. A section about the reported
+   month now gets the calendar-month-across-years series its claim is about, which is both the
+   aligned pairing and a bounded one. The sea-ice half of the banked build already worked this
+   way; this generalises it to temperature.
+
+Usage:
+  python scripts/harvest.py                 # pages + figure CSVs (cached)
   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=4
   python scripts/build_cpt_jsonl.py
-  python scripts/build_cpt_jsonl.py --set output.max_records=null
+  python scripts/build_cpt_jsonl.py --audit-alignment
+  python scripts/build_cpt_jsonl.py --audit-vintage    # ERA5 revision between bulletins
 """
-
 from __future__ import annotations
 
 import argparse
-import calendar
-import html as _html
+import collections
 import json
-import math
 import re
+import statistics
 import sys
-import time
-from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
-try:
-    import requests
-except ImportError as exc:  # pragma: no cover
-    raise SystemExit("requests is required. pip install -r requirements.txt") from exc
-try:
-    import yaml
-except ImportError as exc:  # pragma: no cover
-    raise SystemExit("PyYAML is required. pip install -r requirements.txt") from exc
+import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import c3sdata                                            # noqa: E402
+import c3ssec                                             # noqa: E402
+import c3ssrc                                             # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from emit import emit_record                              # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
 
-# shared v1-compliant record builder (self-validates against schema/validate.py --strict)
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
-from emit import emit_record  # noqa: E402
 
-# --- theme definitions -----------------------------------------------------
-# Each channel: (csv keyword match list, column selector, unit). Column selector
-# is a name (temperature CSVs have named columns) or an int index (sea-ice CSVs).
-THEMES: Dict[str, Dict[str, Any]] = {
-    "temperature": {
-        "slug": "surface-air-temperature",
-        "title_prefix": "Surface air temperature for",
-        "freq": "1m",
-        "channels": [
-            (["global_allmonths", "1991-2020"], "ano_91-20", "global_sat_anomaly_degc_1991_2020"),
-            (["global_allmonths", "1991-2020"], "ano_pi", "global_sat_anomaly_degc_preindustrial"),
-            (["Europe_allmonths", "1991-2020"], "ano_91-20", "europe_sat_anomaly_degc_1991_2020"),
-        ],
-    },
-    "sea_ice": {
-        "slug": "sea-ice-cover",
-        "title_prefix": "Sea ice cover for",
-        "freq": "1y",
-        "channels": [
-            (["Arctic", "monthly_extent_anomalies"], 1, "arctic_sie_anomaly_mkm2_1991_2020"),
-            (["Antarctic", "monthly_extent_anomalies"], 1, "antarctic_sie_anomaly_mkm2_1991_2020"),
-        ],
-    },
-}
+# --- config ---------------------------------------------------------------
 
-DROP_LINES = (
-    "data source:", "credit:", "use the grey", "download png", "download high-res",
-    "table of contents", "global map", "polar regions", "back to top", "see all months",
-    "jump to another month", "about the data and analysis", "reference period will not",
-    "ccl-icon", "implemented by ecmwf", "skip to main content", "subscribe to the newsletter",
-    "privacy policy", "feedback survey",
-)
+def deep_merge(base: dict, over: dict) -> dict:
+    m = dict(base)
+    for k, v in over.items():
+        m[k] = deep_merge(m[k], v) if k in m and isinstance(m[k], dict) and isinstance(v, dict) else v
+    return m
 
 
-# --- config helpers (same conventions as the other packages) ---------------
-
-def deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
-    merged = dict(base)
-    for k, v in override.items():
-        if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
-            merged[k] = deep_merge(merged[k], v)
-        else:
-            merged[k] = v
-    return merged
-
-
-def coerce_value(raw: str) -> Any:
+def coerce(raw: str) -> Any:
     low = raw.strip().lower()
     if low in {"true", "yes"}: return True
     if low in {"false", "no"}: return False
     if low in {"null", "none", "~"}: return None
     if re.fullmatch(r"-?\d+", raw): return int(raw)
     if re.fullmatch(r"-?\d+\.\d+", raw): return float(raw)
-    if raw.startswith("[") and raw.endswith("]"):
-        inner = raw[1:-1].strip()
-        return [coerce_value(p.strip()) for p in inner.split(",")] if inner else []
     return raw
 
 
-def parse_set_args(set_args: Sequence[str]) -> Dict[str, Any]:
-    result: Dict[str, Any] = {}
-    for item in set_args:
-        if "=" not in item:
-            raise ValueError(f"Invalid --set (need key=value): {item}")
-        key, raw = item.split("=", 1)
-        cur = result
-        parts = key.split(".")
+def parse_sets(sets: Sequence[str]) -> dict:
+    out: dict = {}
+    for it in sets:
+        k, v = it.split("=", 1)
+        cur = out
+        parts = k.split(".")
         for p in parts[:-1]:
             cur = cur.setdefault(p, {})
-        cur[parts[-1]] = coerce_value(raw)
-    return result
+        cur[parts[-1]] = coerce(v)
+    return out
 
 
-def load_config(path: Path, overrides: Sequence[str]) -> Dict[str, Any]:
-    cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return deep_merge(cfg, parse_set_args(overrides)) if overrides else cfg
+def load_config(path: Path, sets: Sequence[str]) -> dict:
+    cfg = yaml.safe_load(path.read_text())
+    return deep_merge(cfg, parse_sets(sets)) if sets else cfg
 
 
-def resolve_path(s: str) -> Path:
+def rp(s: str) -> Path:
     p = Path(s)
     return p if p.is_absolute() else ROOT / p
 
 
-# --- date helpers ----------------------------------------------------------
+# --- which series does a section get? -------------------------------------
 
-def months_in_range(start: str, end: Optional[str]) -> List[Tuple[int, int]]:
-    sy, sm = map(int, start.split("-"))
-    if end:
-        ey, em = map(int, end.split("-"))
-    else:
-        t = date.today()
-        ey, em = t.year, t.month
-    out: List[Tuple[int, int]] = []
-    y, m = sy, sm
-    while (y, m) <= (ey, em):
-        out.append((y, m))
-        m += 1
-        if m > 12:
-            m = 1; y += 1
+class Rule(NamedTuple):
+    kinds: Tuple[str, ...]    # figure-data families, in preference order
+    domains: Tuple[str, ...]  # one channel group per domain
+    stride: str               # 'annual' | 'monthly' | 'daily'
+
+
+#: (theme, topic, period) -> the figure-data family that section's figure is drawn from.
+#: `period == 'month'` means the section is about the reported month itself, which is where
+#: the bulletin makes its rank-in-the-record claim, so those get the calendar-month series.
+#:
+#: The second entry of `kinds` is a fallback that matters: C3S only began publishing the
+#: dedicated calendar-month CSV (`..._global_June_DATA.csv`) in the recent era, but the
+#: `allmonths` file it has always published contains the same numbers -- selecting one month
+#: across years from it reproduces the calendar-month figure exactly, which is what the
+#: bulletin itself plots. Without the fallback the whole pre-2024 temperature era would drop
+#: for want of a file, having had the data all along.
+RULES: Dict[Tuple[str, str, str], Rule] = {}
+
+
+def _add(theme, topics, periods, kinds, domains, stride):
+    for t in topics:
+        for p in periods:
+            RULES[(theme, t, p)] = Rule(tuple(kinds), tuple(domains), stride)
+
+
+_ALL_PERIODS = ["month", "12months", "season", "ytd", "other"]
+
+_add("temperature", ["global"], ["month"],
+     ["sat_calendar_month", "sat_allmonths"], ["global"], "annual")
+_add("temperature", ["europe"], ["month"],
+     ["sat_calendar_month", "sat_allmonths"], ["europe"], "annual")
+_add("temperature", ["global"], ["12months"],
+     ["sat_12month", "sat_allmonths"], ["global"], "monthly")
+_add("temperature", ["europe"], ["12months"],
+     ["sat_12month", "sat_allmonths"], ["europe"], "monthly")
+_add("temperature", ["global"], ["season", "ytd", "other"],
+     ["sat_allmonths"], ["global"], "monthly")
+_add("temperature", ["europe"], ["season", "ytd", "other"],
+     ["sat_allmonths"], ["europe"], "monthly")
+_add("temperature", ["regional"], _ALL_PERIODS,
+     ["sat_allmonths"], ["global", "europe"], "monthly")
+_add("temperature", ["sst"], _ALL_PERIODS, ["sst_daily"], ["60s-60n"], "daily")
+_add("sea_ice", ["arctic"], _ALL_PERIODS, ["sie_calendar_month"], ["arctic"], "annual")
+_add("sea_ice", ["antarctic"], _ALL_PERIODS, ["sie_calendar_month"], ["antarctic"], "annual")
+_add("hydrological", ["europe"], _ALL_PERIODS, ["hydro_4month"],
+     ["nweurope", "neeurope", "sweurope", "seeurope"], "monthly")
+_add("hydrological", ["global", "trends"], _ALL_PERIODS, ["rh_monthly"],
+     ["global_and_europe"], "monthly")
+
+
+# --- the cached corpus ----------------------------------------------------
+
+class Bulletin(NamedTuple):
+    theme: str
+    ym: str
+    html_path: Path
+    csv_names: List[str]
+
+
+def load_index(cfg) -> Dict[str, List[str]]:
+    """page filename -> the cache names of the CSVs that page links.
+
+    Derived from the cached HTML rather than read from `csv_index.json`. The index is a pure
+    function of the pages, so deriving it removes an ordering dependency on the harvest (the
+    JSON is only written when the CSV pass finishes, and a builder that read it early saw an
+    empty index and dropped every section for "no series").
+    """
+    import harvest
+    html_dir = rp(cfg["data"]["html_cache_dir"])
+    out: Dict[str, List[str]] = {}
+    for p in sorted(html_dir.glob("*.html")):
+        out[p.name] = [harvest.csv_local(u) for u in harvest.csv_urls_from(p.read_bytes())]
     return out
 
 
-# --- HTTP + caching --------------------------------------------------------
-
-def fetch_text(session, url, cache_file: Path, timeout, binary=False):
-    """Return (content, from_cache). content is None on 404/error."""
-    if cache_file.exists():
-        return (cache_file.read_bytes() if binary else cache_file.read_text(encoding="utf-8")), True
-    try:
-        r = session.get(url, timeout=timeout)
-    except requests.RequestException:
-        return None, False
-    if r.status_code != 200 or not r.content:
-        return None, False
-    cache_file.parent.mkdir(parents=True, exist_ok=True)
-    if binary:
-        cache_file.write_bytes(r.content); return r.content, False
-    cache_file.write_text(r.text, encoding="utf-8"); return r.text, False
-
-
-# --- text extraction -------------------------------------------------------
-
-def extract_narrative(html: str, title_prefix: str) -> str:
-    raw = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", "", html)
-    raw = re.sub(r"(?i)</(p|div|h[1-6]|li|tr|section|figcaption)>", "\n", raw)
-    raw = re.sub(r"(?i)<br\s*/?>", "\n", raw)
-    txt = _html.unescape(re.sub(r"<[^>]+>", " ", raw))
-    lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in txt.split("\n")]
-    start = next((i for i, ln in enumerate(lines) if ln.startswith(title_prefix)), 0)
-    end = next((i for i, ln in enumerate(lines) if ln.startswith("Bulletin navigation")), len(lines))
-    keep: List[str] = []
-    for ln in lines[start + 1:end]:
-        if len(ln) < 40 or "." not in ln:  # drops icon-sprite blob, headings, link text
-            continue
-        low = ln.lower()
-        if any(d in low for d in DROP_LINES):
-            continue
-        if not keep or keep[-1] != ln:
-            keep.append(ln)
-    text = "\n\n".join(keep)
-    text = re.sub(r"\s+([,.;:])", r"\1", text)  # tag-strip leaves "globally ," → "globally,"
-    return text
-
-
-# --- CSV discovery + parsing ----------------------------------------------
-
-def discover_csvs(html: str, base_url: str) -> List[str]:
-    hrefs = re.findall(r'href="([^"]+?\.csv[^"]*)"', html)
-    out, seen = [], set()
-    for h in hrefs:
-        u = h if h.startswith("http") else base_url + h
-        if u not in seen:
-            seen.add(u); out.append(u)
-    return out
-
-
-def match_csv(csvs: List[str], keywords: List[str]) -> Optional[str]:
-    for u in csvs:
-        name = u.rsplit("/", 1)[-1].lower()
-        if all(k.lower() in name for k in keywords):
-            return u
-    return None
-
-
-def parse_temp_csv(text: str) -> Tuple[List[str], Dict[str, Dict[str, float]]]:
-    """Return (column_names, {date 'YYYY-MM': {col: value}})."""
-    cols: List[str] = []
-    data: Dict[str, Dict[str, float]] = {}
-    for line in text.splitlines():
-        if line.startswith("#") or not line.strip():
-            continue
-        parts = [p.strip() for p in line.split(",")]
-        if parts[0] == "month":
-            cols = parts
-            continue
-        if not cols or not re.match(r"\d{4}-\d{2}", parts[0]):
-            continue
-        ym = parts[0][:7]
-        row = {}
-        for c, v in zip(cols[1:], parts[1:]):
-            try:
-                f = float(v)
-                row[c] = None if math.isnan(f) else f
-            except ValueError:
-                row[c] = None
-        data[ym] = row
-    return cols, data
-
-
-def parse_seaice_csv(text: str, col_idx: int) -> List[Tuple[int, float]]:
-    """Return [(year, value)] for the this-month-across-years series (nan dropped)."""
+def bulletins(cfg) -> List[Bulletin]:
+    html_dir = rp(cfg["data"]["html_cache_dir"])
+    idx = load_index(cfg)
     out = []
-    for line in text.splitlines():
-        m = re.match(r"^(\d{4})-\d{2}\s*,(.*)$", line)
-        if not m:
+    for p in sorted(html_dir.glob("*.html")):
+        theme, ymc = p.stem.rsplit("_", 1)
+        out.append(Bulletin(theme, f"{ymc[:4]}-{ymc[4:]}", p, idx.get(p.name, [])))
+    return out
+
+
+_TABLE_CACHE: Dict[str, Optional[c3sdata.Table]] = {}
+_FAM_CACHE: Dict[str, Optional[c3sdata.Family]] = {}
+
+
+def load_table(cfg, name: str) -> Optional[c3sdata.Table]:
+    if name not in _TABLE_CACHE:
+        p = rp(cfg["data"]["csv_cache_dir"]) / name
+        _TABLE_CACHE[name] = c3sdata.parse(p.read_bytes()) if p.exists() else None
+    return _TABLE_CACHE[name]
+
+
+def family_of(cfg, name: str) -> Optional[c3sdata.Family]:
+    if name not in _FAM_CACHE:
+        tab = load_table(cfg, name)
+        fam = None if tab is None else (
+            c3sdata.classify(name) or c3sdata.classify_content(tab, name))
+        if fam is not None and not fam.baseline:
+            fam = fam._replace(baseline=c3sdata.baseline_of(tab))
+        _FAM_CACHE[name] = fam
+    return _FAM_CACHE[name]
+
+
+def pick_series(cfg, bul: Bulletin, rule: Rule, month_no: int, want_baseline: str = ""
+                ) -> List[Tuple[str, c3sdata.Table, str, c3sdata.Family]]:
+    """(domain, table, column, family) triples backing this section, from THIS bulletin's CSVs.
+
+    `want_baseline` is the reference period the section's own prose quotes against. C3S moved
+    its headline baseline from 1981-2010 to 1991-2020 and publishes both files for many
+    months, so preferring the wrong one pairs "0.46°C warmer than the 1981-2010 average" with
+    a 1991-2020 series -- the largest genuine cause of prose figures missing from the attached
+    series. Falls back to 1991-2020 when the prose names no baseline.
+    """
+    prefer = want_baseline or "1991-2020"
+    out = []
+    for dom in rule.domains:
+        chosen: Optional[Tuple[c3sdata.Table, c3sdata.Family]] = None
+        for kind in rule.kinds:                      # preference order, fallback second
+            cands = []
+            for name in bul.csv_names:
+                fam = family_of(cfg, name)
+                tab = load_table(cfg, name)
+                if fam is None or tab is None or fam.kind != kind or fam.domain != dom:
+                    continue
+                if rule.stride == "annual" and kind.endswith("calendar_month") \
+                        and fam.calendar_month not in (None, month_no):
+                    continue
+                cands.append((tab, fam))
+            if cands:
+                # Preference order matters more than coverage here. A bulletin links several
+                # files of the same family that hold *different quantities*: for sea ice, an
+                # extent file (`CIE`, columns "SIE anomaly"...) and an area file (`CIA`,
+                # columns "Arctic","Antarctic"). Sorting by row count picked the area file --
+                # 487 rows against 41 -- and paired "0.8 million km2 below average ... third
+                # lowest July extent" with an area anomaly of -0.38 whose rank is 10th. So the
+                # named quantity is ranked first, then the baseline the prose quotes, and only
+                # then coverage.
+                cands.sort(key=lambda tf: (not _has_preferred_quantity(kind, tf[0]),
+                                           tf[1].baseline != prefer,
+                                           tf[1].baseline != "1991-2020",
+                                           -len(tf[0].rows)))
+                chosen = cands[0]
+                break
+        if chosen is None:
             continue
-        year = int(m.group(1))
-        cells = [c.strip() for c in line.split(",")]
-        try:
-            val = float(cells[col_idx])
-        except (ValueError, IndexError):
-            continue  # missing
-        if math.isnan(val):
-            continue  # 'nan' parses to float NaN — drop it
-        out.append((year, val))
-    out.sort()
+        tab, fam = chosen
+        cols = c3sdata.pick_columns(fam, tab)
+        # A file whose columns name basins/regions (the older sea-ice and temperature files
+        # hold Arctic *and* Antarctic, or Global *and* European, in one table) contributes only
+        # the column for this record's own region. Publishing all of them put an
+        # `antarctic_arctic` channel inside the Antarctic section -- the cross-contamination
+        # the per-section design exists to prevent.
+        regional = [c for c in cols if c.strip().lower() in _REGION_ALIASES]
+        if regional:
+            mine = [c for c in regional if _REGION_ALIASES[c.strip().lower()] == dom]
+            cols = mine or ([] if fam.kind == "sie_calendar_month" else cols)
+        for col in cols:
+            out.append((dom, tab, col, fam))
     return out
 
 
-# --- record building -------------------------------------------------------
-
-_TEXT_CACHE: Dict[str, Optional[str]] = {}
-
-
-def _dl_text(url, cfg):
-    if url in _TEXT_CACHE:
-        return _TEXT_CACHE[url]
-    txt, _ = fetch_text(_SESSION, url, resolve_path(cfg["data"]["csv_cache_dir"]) / url.rsplit("/", 1)[-1],
-                        int(cfg["data"]["timeout_s"]))
-    _TEXT_CACHE[url] = txt
-    return txt
-
-
-def temperature_series(csvs, cfg) -> Dict[str, Dict[str, Optional[float]]]:
-    """Return {ym 'YYYY-MM': {'global':v,'europe':v}} across current + mid (2021-24) eras.
-    Both use the 1991-2020 baseline; monthly series. Values may be None where a channel
-    has a genuine gap (kept, not dropped, so the expanding window can null-fill interior
-    holes rather than fabricate or silently shorten one channel)."""
-    # current era: Fig1b (global, named col ano_91-20) + Fig6b (Europe, ano_91-20)
-    g_url = match_csv(csvs, ["global_allmonths", "1991-2020"])
-    e_url = match_csv(csvs, ["Europe_allmonths", "1991-2020"])
-    if g_url and e_url:
-        gt, et = _dl_text(g_url, cfg), _dl_text(e_url, cfg)
-        if gt and et:
-            _, gd = parse_temp_csv(gt)
-            _, ed = parse_temp_csv(et)
-            out: Dict[str, Dict[str, Optional[float]]] = {}
-            for ym in set(gd) | set(ed):
-                out[ym] = {"global": gd.get(ym, {}).get("ano_91-20"),
-                           "europe": ed.get(ym, {}).get("ano_91-20")}
-            if out:
-                return out
-    # mid era (~2021-2024): one ts_1month file, positional col1=YYYYMM, col2=global, col3=europe
-    m_url = match_csv(csvs, ["ts_1month_anomaly_Global", "1991-2020"])
-    if m_url:
-        txt = _dl_text(m_url, cfg)
-        if txt:
-            out = {}
-            for line in txt.splitlines():
-                m = re.match(r"^\s*(\d{4})(\d{2})\s*,(.*)$", line)
-                if not m:
-                    continue
-                cells = [c.strip() for c in line.split(",")]
-                try:
-                    gv, ev = float(cells[1]), float(cells[2])
-                except (ValueError, IndexError):
-                    continue
-                gv = None if math.isnan(gv) else gv
-                ev = None if math.isnan(ev) else ev
-                out[f"{m.group(1)}-{m.group(2)}"] = {"global": gv, "europe": ev}
-            return out
-    return {}
+def window(tab: c3sdata.Table, col: str, ym: str, stride: str, month_no: int,
+           n_monthly: int, n_daily: int) -> Tuple[List[Optional[float]], List[str]]:
+    """The series slice for this section, oldest -> newest, ending on the reported period."""
+    keys = sorted(tab.rows)
+    if stride == "annual":
+        # one point per year for the reported calendar month: the series the bulletin's
+        # rank-in-the-record claim is a claim about.
+        sel = [k for k in keys if len(k) == 7 and int(k[5:7]) == month_no and k <= ym]
+    elif stride == "daily":
+        sel = [k for k in keys if len(k) == 10 and k[:7] <= ym][-n_daily:]
+    else:
+        sel = [k for k in keys if len(k) == 7 and k <= ym][-n_monthly:]
+    return [tab.rows[k].get(col) for k in sel], sel
 
 
-def _month_grid(start_ym: str, end_ym: str) -> List[str]:
-    """Contiguous monthly grid ['YYYY-MM', ...] from start_ym through end_ym inclusive."""
-    sy, sm = int(start_ym[:4]), int(start_ym[5:7])
-    ey, em = int(end_ym[:4]), int(end_ym[5:7])
-    out: List[str] = []
-    y, m = sy, sm
-    while (y, m) <= (ey, em):
-        out.append(f"{y:04d}-{m:02d}")
-        m += 1
-        if m > 12:
-            m = 1; y += 1
-    return out
+# --- build ----------------------------------------------------------------
 
+def build(cfg) -> Tuple[List[dict], dict]:
+    d, t, o = cfg["data"], cfg["text"], cfg["output"]
+    min_chars = int(t["min_text_chars"])
+    n_monthly = int(d["window_months"])
+    n_daily = int(d["window_days"])
+    min_points = int(d["min_points"])
+    max_null = float(d["max_null_fraction"])
+    require_terminal = bool(d.get("require_terminal_is_reported_month", True))
+    maxrec = o.get("max_records")
+    stat: collections.Counter = collections.Counter()
+    records: List[dict] = []
+    seen_text: set = set()
+    seen_sid: set = set()
 
-def build_temperature_record(cfg, year, month, narrative, csvs, page_url):
-    ym = f"{year:04d}-{month:02d}"
-    series = temperature_series(csvs, cfg)
-    # Expanding window: pair this release with the FULL monthly history of the anomaly
-    # series up to (and including) its month, not a fixed trailing window. Anchor at the
-    # earliest month either channel has a value so both channels stay equal-length; walk a
-    # contiguous month grid to the release month, null-filling any interior gap (the schema
-    # allows null for genuine gaps — do not fabricate).
-    dates = [d for d in series if d <= ym and (series[d]["global"] is not None
-                                               or series[d]["europe"] is not None)]
-    if len(dates) < 2:
-        return None, f"short/absent temp series ({len(dates)} points)"
-    start_ym, end_ym = min(dates), max(dates)
-    months = _month_grid(start_ym, end_ym)
-    if len(months) < 2:
-        return None, f"short temp series ({len(months)} points)"
-    channels = [
-        {"values": [None if series.get(m, {}).get("global") is None
-                    else round(series[m]["global"], 4) for m in months],
-         "unit": "global_sat_anomaly_degc_1991_2020", "freq": "1m"},
-        {"values": [None if series.get(m, {}).get("europe") is None
-                    else round(series[m]["europe"], 4) for m in months],
-         "unit": "europe_sat_anomaly_degc_1991_2020", "freq": "1m"},
-    ]
-    # channels share a freq (1m) -> must share length
-    assert len({len(c["values"]) for c in channels}) == 1, "temp channel length mismatch"
-    # No generated/templated framing text: the <ts></ts> placeholder is appended directly
-    # to the real scraped narrative, nothing else is added.
-    text = f"{narrative}\n\n<ts></ts>"
-    # window is monthly-continuous; period spans the first to last month in it.
-    period_start = f"{start_ym}-01"
-    end_y, end_m = int(end_ym[:4]), int(end_ym[5:7])
-    period_end = f"{end_ym}-{calendar.monthrange(end_y, end_m)[1]:02d}"
-    rec = emit_record(
-        text=text,
-        timeseries=channels,
-        alignment="describes",
-        license="cc-by-4.0",
-        text_source="first_party_official",
-        source=page_url,
-        dataset="copernicus_climate_bulletin",
-        series_id=f"c3s_temperature_{ym}",
-        domain="climate",
-        region="global",
-        period_start=period_start,
-        period_end=period_end,
-        meta={
-            "theme": "temperature",
-            "data_month": ym,
-            "series_start": start_ym,
-            "n_points": len(months),
-            "report_url": page_url,
-        },
-    )
-    return rec, None
-
-
-def seaice_channel(csvs, cfg, which, year) -> Optional[Dict[int, float]]:
-    """{year: SIE anomaly} for Arctic|Antarctic across current + mid eras (col idx 1, same layout)."""
-    url = (match_csv(csvs, ["seaice", which, "monthly_extent_anomalies"])
-           or match_csv(csvs, [which + "_OSI-SAF_sie", "1991-2020"]))
-    if not url:
-        return None
-    txt = _dl_text(url, cfg)
-    if not txt:
-        return None
-    return {y: v for (y, v) in parse_seaice_csv(txt, 1) if y <= year}
-
-
-def build_sea_ice_record(cfg, year, month, narrative, csvs, page_url):
-    ym = f"{year:04d}-{month:02d}"
-    win_years = cfg["data"].get("sea_ice_window_years")
-    monthname = calendar.month_name[month]
-    arctic = seaice_channel(csvs, cfg, "Arctic", year)
-    antarctic = seaice_channel(csvs, cfg, "Antarctic", year)
-    if not arctic or not antarctic:
-        return None, "missing Arctic/Antarctic sea-ice CSV"
-    common = sorted(set(arctic) & set(antarctic))
-    if win_years:
-        common = common[-int(win_years):]
-    if len(common) < 2:
-        return None, f"short sea-ice series ({len(common)})"
-    channels = [
-        {"values": [round(arctic[y], 4) for y in common],
-         "unit": "arctic_sie_anomaly_mkm2_1991_2020", "freq": "1y"},
-        {"values": [round(antarctic[y], 4) for y in common],
-         "unit": "antarctic_sie_anomaly_mkm2_1991_2020", "freq": "1y"},
-    ]
-    # No generated/templated framing text: the <ts></ts> placeholder is appended directly
-    # to the real scraped narrative, nothing else is added.
-    text = f"{narrative}\n\n<ts></ts>"
-    # this-calendar-month-across-years: span that month in the first year → the last.
-    first_year, last_year = common[0], common[-1]
-    period_start = f"{first_year:04d}-{month:02d}-01"
-    period_end = f"{last_year:04d}-{month:02d}-{calendar.monthrange(last_year, month)[1]:02d}"
-    rec = emit_record(
-        text=text,
-        timeseries=channels,
-        alignment="describes",
-        license="cc-by-4.0",
-        text_source="first_party_official",
-        source=page_url,
-        dataset="copernicus_climate_bulletin",
-        series_id=f"c3s_sea_ice_{ym}",
-        domain="climate",
-        region="global",
-        period_start=period_start,
-        period_end=period_end,
-        meta={
-            "theme": "sea_ice",
-            "data_month": ym,
-            "calendar_month": monthname,
-            "n_years": len(channels[0]["values"]),
-            "report_url": page_url,
-        },
-    )
-    return rec, None
-
-
-# Per-record validation now lives in emit_record(): each record is self-checked against
-# schema/validate.py --strict at construction time, raising ValueError on any violation.
-
-
-# --- pipeline --------------------------------------------------------------
-
-_SESSION: Any = None
-
-
-def run_pipeline(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
-    global _SESSION
-    data_cfg, text_cfg, out_cfg = cfg["data"], cfg["text"], cfg["output"]
-    base = data_cfg["base_url"]
-    min_chars = int(text_cfg.get("min_text_chars", 200))
-    delay = float(data_cfg.get("request_delay_s", 1.0))
-    timeout = int(data_cfg.get("timeout_s", 30))
-    max_records = out_cfg.get("max_records")
-    themes = data_cfg.get("themes", ["temperature", "sea_ice"])
-    html_cache = resolve_path(data_cfg["html_cache_dir"])
-
-    _SESSION = requests.Session()
-    _SESSION.headers.update({"User-Agent": "CPTDatasetBuilder/1.0 (+research)"})
-
-    stats = {"attempted": 0, "emitted": 0, "skipped_no_page": 0,
-             "skipped_short_text": 0, "skipped_ts": 0, "skipped_validation": 0}
-    per_theme = {t: 0 for t in themes}
-    records: List[Dict[str, Any]] = []
-    errors: List[str] = []
-
-    # newest-first so a demo cap lands on recent (reliable, current-format) months;
-    # full build (max_records=null) covers everything regardless of order.
-    for (year, month) in reversed(months_in_range(data_cfg["start_month"], data_cfg.get("end_month"))):
-        monthname = calendar.month_name[month].lower()
-        for theme in themes:
-            spec = THEMES[theme]
-            stats["attempted"] += 1
-            label = f"{theme} {year}-{month:02d}"
-            page_url = f"{base}/{spec['slug']}-{monthname}-{year}"
-            cache_file = html_cache / f"{theme}_{year}{month:02d}.html"
-            html, cached = fetch_text(_SESSION, page_url, cache_file, timeout)
-            if html is None:
-                stats["skipped_no_page"] += 1
-                if not cached:
-                    time.sleep(delay)
+    for bul in bulletins(cfg):
+        if bul.theme not in d["themes"]:
+            continue
+        stat["bulletins"] += 1
+        fallback = {"temperature": "global", "sea_ice": "arctic",
+                    "hydrological": "europe"}[bul.theme]
+        secs = c3ssec.sections(bul.html_path.read_text(errors="ignore"), fallback)
+        if not secs:
+            stat["drop_bulletin_no_section"] += 1
+            continue
+        month_no = int(bul.ym[5:7])
+        for sec in secs:
+            stat["section_units"] += 1
+            if len(sec.text) < min_chars:
+                stat["drop_short_text"] += 1
                 continue
-            narrative = extract_narrative(html, spec["title_prefix"])
-            if len(narrative) < min_chars:
-                stats["skipped_short_text"] += 1
-                print(f"{label}: skipped (short text {len(narrative)})")
+            rule = RULES.get((bul.theme, sec.topic, sec.period))
+            if rule is None:
+                stat["drop_no_rule"] += 1
+                stat[f"norule::{bul.theme}/{sec.topic}/{sec.period}"] += 1
                 continue
-            csvs = discover_csvs(html, base)
-            builder = build_temperature_record if theme == "temperature" else build_sea_ice_record
-            # emit_record() inside the builder self-validates against schema/validate.py
-            # --strict, raising ValueError on any violation (counted as skipped_validation).
+            named_bases = c3ssec.baselines_named(sec.text)
+            triples = pick_series(cfg, bul, rule, month_no,
+                                  named_bases[0] if named_bases else "")
+            if not triples:
+                stat["drop_no_series_for_section"] += 1
+                stat[f"noseries::{bul.theme}/{rule.kinds[0]}"] += 1
+                continue
+            chans = []
+            for dom, tab, col, fam in triples:
+                vals, keys = window(tab, col, bul.ym, rule.stride, month_no, n_monthly, n_daily)
+                if len(vals) < min_points or vals[-1] is None:
+                    stat["channel_dropped_short_or_null_end"] += 1
+                    continue
+                # The series must actually END on the month the bulletin reports. Bulletins
+                # sometimes link a figure CSV from an earlier month's folder alongside their
+                # own (the 2024-03 hydrological page links 2023-11 files too), and taking the
+                # latest value at or before the reported month would then pair this month's
+                # prose with a terminal point from an earlier month -- exactly the mismatch
+                # `period_end == reported month` is supposed to guarantee.
+                if require_terminal and not _terminal_is_reported(keys[-1], bul.ym, rule.stride):
+                    stat["channel_dropped_terminal_not_reported_month"] += 1
+                    continue
+                if sum(1 for v in vals if v is None) / len(vals) > max_null:
+                    stat["channel_dropped_over_null_budget"] += 1
+                    continue
+                unit = (c3sdata.CHANNEL_UNITS.get((fam.kind, col.strip().lower()))
+                        or _unit_name(fam, dom, col, tab))
+                chans.append((unit, vals, keys, fam, tab))
+            if not chans:
+                stat["drop_all_channels_unusable"] += 1
+                continue
+            # Belt and braces on channel units: whatever the naming rules produce, a record
+            # must not carry two channels with one unit. Column vocabularies churn between
+            # eras, so a naming rule that is complete today can silently collide tomorrow --
+            # and the failure mode is the whole record being rejected, not one channel.
+            seen_units: Dict[str, int] = {}
+            deduped = []
+            for u, vv, kk, ff, tb in chans:
+                if u in seen_units:
+                    seen_units[u] += 1
+                    stat["channel_unit_disambiguated"] += 1
+                    u = f"{u}_{seen_units[u]}"
+                else:
+                    seen_units[u] = 0
+                deduped.append((u, vv, kk, ff, tb))
+            chans = deduped
+            # all channels of a record share one length and one grid (SCHEMA: same freq)
+            n = min(len(c[1]) for c in chans)
+            if n < min_points:
+                stat["drop_short_window"] += 1
+                continue
+            chans = [(u, v[-n:], k[-n:], f, tb) for u, v, k, f, tb in chans]
+
+            freq = {"annual": "1y", "monthly": "1m", "daily": "1d"}[rule.stride]
+            text = f"{sec.text}\n\n<ts></ts>"
+            sid = (f"{d['series_id_prefix']}_{bul.theme}_{bul.ym}"
+                   f"_{sec.topic}_{sec.period}_s{sec.ordinal}")
+            if sid in seen_sid:
+                stat["drop_duplicate_series_id"] += 1
+                continue
+            if text in seen_text:
+                stat["drop_duplicate_text"] += 1
+                continue
+
+            figs = c3ssec.figures(sec.text)
+            terminals = [c[1][-1] for c in chans]
+            tier = ("recites" if any(c3ssec.quotes(f, tv) for f in figs for tv in terminals)
+                    else "describes")
+            keys0 = chans[0][2]
             try:
-                rec, err = builder(cfg, year, month, narrative, csvs, page_url)
+                rec = emit_record(
+                    text=text,
+                    timeseries=[{"values": [None if v is None else round(v, 4) for v in vv],
+                                 "unit": u, "freq": freq} for u, vv, _k, _f, _tb in chans],
+                    alignment=tier,
+                    license=d["license_tag"],
+                    source=_page_url(bul),
+                    dataset=d["dataset_name"],
+                    series_id=sid,
+                    domain="climate",
+                    region=d["region"],
+                    period_start=_iso(keys0[0], freq),
+                    period_end=_iso(keys0[-1], freq),
+                    meta={
+                        "provider": d["provider"],
+                        "bulletin": d["bulletin_name"],
+                        "theme": bul.theme,
+                        "reported_month": bul.ym,
+                        "section_heading": sec.heading or None,
+                        "section_parent": sec.parent,
+                        "topic": sec.topic,
+                        "period": sec.period,
+                        "series_family": chans[0][3].kind,
+                        "series_stride": rule.stride,
+                        "series_via_fallback": chans[0][3].kind != rule.kinds[0],
+                        "n_points": n,
+                        "channels": [u for u, *_ in chans],
+                        "figure_data_reference_period":
+                            chans[0][4].meta.get("reference period", "")
+                            or chans[0][3].baseline,
+                        "figures_in_text": len(figs),
+                        "baseline_named_in_prose": named_bases[0] if named_bases else None,
+                        "states_ranking": c3ssec.states_ranking(sec.text),
+                        "true_license": d["true_license"],
+                    },
+                )
             except ValueError as exc:
-                stats["skipped_validation"] += 1
-                errors.append(f"{label}: {exc}")
-                if not cached:
-                    time.sleep(delay)
+                stat["drop_invalid"] += 1
+                stat[f"invalid::{exc}"] += 1
                 continue
-            if rec is None:
-                stats["skipped_ts"] += 1
-                print(f"{label}: skipped ({err})")
-                if not cached:
-                    time.sleep(delay)
+            problems = local_checks(rec, n)
+            if problems:
+                stat["drop_invalid"] += 1
+                stat[f"local::{problems[0]}"] += 1
                 continue
             records.append(rec)
-            per_theme[theme] += 1
-            stats["emitted"] += 1
-            print(f"{label}: emitted ({len(rec['timeseries'])} ch, {len(rec['timeseries'][0]['values'])} steps)")
-            if not cached:
-                time.sleep(delay)
-            if max_records is not None and len(records) >= int(max_records):
+            seen_text.add(text)
+            seen_sid.add(sid)
+            stat["emitted"] += 1
+            stat[f"emit::{bul.theme}"] += 1
+            if maxrec is not None and len(records) >= int(maxrec):
                 break
-        if max_records is not None and len(records) >= int(max_records):
+        if maxrec is not None and len(records) >= int(maxrec):
             break
+    return records, {"stats": dict(stat), "reconcile": reconcile(stat)}
 
-    report = {
-        "generated_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        "start_month": data_cfg["start_month"],
-        "end_month": data_cfg.get("end_month") or f"{date.today():%Y-%m}",
-        "themes": themes, "stats": stats, "per_theme": per_theme,
-        "validation_errors": errors[:20], "config_snapshot": cfg, "dry_run": dry_run,
+
+def _terminal_is_reported(last_key: str, ym: str, stride: str) -> bool:
+    """Does the series' last point fall in the month the bulletin reports?"""
+    if stride == "daily":
+        return last_key[:7] == ym
+    return last_key[:7] == ym if len(last_key) >= 7 else last_key == ym[:4]
+
+
+#: The quantity each family's prose is actually about, as a marker in the column names. Where
+#: a bulletin publishes several files of one family, the one carrying this quantity wins.
+_PREFERRED_QUANTITY = {
+    "sie_calendar_month": ("sie",),        # extent, not area: the prose ranks extent
+}
+
+
+def _has_preferred_quantity(kind: str, tab: c3sdata.Table) -> bool:
+    want = _PREFERRED_QUANTITY.get(kind)
+    if not want:
+        return True
+    cols = " ".join(tab.cols).lower()
+    return any(w in cols for w in want)
+
+
+#: column name -> the region it is about, for files that hold several regions side by side
+_REGION_ALIASES = {"arctic": "arctic", "antarctic": "antarctic",
+                   "global": "global", "european": "europe", "europe": "europe"}
+
+#: sea-ice figure data publishes four anomaly columns per basin (extent and area, absolute
+#: and per cent); each needs its own unit or a record carries four channels with one name.
+_SIE_COLS = {
+    "sie anomaly": "sea_ice_extent_anomaly_mkm2",
+    "sie anomaly %": "sea_ice_extent_anomaly_pct",
+    "sia anomaly": "sea_ice_area_anomaly_mkm2",
+    "sia anomaly %": "sea_ice_area_anomaly_pct",
+}
+#: a column that names a region rather than a variable: the region overrides the file's own
+#: domain, because one file can hold both ("Month,Global,European" in a temperature series).
+_REGION_COLS = {"global": "global", "european": "europe", "europe": "europe"}
+
+
+def _unit_name(fam: c3sdata.Family, dom: str, col: str,
+               tab: Optional[c3sdata.Table] = None) -> str:
+    """A channel's unit. Always column-derived: the same file routinely holds several
+    anomaly columns, and a name that ignores the column gives them all one unit -- which
+    `validate.py --strict` rejects outright, so 358 records were being lost to it."""
+    c = col.strip().lower()
+    if fam.kind == "sie_calendar_month":
+        return f"{dom}_{_SIE_COLS.get(c, c.replace(' ', '_').replace('%', 'pct'))}"
+    if fam.kind == "sst_daily":
+        return "sst_anomaly_degc_60s_60n" + ("" if "anom" in c else f"_{c}".replace(" ", "_"))
+    if fam.kind in ("sat_calendar_month", "sat_allmonths", "sat_12month"):
+        region = _REGION_COLS.get(c, dom)
+        suffix = "_12month_mean" if fam.kind == "sat_12month" else ""
+        if c == "ano_pi":
+            suffix += "_preindustrial"
+        return f"{region}_sat_anomaly_degc{suffix}"
+    if fam.kind == "hydro_4month":
+        return f"{dom}_{c3sdata.variable_of(col, tab) if tab else c}"
+    var = c3sdata.variable_of(col, tab) if tab else c
+    region = _REGION_COLS.get(c, dom)
+    return f"{region}_{var}".lower().replace(" ", "_")
+
+
+def _iso(key: str, freq: str) -> str:
+    if len(key) == 4:
+        return f"{key}-01-01"
+    if len(key) == 7:
+        return f"{key}-01"
+    return key
+
+
+def _page_url(bul: Bulletin) -> str:
+    return c3ssrc.candidates(bul.theme, bul.ym)[0].url
+
+
+def local_checks(rec: dict, n: int) -> List[str]:
+    e = []
+    if rec["text"].count("<ts></ts>") != 1:
+        e.append("ts token count")
+    lens = {len(c["values"]) for c in rec["timeseries"]}
+    if lens != {n}:
+        e.append(f"channel lengths {sorted(lens)} != {n}")
+    if any(c["values"][-1] is None for c in rec["timeseries"]):
+        e.append("terminal null")
+    return e
+
+
+def reconcile(stat: collections.Counter) -> dict:
+    units = stat["section_units"]
+    acc = (stat["emitted"] + stat["drop_short_text"] + stat["drop_no_rule"]
+           + stat["drop_no_series_for_section"] + stat["drop_all_channels_unusable"]
+           + stat["drop_short_window"] + stat["drop_duplicate_series_id"]
+           + stat["drop_duplicate_text"] + stat["drop_invalid"])
+    return {"section_units": units, "accounted": acc, "balances": units == acc}
+
+
+# --- audits ---------------------------------------------------------------
+
+def audit_alignment(cfg) -> dict:
+    import random
+    path = rp(cfg["output"]["output_path"])
+    if not path.exists():
+        return {"error": f"{path} not built"}
+    recs = [json.loads(l) for l in path.open()]
+    n = len(recs)
+    out: Dict[str, Any] = {"records": n}
+    out["structural"] = {
+        "channel length == n_points":
+            f"{sum(1 for r in recs if all(len(c['values']) == r['meta']['n_points'] for c in r['timeseries']))}/{n}",
+        "terminal non-null":
+            f"{sum(1 for r in recs if all(c['values'][-1] is not None for c in r['timeseries']))}/{n}",
+        "exactly one <ts></ts>": f"{sum(1 for r in recs if r['text'].count('<ts></ts>') == 1)}/{n}",
+        "series ends at or before the reported month":
+            f"{sum(1 for r in recs if r['period_end'][:7] <= r['meta']['reported_month'])}/{n}",
     }
-    if dry_run:
-        if records:
-            print("\n--- sample record ---")
-            print(json.dumps(records[0], ensure_ascii=False, indent=2)[:2200])
-        print("\n", json.dumps(stats, indent=2))
-        return report
+    tot = miss = clean = 0
+    for r in recs:
+        body = r["text"].split("\n\n<ts></ts>")[0]
+        vals = [v for c in r["timeseries"] for v in c["values"] if v is not None]
+        bad = sum(1 for f in c3ssec.figures(body)
+                  if not any(c3ssec.quotes(f, v) for v in vals))
+        got = len(c3ssec.figures(body))
+        tot += got
+        miss += bad
+        clean += bad == 0
+    out["quotation"] = {"figures_quoted": tot, "not_in_own_series": miss,
+                        "pct": round(100.0 * miss / max(1, tot), 2),
+                        "records_all_figures_present": f"{clean}/{n}"}
+    random.seed(23)
+    by = collections.defaultdict(list)
+    for i, r in enumerate(recs):
+        by[(r["meta"]["theme"], r["meta"]["topic"], r["meta"]["period"])].append(i)
+    true = ctrl = ctrl_n = 0
+    for r in recs:
+        body = r["text"].split("\n\n<ts></ts>")[0]
+        figs = c3ssec.figures(body)
+        terms = [c["values"][-1] for c in r["timeseries"]]
+        true += any(c3ssec.quotes(f, tv) for f in figs for tv in terms)
+        peers = [j for j in by[(r["meta"]["theme"], r["meta"]["topic"], r["meta"]["period"])]
+                 if recs[j]["meta"]["reported_month"] != r["meta"]["reported_month"]]
+        if not peers:
+            continue
+        o = recs[random.choice(peers)]
+        ot = [c["values"][-1] for c in o["timeseries"]]
+        ctrl += any(c3ssec.quotes(f, tv) for f in figs for tv in ot)
+        ctrl_n += 1
+    out["tier"] = {"terminal_value_quoted": f"{true}/{n} = {100*true/n:.1f}%",
+                   "permutation_control": f"{ctrl}/{ctrl_n} = {100*ctrl/max(1,ctrl_n):.1f}%",
+                   "lift_pp": round(100*true/n - 100*ctrl/max(1, ctrl_n), 1),
+                   "tags_in_file": dict(collections.Counter(r["alignment"] for r in recs))}
 
-    out_path = resolve_path(out_cfg["output_path"])
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", encoding="utf-8") as fh:
+    # -- the exact test this package can answer: a stated rank-in-the-record, checked against
+    #    the very series it is a claim about. "the sixth warmest June on record" either is the
+    #    terminal point's position in its own calendar-month record or it is not.
+    exact_ok = exact_n = near_ok = ambiguous = 0
+    examples = []
+    for r in recs:
+        if r["meta"]["series_stride"] != "annual":
+            continue
+        body = r["text"].split("\n\n<ts></ts>")[0]
+        claims = c3ssec.stated_ranks(body)
+        if not claims:
+            continue
+        # Only sections making ONE rank claim are scored. A section that makes several
+        # ("third lowest July extent ... the second lowest was 2017 ... ninth in our dataset")
+        # cannot be attributed to one channel by an automated reader, and scoring them against
+        # the record's single channel measures the reader, not the pairing: hand-checking the
+        # 2020-10 Arctic record showed the series exactly right (terminal -2.978, matching the
+        # prose's "3.0 million km2 below", ranked 1st of 42 as the prose says) while the
+        # multi-claim reader scored it a miss.
+        if len({c[0] for c in claims}) > 1:
+            ambiguous += 1
+            continue
+        for want, hi in claims[:1]:
+            best = None
+            for c in r["timeseries"]:
+                vals = [v for v in c["values"] if v is not None]
+                if len(vals) < 10 or c["values"][-1] is None:
+                    continue
+                pos = sorted(vals, reverse=hi).index(c["values"][-1]) + 1
+                if best is None or abs(pos - want) < abs(best - want):
+                    best = pos
+            if best is None:
+                continue
+            exact_n += 1
+            if best == want:
+                exact_ok += 1
+            if abs(best - want) <= 1:
+                near_ok += 1
+            elif len(examples) < 6:
+                examples.append({"series_id": r["series_id"], "stated": want, "actual": best})
+    out["stated_rank_reproduces"] = {
+        "sections_with_multiple_rank_claims_not_scored": ambiguous,
+        "rank_claims_checked": exact_n,
+        "exact": f"{exact_ok}/{exact_n} = {100*exact_ok/max(1,exact_n):.1f}%",
+        "within_1": f"{near_ok}/{exact_n} = {100*near_ok/max(1,exact_n):.1f}%",
+        "counterexamples": examples,
+    }
+
+    # -- and the sign test, which every anomaly series can answer against a 50% baseline
+    sign_ok = sign_n = 0
+    for r in recs:
+        body = r["text"].split("\n\n<ts></ts>")[0]
+        want = c3ssec.stated_anomaly_sign(body)
+        if want is None:
+            continue
+        terms = [c["values"][-1] for c in r["timeseries"] if c["values"][-1] is not None]
+        if not terms:
+            continue
+        sign_n += 1
+        got = 1 if sum(1 for t in terms if t > 0) >= sum(1 for t in terms if t < 0) else -1
+        sign_ok += got == want
+    out["stated_above_or_below_average"] = {
+        "records_making_the_claim": sign_n,
+        "terminal_sign_agrees": f"{sign_ok}/{sign_n} = {100*sign_ok/max(1,sign_n):.1f}%",
+        "chance_baseline": "50%",
+    }
+    lens = {len(c["values"]) for r in recs for c in r["timeseries"]}
+    dp = sum(len(c["values"]) for r in recs for c in r["timeseries"])
+    nulls = sum(1 for r in recs for c in r["timeseries"] for v in c["values"] if v is None)
+    ptsf = collections.defaultdict(list)
+    for r in recs:
+        ptsf[r["meta"]["series_family"]].append(r["meta"]["n_points"])
+    out["series_health"] = {
+        "points_per_channel_range": [min(lens), max(lens)],
+        "pct_records_ge_32_points":
+            round(100.0 * sum(1 for r in recs if r["meta"]["n_points"] >= 32) / n, 1),
+        "timesteps": sum(r["meta"]["n_points"] for r in recs),
+        "datapoints": dp, "null_pct": round(100.0 * nulls / dp, 2),
+        "by_family": {k: {"records": len(v), "median_points": statistics.median(v)}
+                      for k, v in sorted(ptsf.items(), key=lambda x: -len(x[1]))},
+        "channels_per_record": {
+            "median": statistics.median([len(r["timeseries"]) for r in recs]),
+            "max": max(len(r["timeseries"]) for r in recs)},
+        "distinct_texts": len({r["text"] for r in recs}),
+        "distinct_series_id": len({r["series_id"] for r in recs}),
+        "reported_month_span": [min(r["meta"]["reported_month"] for r in recs),
+                                max(r["meta"]["reported_month"] for r in recs)],
+        "distinct_reported_months": len({r["meta"]["reported_month"] for r in recs}),
+        "themes": dict(collections.Counter(r["meta"]["theme"] for r in recs)),
+        "series_via_fallback_file":
+            sum(1 for r in recs if r["meta"].get("series_via_fallback")),
+    }
+    return out
+
+
+def audit_vintage(cfg) -> dict:
+    """Does ERA5 change under the bulletins? Same month, as published in different bulletins.
+
+    There is no third-party series to diff against -- the figure data *is* what the prose was
+    written from, which is this package's structural advantage over `47/48/49/50`. But ERA5 is
+    itself reanalysed, so the same historical month can read differently in a later bulletin.
+    This measures that directly, so the package can state whether a record's series is the
+    vintage its own prose was written against.
+    """
+    idx = load_index(cfg)
+    series: Dict[Tuple[str, str, str], Dict[str, List[Tuple[str, float]]]] = \
+        collections.defaultdict(lambda: collections.defaultdict(list))
+    for page, names in sorted(idx.items()):
+        theme, ymc = page.replace(".html", "").rsplit("_", 1)
+        bym = f"{ymc[:4]}-{ymc[4:]}"
+        for nm in names:
+            tab = load_table(cfg, nm)
+            fam = family_of(cfg, nm)
+            if tab is None or fam is None or fam.kind not in ("sat_allmonths", "rh_monthly"):
+                continue
+            col = c3sdata.pick_columns(fam, tab)[0]
+            for k, v in tab.rows.items():
+                if len(k) == 7 and v.get(col) is not None:
+                    series[(fam.kind, fam.domain, col)][k].append((bym, v[col]))
+    same = diff = 0
+    drifts: List[float] = []
+    for months in series.values():
+        for obs in months.values():
+            if len(obs) < 2:
+                continue
+            vals = {round(v, 4) for _b, v in obs}
+            if len(vals) == 1:
+                same += 1
+            else:
+                diff += 1
+                drifts.append(max(vals) - min(vals))
+    return {"month_values_published_in_2plus_bulletins": same + diff,
+            "identical_across_bulletins": same, "revised": diff,
+            "pct_identical": round(100.0 * same / max(1, same + diff), 2),
+            "median_abs_revision": round(statistics.median(drifts), 4) if drifts else None,
+            "max_abs_revision": round(max(drifts), 4) if drifts else None}
+
+
+def run(cfg, dry: bool) -> dict:
+    d, o = cfg["data"], cfg["output"]
+    records, report = build(cfg)
+    report.update({"provider": d["provider"], "bulletin": d["bulletin_name"],
+                   "dataset": d["dataset_name"], "config_snapshot": cfg, "dry_run": dry})
+    if not report["reconcile"]["balances"] and o.get("max_records") is None:
+        raise SystemExit(f"reconcile does not balance: {report['reconcile']}")
+    if dry:
+        if records:
+            r0 = dict(records[0])
+            r0["text"] = r0["text"][:600] + "…"
+            r0["timeseries"] = [{**ts, "values": ts["values"][:5] + ["…"]}
+                                for ts in r0["timeseries"][:3]]
+            print(json.dumps(r0, ensure_ascii=False, indent=2)[:2600])
+        print(json.dumps({k: v for k, v in report.items() if k != "config_snapshot"},
+                         indent=2)[:3500])
+        return report
+    op = rp(o["output_path"])
+    op.parent.mkdir(parents=True, exist_ok=True)
+    with op.open("w", encoding="utf-8") as fh:
         for r in records:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
-    if records and out_cfg.get("samples_path"):
-        sp = resolve_path(out_cfg["samples_path"]); sp.parent.mkdir(parents=True, exist_ok=True)
+    if records and o.get("samples_path"):
+        sp = rp(o["samples_path"])
+        sp.parent.mkdir(parents=True, exist_ok=True)
         with sp.open("w", encoding="utf-8") as fh:
-            json.dump(records[:4], fh, ensure_ascii=False, indent=2); fh.write("\n")
-    rp = resolve_path(out_cfg["report_path"]); rp.parent.mkdir(parents=True, exist_ok=True)
-    rp.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+            json.dump(records[:3], fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+    rpp = rp(o["report_path"])
+    rpp.parent.mkdir(parents=True, exist_ok=True)
+    rpp.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     return report
 
 
-def parse_args() -> argparse.Namespace:
-    ap = argparse.ArgumentParser(description="Build Copernicus C3S bulletin → CPT JSONL")
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Build C3S Climate Bulletin → CPT JSONL")
     ap.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     ap.add_argument("--set", dest="set", action="append", default=[])
     ap.add_argument("--dry-run", action="store_true")
-    return ap.parse_args()
-
-
-def main() -> None:
-    args = parse_args()
+    ap.add_argument("--audit-alignment", action="store_true")
+    ap.add_argument("--audit-vintage", action="store_true")
+    args = ap.parse_args()
     cfg = load_config(args.config, args.set)
-    report = run_pipeline(cfg, dry_run=args.dry_run)
-    s = report["stats"]
-    print(f"\nDone: {s['emitted']} records {report['per_theme']} "
-          f"(no_page={s['skipped_no_page']}, short_text={s['skipped_short_text']}, "
-          f"ts={s['skipped_ts']}, invalid={s['skipped_validation']}).", file=sys.stderr)
+    if args.audit_alignment:
+        print(json.dumps(audit_alignment(cfg), indent=2))
+        return
+    if args.audit_vintage:
+        print(json.dumps(audit_vintage(cfg), indent=2))
+        return
+    rep = run(cfg, dry=args.dry_run)
+    s = rep["stats"]
+    print(f"\nDone: {s.get('emitted', 0)} records from {s.get('section_units', 0)} section "
+          f"units ({s.get('bulletins', 0)} bulletins). "
+          f"reconcile={rep['reconcile']['balances']}", file=sys.stderr)
 
 
 if __name__ == "__main__":
