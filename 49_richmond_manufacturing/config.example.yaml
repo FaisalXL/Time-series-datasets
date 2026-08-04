@@ -1,67 +1,100 @@
 # Richmond Fed Fifth District Survey of Manufacturing Activity → CPT world-knowledge JSONL
 #
-# One record = one release month: the monthly release narrative (which states the latest
-# month's diffusion-index readings) paired with the FULL history of those indices up to the
-# release month (expanding window). The prose *describes* the trajectory → "describes"
-# (EIA/BLS-tier). text_quality "real".
+# One record = (data month × the release's own narrative block): that block of the release
+# prose, verbatim, paired with a trailing 36-month window of exactly the indicators the
+# block names, ending on the month the release reports. alignment is measured per record
+# ("recites" when the prose quotes a channel's terminal value, else "describes").
+# text_quality "real" — nothing in the text is generated; <ts></ts> is appended directly
+# to the Bank's own words and provenance lives in meta.
+#
+# ⚠ THE SERIES IS NOT THE PUBLISHED WORKBOOK. The release's own Technical Notes say why:
+#   "Seasonal adjustment factors are recalculated every July and the entire series is
+#   revised."  Measured: the value a release printed still equals today's
+#   mfg_historicaldata.xlsx in only 27.9% of cells (2018-23: 11-20%; 2026: 100%), median
+#   drift 2.0 index points. So the series is the AS-FIRST-PUBLISHED vintage, stitched from
+#   each release's own results table. Run `--audit-vintage` to reproduce the number and
+#   `--audit-overlap` for the stitch's own consistency check.
 #
 # One of the Federal Reserve regional business surveys (see docs/fed_surveys_discovery.md).
-# Siblings: 47_philadelphia_mbos, 48_dallas_tmos; Richmond also runs a Non-Manufacturing
-# (service sector) survey — a separate package.
+# Sibling: 50_richmond_nonmanufacturing — same bank, same document shapes, identical
+# scripts; everything that differs between them lives in this file.
 #
 # License: Federal Reserve Bank publications are U.S. public domain / freely reusable.
-# ⚠ The index SERIES are also on FRED (Oliver's #9); the novel element is the
-#   release-narrative pairing. Get overlap sign-off before scaling. See NOTION_PAGE.md.
 #
 # Quick start:
 #   pip install -r requirements.txt        # + poppler (pdftotext)
+#   python scripts/harvest.py                                # fetch releases (cached)
 #   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=3
-#   python scripts/build_cpt_jsonl.py                                  # demo (50)
-#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build (~100)
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null   # full build
 
 data:
   bank: "Federal Reserve Bank of Richmond"
   survey_title: "Fifth District Survey of Manufacturing Activity"
   district: 5
   domain: "manufacturing"
+  region: "US"
+  survey_key: "mfg"                 # selects the filename vocabulary in scripts/richsrc.py
+  dataset_name: "richmond_manufacturing"
+  series_id_prefix: "rich_mfg"
+  license_tag: "public-domain-us-gov"
 
-  # Diffusion-index workbook (.xlsx; stdlib-parsed). DATE col = Excel serial; monthly,
-  # composite + core indices from Nov-1993, cap-util/wages from ~1997.
-  data_xlsx_url: "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/manufacturing/data/mfg_historicaldata.xlsx"
-
-  # Release PDFs are named by RELEASE DATE (mfg_MM_DD_YY.pdf), ~4th Tuesday of the month,
-  # under /{YYYY}/pdf/. There is no clean archive listing, so the build COMPUTES the
-  # candidate release date and probes nearby days. Real PDFs exist ~2018 -> present.
-  pdf_dir_template: "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/manufacturing/{year}/pdf/mfg_{mm}_{dd}_{yy}.pdf"
-
-  # SA current-month diffusion channels (workbook column -> channel name). The narrative
-  # recites each. Composite = weighted avg of shipments (33%) + new orders (40%) + emp (27%).
-  channels:
-    - {col: "sa_mfg_composite",    name: "composite_index"}
-    - {col: "sa_mfg_ship_c",       name: "shipments"}
-    - {col: "sa_mfg_new_orders_c", name: "new_orders"}
-    - {col: "sa_mfg_emp_c",        name: "employment"}
-    - {col: "sa_mfg_bk_logs_c",    name: "order_backlog"}
-    - {col: "sa_mfg_cap_util_c",   name: "capacity_utilization"}
-    - {col: "sa_mfg_wage_c",       name: "wages"}
-
-  min_points: 2              # expanding window: full index history to the release month (>= this many points)
-  min_text_year: 2017        # release PDFs only exist ~2018+; skip older months (avoid wasted probes)
   # canonical originating page (schema v1 `source` must be a URL)
   source_url: "https://www.richmondfed.org/research/regional_economy/surveys_of_business_conditions/manufacturing"
+
+  # The Bank's published (revised) workbook. Used ONLY by --audit-vintage, never as the
+  # record series. Cached under its own name so the cache is self-describing.
+  data_xlsx_url: "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/manufacturing/data/mfg_historicaldata.xlsx"
+  workbook_cache_name: "mfg_historicaldata.xlsx"
+
+  # Window: 36 months, the same size 47_philadelphia_mbos and 48_dallas_tmos settled on,
+  # and comfortably above the model's 32-point patch. Every emitted channel is exactly
+  # this long; a channel over the null budget drops the record rather than being padded.
+  window_months: 36
+  max_null_fraction: 0.15
+
+  # The data-month convention FLIPPED inside the 2005-2007 gap: a 1997-2004 release
+  # reports month M-1 (the January 2000 release tables December 1999), a 2008+ release
+  # reports M. Nothing here is used unless a release's table carries no month labels at
+  # all — `--audit-convention` measures the rule from the tables' own headings.
+  modern_era_start: "2005-01"
+  data_month_offset_by_era: {retired: 1, modern: 0}
+
   cache_dir: ".cache"
-  user_agent: "CPT-dataset-research faisal@usc.edu"
+  user_agent: "CPT-dataset-research flnu@usc.edu"
   request_delay_s: 0.3
   timeout_s: 60
 
+  # channel → (current-conditions column, six-months-ahead column) in the published
+  # workbook. --audit-vintage only; prices are NSA in the workbook, as in the release.
+  workbook_columns:
+    composite_index:             ["sa_mfg_composite", null]
+    shipments:                   ["sa_mfg_ship_c", "sa_mfg_ship_e"]
+    new_orders:                  ["sa_mfg_new_orders_c", "sa_mfg_new_orders_e"]
+    order_backlog:               ["sa_mfg_bk_logs_c", "sa_mfg_bk_logs_e"]
+    capacity_utilization:        ["sa_mfg_cap_util_c", "sa_mfg_cap_util_e"]
+    vendor_lead_time:            ["sa_mfg_vend_lead_c", "sa_mfg_vend_lead_e"]
+    employment:                  ["sa_mfg_emp_c", "sa_mfg_emp_e"]
+    average_workweek:            ["sa_mfg_workwk_c", "sa_mfg_workwk_e"]
+    wages:                       ["sa_mfg_wage_c", "sa_mfg_wage_e"]
+    capital_expenditures:        ["sa_mfg_capital_expnd_c", "sa_mfg_capital_expnd_e"]
+    finished_goods_inventories:  ["sa_mfg_fd_gds_inv_c", "sa_mfg_fd_gds_inv_e"]
+    raw_materials_inventories:   ["sa_mfg_raw_mats_inv_c", "sa_mfg_raw_mats_inv_e"]
+    local_business_conditions:   ["sa_mfg_local_bus_cond_c", "sa_mfg_local_bus_cond_e"]
+    skills_availability:         ["sa_mfg_nec_skls_avail_c", "sa_mfg_nec_skls_avail_e"]
+    equipment_software_spending: ["sa_mfg_equip_sftw_expnd_c", "sa_mfg_equip_sftw_expnd_e"]
+    services_expenditures:       ["sa_mfg_bus_svcs_expnd_c", "sa_mfg_bus_svcs_expnd_e"]
+    prices_paid:                 ["nsa_mfg_pct_chg_prcs_pd_c", "nsa_mfg_pct_chg_prcs_pd_e"]
+    prices_received:             ["nsa_mfg_pct_chg_prcs_recd_c", "nsa_mfg_pct_chg_prcs_recd_e"]
+
 text:
-  min_text_chars: 250
-  # No templated ts_intro: <ts></ts> is appended directly to the real scraped narrative,
-  # nothing is generated.
+  # 120 chars, matching 47_philadelphia_mbos. The 2018+ releases write short paragraphs, so
+  # this floor is what most of the dropped block units are; `drop_short_text` in the run
+  # report is the exact cost of the choice.
+  min_text_chars: 120
 
 output:
   output_path: output/richmond_manufacturing_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
-  max_records: 50            # demo cap. null = full build (~100 releases, 2018->present)
+  max_records: null                 # null = full build
   indent: null

@@ -1,78 +1,141 @@
 {
+  "stats": {
+    "release_date_from_filename_only": 19,
+    "release_date_corrected_from_document": 1,
+    "releases_merged_after_date_correction": 24,
+    "releases_seen": 309,
+    "releases_with_table": 295,
+    "releases_with_blocks": 309,
+    "block_units": 1455,
+    "drop_no_indicator_named": 94,
+    "channel_dropped_over_null_budget": 2211,
+    "drop_sparse_or_short_window": 333,
+    "drop_release_no_table": 14,
+    "drop_blocks_no_table": 73,
+    "emitted": 1003,
+    "drop_short_text": 25
+  },
+  "reconcile": {
+    "block_units": 1528,
+    "accounted": 1528,
+    "balances": true
+  },
+  "recites": 256,
+  "describes": 747,
+  "figures_in_text": 2913,
+  "figures_not_in_own_series": 55,
   "survey": "Fifth District Survey of Manufacturing Activity",
   "bank": "Federal Reserve Bank of Richmond",
-  "window": "expanding (full index history to each release month)",
-  "channels": [
-    "composite_index",
-    "shipments",
-    "new_orders",
-    "employment",
-    "order_backlog",
-    "capacity_utilization",
-    "wages"
-  ],
-  "stats": {
-    "months_with_window": 50,
-    "emitted": 50,
-    "no_text": 0,
-    "short_text": 0,
-    "short_window": 0,
-    "invalid": 0
-  },
+  "dataset": "richmond_manufacturing",
+  "window": "trailing 36 months, as-published vintage",
   "config_snapshot": {
     "data": {
       "bank": "Federal Reserve Bank of Richmond",
       "survey_title": "Fifth District Survey of Manufacturing Activity",
       "district": 5,
       "domain": "manufacturing",
-      "data_xlsx_url": "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/manufacturing/data/mfg_historicaldata.xlsx",
-      "pdf_dir_template": "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/manufacturing/{year}/pdf/mfg_{mm}_{dd}_{yy}.pdf",
-      "channels": [
-        {
-          "col": "sa_mfg_composite",
-          "name": "composite_index"
-        },
-        {
-          "col": "sa_mfg_ship_c",
-          "name": "shipments"
-        },
-        {
-          "col": "sa_mfg_new_orders_c",
-          "name": "new_orders"
-        },
-        {
-          "col": "sa_mfg_emp_c",
-          "name": "employment"
-        },
-        {
-          "col": "sa_mfg_bk_logs_c",
-          "name": "order_backlog"
-        },
-        {
-          "col": "sa_mfg_cap_util_c",
-          "name": "capacity_utilization"
-        },
-        {
-          "col": "sa_mfg_wage_c",
-          "name": "wages"
-        }
-      ],
-      "min_points": 2,
-      "min_text_year": 2017,
+      "region": "US",
+      "survey_key": "mfg",
+      "dataset_name": "richmond_manufacturing",
+      "series_id_prefix": "rich_mfg",
+      "license_tag": "public-domain-us-gov",
       "source_url": "https://www.richmondfed.org/research/regional_economy/surveys_of_business_conditions/manufacturing",
+      "data_xlsx_url": "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/manufacturing/data/mfg_historicaldata.xlsx",
+      "workbook_cache_name": "mfg_historicaldata.xlsx",
+      "window_months": 36,
+      "max_null_fraction": 0.15,
+      "modern_era_start": "2005-01",
+      "data_month_offset_by_era": {
+        "retired": 1,
+        "modern": 0
+      },
       "cache_dir": ".cache",
-      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "user_agent": "CPT-dataset-research flnu@usc.edu",
       "request_delay_s": 0.3,
-      "timeout_s": 60
+      "timeout_s": 60,
+      "workbook_columns": {
+        "composite_index": [
+          "sa_mfg_composite",
+          null
+        ],
+        "shipments": [
+          "sa_mfg_ship_c",
+          "sa_mfg_ship_e"
+        ],
+        "new_orders": [
+          "sa_mfg_new_orders_c",
+          "sa_mfg_new_orders_e"
+        ],
+        "order_backlog": [
+          "sa_mfg_bk_logs_c",
+          "sa_mfg_bk_logs_e"
+        ],
+        "capacity_utilization": [
+          "sa_mfg_cap_util_c",
+          "sa_mfg_cap_util_e"
+        ],
+        "vendor_lead_time": [
+          "sa_mfg_vend_lead_c",
+          "sa_mfg_vend_lead_e"
+        ],
+        "employment": [
+          "sa_mfg_emp_c",
+          "sa_mfg_emp_e"
+        ],
+        "average_workweek": [
+          "sa_mfg_workwk_c",
+          "sa_mfg_workwk_e"
+        ],
+        "wages": [
+          "sa_mfg_wage_c",
+          "sa_mfg_wage_e"
+        ],
+        "capital_expenditures": [
+          "sa_mfg_capital_expnd_c",
+          "sa_mfg_capital_expnd_e"
+        ],
+        "finished_goods_inventories": [
+          "sa_mfg_fd_gds_inv_c",
+          "sa_mfg_fd_gds_inv_e"
+        ],
+        "raw_materials_inventories": [
+          "sa_mfg_raw_mats_inv_c",
+          "sa_mfg_raw_mats_inv_e"
+        ],
+        "local_business_conditions": [
+          "sa_mfg_local_bus_cond_c",
+          "sa_mfg_local_bus_cond_e"
+        ],
+        "skills_availability": [
+          "sa_mfg_nec_skls_avail_c",
+          "sa_mfg_nec_skls_avail_e"
+        ],
+        "equipment_software_spending": [
+          "sa_mfg_equip_sftw_expnd_c",
+          "sa_mfg_equip_sftw_expnd_e"
+        ],
+        "services_expenditures": [
+          "sa_mfg_bus_svcs_expnd_c",
+          "sa_mfg_bus_svcs_expnd_e"
+        ],
+        "prices_paid": [
+          "nsa_mfg_pct_chg_prcs_pd_c",
+          "nsa_mfg_pct_chg_prcs_pd_e"
+        ],
+        "prices_received": [
+          "nsa_mfg_pct_chg_prcs_recd_c",
+          "nsa_mfg_pct_chg_prcs_recd_e"
+        ]
+      }
     },
     "text": {
-      "min_text_chars": 250
+      "min_text_chars": 120
     },
     "output": {
       "output_path": "output/richmond_manufacturing_cpt.jsonl",
       "report_path": "output/run_report.json",
       "samples_path": "samples/example_output.jsonl",
-      "max_records": 50,
+      "max_records": null,
       "indent": null
     }
   },
