@@ -1,0 +1,202 @@
+# FNSPID → CPT, FULL-SCALE config (prepared 2026-08-04, HELD for sign-off)
+#
+# ⚠ DO NOT RUN until three gates clear — see PREREQ block below. This file exists
+#   so the run is ready on approval, per the 2026-08-03 meeting handoff.
+#
+# Every knob below is set from a measurement, not a guess. Measurements were taken
+# on 2026-08-04 by scanning the full 15.5M-row news CSV (scratchpad/fnspid_census.py,
+# fnspid_gates.py, fnspid_dedup.py). The model reproduces the previous build's own
+# run_report to within 0.6% (modelled 154,615 vs actual groups_retained 155,529),
+# so the yield curve below is trustworthy.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# MEASURED UNIVERSE
+#   15,549,299 news rows scanned
+#    3,735,344 rows carry an article body ≥200 chars   (24.0% — matches README's 3.74M)
+#   −1,244,084 dropped, no Stock_symbol
+#   −   73,675 dropped, no price CSV for that symbol
+#   =1,174,361 unique (ticker, date) pairs  ← TRUE UNCAPPED CEILING, 4,653 tickers
+#
+# YIELD vs max_per_ticker (measured, no month cap):
+#     40 →   156,028   (the shipped 2026-07-24 build: 155,529 actual)
+#     80 →   274,277
+#    120 →   369,152
+#    200 →   518,039
+#    300 →   656,822
+#    500 →   837,304
+#   null → 1,174,361
+#
+# ⚠ THE CAP IS NOT A SAMPLE. The news CSV is sorted by ticker, then date
+#   DESCENDING, and the builder applies caps in file order (build_cpt_from_hf.py
+#   L294). So max_per_ticker=40 takes each ticker's 40 MOST RECENT dates — the
+#   existing 156k build is recency-biased toward 2022–23, not a 2009–2023 sample.
+#   Going uncapped removes the bias entirely (you take everything). That is one
+#   more reason to run uncapped rather than at an intermediate cap.
+#
+# CONCENTRATION at uncapped (measured) — healthy, no cap needed for diversity:
+#   top 10 tickers = 2.4% of pairs · top 100 = 17.2% · median 104 pairs/ticker
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# PREREQ — three gates, all open as of 2026-08-04:
+#   G1  LICENSE (B8). CC BY-NC 4.0 go/no-go. Awaiting Faisal.
+#   G2  LICENSE ENUM. The frozen v1 enum is
+#       {public-domain-us-gov, cc-by-4.0, cc0, proprietary-review, unknown} —
+#       it has NO slot for CC BY-NC. cc-by-4.0 would be a false identifier (the
+#       NC clause is the entire question). So FNSPID must ship as
+#       `proprietary-review`, which SCHEMA.md §6 defines as "Excluded from any
+#       release until cleared." Needs either a schema amendment (add
+#       `cc-by-nc-4.0`) or an explicit decision to ship quarantined. This is the
+#       same friction already logged for the NDMC/USDM subset (REVIEW_STATUS §5).
+#   G3  SCHEMA §7 MAJORITY RULE — the big one. FNSPID is `contextualizes`
+#       (third-party news vs OHLCV). SCHEMA.md §7 says contextualizes
+#       "Qualifies with care … never the majority of the corpus." At 300–800k
+#       against a 176k non-contextualizes base, FNSPID would be 63–82% of the
+#       corpus. The 1M-via-FNSPID plan therefore conflicts with the schema's own
+#       qualification backbone. Either §7 is amended, or FNSPID is capped at
+#       ~parity with the recites/describes total.
+#
+#   ALSO BLOCKING, but ours to fix and NOT waiting on anyone (do this first):
+#   G4  The builder is pre-schema-v1. `validate.py output/fnspid_cpt.jsonl
+#       --strict` returns 0/5000 passed — `license` outside vocab and `source`
+#       not a URL. It also emits no `alignment`/`domain`/`region`/
+#       `period_start`/`period_end` and scatters dataset keys (ticker,
+#       news_date, trading_dates…) at top level instead of under `meta`.
+#       Retrofit to schema/emit.py BEFORE any large run, or the run produces
+#       ~1.2M non-conforming records.
+
+data:
+  news_csv:   "../../raw_data/05_fnspid/Stock_news/nasdaq_exteral_data.csv"
+  prices_dir: "../../raw_data/05_fnspid/prices/full_history"
+  tickers_filter: []
+  date_min: null
+  date_max: null
+  max_news_rows: null
+
+  # MEASURED: the meeting's relaxed window floor is ~32; the old value (30) was
+  # BELOW it. Raising it is almost free, because price history is dense daily
+  # data — the only pairs lost are those too close to a ticker's listing date:
+  #   floor 15 → lose 11,622 (0.99%)   ceiling 1,162,739
+  #   floor 32 → lose 12,584 (1.07%)   ceiling 1,161,777
+  #   floor 64 → lose 14,354 (1.22%)   ceiling 1,160,007
+  #   floor 90 → lose 16,123 (1.37%)   ceiling 1,158,238
+  # Going 30 → 90 costs 0.38% of volume and triples series depth. Take it.
+  # Target 90, accept down to the 32 floor rather than discard short-history pairs.
+  history_days: 90
+  min_history_days: 32
+
+  channels: ["open", "high", "low", "close", "adj_close", "volume"]
+
+filters:
+  # MEASURED: 828,997 of 1,174,361 pairs (70.6%) have an article that names the
+  # ticker. This is a FREE structural filter — no GPU, deterministic — and it
+  # targets the same attribution noise the B1 LLM judge drops at 46%. Run it
+  # FIRST so the judge only sees ~829k rows instead of 1.17M (≈30% less GPU).
+  # NOTE: 70.6% is a lower bound from my own matcher (title + first 1200 chars,
+  # uppercase-token match). The builder's symbol_mentioned() differs — it is
+  # stricter for 1–2 char tickers, looser for ≥3 char. The pilot must measure
+  # the real rate; do not quote 70.6% as the builder's number.
+  require_symbol_in_text: true
+
+  min_article_chars: 200
+  max_articles_per_record: 5
+
+sampling:
+  # Uncapped. Rationale above: (a) 1.16M is the ceiling and we want most of it,
+  # (b) any intermediate cap is a recency slice rather than a sample, (c) the
+  # uncapped pool is already well spread across tickers.
+  # If G3 forces a volume cap, do NOT lower max_per_ticker to get there — that
+  # reintroduces the recency bias. Cap by a seeded random down-sample at the end
+  # (output.max_records) so the temporal spread is preserved.
+  max_per_ticker: null
+  max_per_ticker_month: null
+  random_seed: 42
+
+text:
+  # MEASURED against the 500-token cap, with tiktoken cl100k_base:
+  #   FNSPID text runs 4.48 chars/token. The old max_chars=3000 yields a median
+  #   of 622 tokens and puts 74.5% of records OVER the cap.
+  #   500 tokens × 4.48 = ~2,240 chars.
+  # Concatenated article text per pair is much longer than the cap either way
+  # (median 4,557 chars, p90 14,180), so only 22.3% of pairs fit natively.
+  #
+  # DECISION: truncate, do not summarize. Truncated real article text stays
+  # `text_quality: real` and needs no sign-off, whereas llm_summarized records
+  # cannot ship until the team signs off on the tag — which would put FNSPID
+  # behind a FOURTH gate. News is inverted-pyramid, so the first ~2,200 chars
+  # carry the lede and the substance.
+  #
+  # ⚠ CODE FIX REQUIRED FIRST: build_cpt_from_hf.py L~408 does
+  #   article_block[:text_cap].rstrip() — a hard mid-sentence, mid-word cut.
+  #   (That is why every shipped record is exactly 3,002 chars.) Truncate at the
+  #   last sentence boundary at or before the cap instead.
+  max_chars: 2240
+
+relevance:
+  # B1 extractive judge — ON by default per the meeting. Text is never rewritten
+  # and the judge never sees the price window, so there is no leakage and no new
+  # tag. Reference keep-rate 54.5% (n=5,000, gemma4-31b).
+  #
+  # ⚠ THE JUDGE IS THE 1M SWING FACTOR. At the uncapped ceiling:
+  #     free symbol filter only : 1,161,777 × 70.6% ≈  820,000  → +176k = ~996k
+  #     symbol filter + judge   : ~820k × judge-rate            → 615–660k est.
+  #   The corpus lands at ~1.00M on the free filter alone and ~790–835k with the
+  #   judge. Run the judge — quality is the point, and Zink's Text+TS vs TS-only
+  #   pipeline (3–5 days out) is what should settle it — but budget a second
+  #   ~200k lever for the gap rather than assuming FNSPID closes it.
+  #
+  # THROUGHPUT: 4 lanes × concurrency 8 = 32 in flight. At ~2s/call that is
+  # ~16 req/s → 829k rows ≈ 14.4 h. Raise concurrency if the vLLM pool allows;
+  # this is the longest single step in the plan.
+  base_url: "http://ds-serv10.ucsd.edu:8004/v1"
+  base_urls:
+    - "http://ds-serv10.ucsd.edu:8004/v1"
+    - "http://ds-serv10.ucsd.edu:8005/v1"
+    - "http://ds-serv10.ucsd.edu:8006/v1"
+    - "http://ds-serv10.ucsd.edu:8007/v1"
+  api_key: "EMPTY"
+  model: "gemma4-31b-it"
+  system_role: false
+  enable_thinking: null
+  concurrency: 8
+  timeout_s: 60
+  max_retries: 3
+  temperature: 0.0
+  max_chars: 2500
+  min_confidence: 0.5
+  keep_on_parse_error: true
+  input_path:  "output/fnspid_cpt.jsonl"
+  output_path: "output/fnspid_cpt_filtered.jsonl"
+  report_path: "output/relevance_report.json"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CROSS-TICKER DEDUP — asked for in the handoff, NOT IMPLEMENTED in the builder.
+# build_cpt_from_hf.py L310 dedups only WITHIN a (ticker,date) group; nothing
+# stops one wire article backing records under many tickers.
+#
+# MEASURED: 1,179,989 distinct article texts back 2,400,034 (text,ticker)
+# taggings — mean 2.03 tickers/article.
+#   tagged to 1 ticker : 749,019 articles (63.5%)  ← cleanest records
+#   tagged to 2–5      : 404,298 articles (34.3%)
+#   tagged to >5       :  26,672 articles ( 2.2%) but 26.3% OF ALL TAGGINGS
+#
+# So 2.2% of articles generate 26.3% of the volume. Those are the wire
+# round-ups — structurally the same "broad-market noise" the B1 judge drops,
+# but identifiable for free from source metadata rather than by a heuristic or
+# a GPU. Recommended: drop articles tagged to >5 tickers as a pre-judge filter
+# and measure the overlap with the judge's verdicts on the pilot.
+# (Precedent: REVIEW_STATUS #55 — prefer structural source metadata to a
+# heuristic whose premise is unmeasured.)
+# ─────────────────────────────────────────────────────────────────────────────
+
+output:
+  output_path:  "output/fnspid_cpt.jsonl"
+  report_path:  "output/run_report.json"
+  samples_path: "samples/example_output.jsonl"
+
+  # PILOT FIRST. Leave this at 25000 and run the pilot to measure, against real
+  # output rather than a model: the builder's true require_symbol_in_text rate,
+  # the judge's keep-rate at the new caps, post-truncation token compliance,
+  # cross-ticker duplication, and wall-clock per 100k. Only then set null.
+  max_records: 25000
+
+  indent: null
