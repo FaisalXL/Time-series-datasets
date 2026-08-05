@@ -1,0 +1,191 @@
+# UK ONS statistical bulletins -> CPT world-knowledge JSONL
+#
+# One record = ONE ANALYTICAL SECTION of one ONS statistical bulletin edition: that section's
+# own VERBATIM prose paired with the trailing multi-channel window of the exact indicator
+# series the bulletin family reports. The prose RECITES the numbers ("CPIH rose by 2.8% in the
+# 12 months to June 2026, down from 3.0% the previous month") -> alignment = "recites",
+# evidence-checked per claim, never assumed.
+#
+# WHY SECTION-LEVEL: an ONS bulletin runs ~44,000 chars (~11,000 tokens) -- 22x the 500-token
+# text cap. One record per bulletin would throw away ~95% of real first-party prose. Each H2
+# section is its own self-contained analytical passage about its own sub-series, so
+# section-level records multiply scale WITHOUT duplicating prose (the dup problem that
+# multi-channel solved for WASDE #41).
+#
+# License: Open Government Licence v3.0 -- ONS's own terms state OGL v3 is interoperable with
+# CC BY 4.0, so `cc-by-4.0` is the closest-fit schema tag; the true grant is in
+# meta.true_license (same convention as INSEE #57 Etalab and RBNZ #60).
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --dry-run
+#   python scripts/build_cpt_jsonl.py                                   # demo
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null      # full build
+
+data:
+  # Any ONS page + "/data" returns JSON for TIME SERIES. It does NOT work for bulletins
+  # (confirmed 404) -- bulletin prose must come from HTML. Both are keyless, no API key.
+  series_url: "https://www.ons.gov.uk/{theme}/{subtopic}/timeseries/{cdid}/{dataset}/data"
+  bulletin_url: "https://www.ons.gov.uk/{theme}/{subtopic}/bulletins/{family}/{edition}"
+  # Enumeration of past editions. NOTE THE CASE: "previousreleases" all-lowercase.
+  # "previousReleases" (camelCase, the form the site's own nav suggests) 404s.
+  previous_releases_url: "https://www.ons.gov.uk/{theme}/{subtopic}/bulletins/{family}/previousreleases"
+
+  cache_dir: ".cache"
+  user_agent: "CPT-dataset-research faisal@usc.edu"
+  timeout_s: 120
+  retries: 4
+  # ONS rate-limits aggressively (observed HTTP 429 on back-to-back requests). Minimum
+  # seconds between LIVE requests; cached reads are free. Raise this for a full run.
+  min_interval_s: 3.0
+
+  # ---- bulletin families ----------------------------------------------------------------
+  # Each family = one ONS bulletin series + the curated channel set it reports on.
+  # Every CDID below was VERIFIED live against the series API (title + month count), not
+  # guessed. Add a family by adding an entry -- the pipeline is fully shared.
+  families:
+    - family: consumerpriceinflation
+      theme: economy
+      subtopic: inflationandpriceindices
+      dataset: mm23
+      domain: macro
+      region: GB
+      # The edition slug IS the reference month ("june2026" -> 2026-06). Verified against the
+      # bulletin's own prose ("...in the 12 months to June 2026"). This is NOT the FHFA #59
+      # case, where the URL month was the index month + 2 -- checked, not assumed.
+      slug_is_reference_month: true
+      # Words that must appear NEAR a figure for it to be credited to this channel
+      # (per-channel keyword proximity -- the fix that caught RBNZ #60's cross-channel
+      # false match). "CPI" vs "CPIH": \bCPI\b cannot match inside "CPIH", verified.
+      channels:
+        - {cdid: l55o, unit: cpih_annual_rate_pct,            keywords: ["CPIH"],            monthly_rate: false}
+        - {cdid: d7g7, unit: cpi_annual_rate_pct,             keywords: ["CPI"],             monthly_rate: false}
+        - {cdid: d7oe, unit: cpi_monthly_rate_pct,            keywords: ["CPI"],             monthly_rate: true}
+        - {cdid: d7bt, unit: cpi_index_2015_100,              keywords: ["CPI"],             index: true}
+        - {cdid: l522, unit: cpih_index_2015_100,             keywords: ["CPIH"],            index: true}
+        - {cdid: chaw, unit: rpi_all_items_index_1987_100,    keywords: ["RPI"],             index: true}
+        # 12 COICOP divisions -- CPI annual rate. Wide multi-channel, WASDE #41 style.
+        - {cdid: d7g8, unit: cpi_annual_rate_food_nonalc_pct, keywords: ["food", "non-alcoholic"]}
+        - {cdid: d7g9, unit: cpi_annual_rate_alcohol_tobacco_pct, keywords: ["alcohol", "tobacco"]}
+        - {cdid: d7ga, unit: cpi_annual_rate_clothing_footwear_pct, keywords: ["clothing", "footwear"]}
+        - {cdid: d7gb, unit: cpi_annual_rate_housing_water_fuels_pct, keywords: ["housing", "water", "fuels"]}
+        - {cdid: d7gc, unit: cpi_annual_rate_furniture_household_pct, keywords: ["furniture", "household equipment"]}
+        - {cdid: d7gd, unit: cpi_annual_rate_health_pct,      keywords: ["health"]}
+        - {cdid: d7ge, unit: cpi_annual_rate_transport_pct,   keywords: ["transport"]}
+        - {cdid: d7gf, unit: cpi_annual_rate_communication_pct, keywords: ["communication"]}
+        - {cdid: d7gg, unit: cpi_annual_rate_recreation_culture_pct, keywords: ["recreation", "culture"]}
+        - {cdid: d7gh, unit: cpi_annual_rate_education_pct,   keywords: ["education"]}
+        - {cdid: d7gi, unit: cpi_annual_rate_restaurants_hotels_pct, keywords: ["restaurant", "hotel", "cafe"]}
+        - {cdid: d7gj, unit: cpi_annual_rate_misc_goods_services_pct, keywords: ["miscellaneous"]}
+      # Editions to build in the demo. A full run enumerates via previous_releases_url and/or
+      # constructs {monthname}{year} directly -- the slug pattern is CONSTRUCTIBLE, which is
+      # exactly what FHFA #59 lacked. Verified boundary: 200 back to june2016, 404 at
+      # march2015 -- the live clean-URL floor sits between those two, confirm on a full run.
+      editions: [june2026, may2026, april2026, march2026]
+
+    # ---- SECOND FAMILY: proves the federation is config-only, no new code ----------------
+    # Measured via Wayback CDX: 129 archived editions of this bulletin, and 230 bulletin
+    # families across ONS's 4 themes (2,979 archived family-editions). This entry exists to
+    # demonstrate that adding a family costs a config block, not a build script.
+    # NOTE: only 3 CDIDs verified live so far -- the channel set is deliberately thin and
+    # should be widened before a full run (the CPI family has 18). Not padded with guesses.
+    - family: retailsales
+      theme: businessindustryandtrade
+      subtopic: retailindustry
+      dataset: drsi
+      domain: macro
+      region: GB
+      slug_is_reference_month: true
+      channels:
+        - {cdid: j5ec, unit: rsi_all_retail_incl_fuel_mom_pct, keywords: ["retail sales", "retail"]}
+        - {cdid: j4mc, unit: internet_sales_share_of_retail_pct, keywords: ["internet sales", "online"]}
+        - {cdid: eafv, unit: rsi_household_goods_stores_value_nsa_index, keywords: ["household goods"]}
+      editions: [june2026, may2026]
+
+series:
+  freq: "1M"              # 1M = one MONTH. (1m = one MINUTE -- see README "freq token" note.)
+  window_months: 36       # >32, per the 2026-08-03 meeting floor. Sources hold 450 months.
+  min_points: 32          # hard floor; a channel shorter than this drops the record
+
+text:
+  # ---- the 500-token cap (2026-08-03 meeting) -------------------------------------------
+  max_chars: 2000         # ~500 tokens at ~4 chars/token
+  min_chars: 300          # below this the "section" is a stub -> dropped
+
+  # How a too-long section is cut down to the cap. ALL modes keep text 100% VERBATIM:
+  #   head             -- keep leading paragraphs in order until the cap (dumbest, baseline)
+  #   numeric_density  -- keep the CONTIGUOUS paragraph run with the most verifiable
+  #                       numeric claims, in source order (default; deterministic, no API key)
+  #   llm_extractive   -- an LLM CHOOSES the contiguous paragraph run; text still verbatim,
+  #                       text_quality stays "real". Same grounded-and-extractive shape as the
+  #                       FNSPID B1 relevance judge. Needs ANTHROPIC_API_KEY.
+  selector: numeric_density
+
+  # Abstractive LLM summarization (rewriting the source into <=500 tokens) is NOT enabled.
+  # It is blocked on a SCHEMA change, not on this script: schema/validate.py allows only
+  # text_quality in {"real","generated"} -- there is no `llm_summarized` value yet, and
+  # "generated" would wrongly conflate a grounded summary of a real document with fully
+  # synthetic text. See README "The LLM question". Setting this true raises a clear error.
+  abstractive_summary: false
+  llm_model: claude-sonnet-5
+
+  # Boilerplate sections -- never analytical prose about the series.
+  exclude_anchors:
+    - glossary
+    - data-sources-and-quality
+    - related-links
+    - cite-this-statistical-bulletin
+    - measuring-the-data
+    - strengths-and-limitations
+    - future-developments
+  # A section must contain at least this many percent-figures to qualify as analytical.
+  # This is a second, self-enforcing gate: it drops boilerplate the anchor list misses.
+  min_figures: 2
+
+  # ---- evidence attribution guards ------------------------------------------------------
+  # An ONS bulletin discusses MORE series than any channel set holds -- "core CPIH", "CPIH
+  # goods", "CPI services", contributions. In the first build 4 of 9 evidence matches on one
+  # record were FALSE for exactly this reason: a "core CPIH" figure and a "CPIH goods" figure
+  # coincidentally equalled headline values and were credited to the headline channels.
+  # If any of these modifiers appears in the figure's own clause and the candidate channel is
+  # not that series, the figure is left UNATTRIBUTED rather than credited to the wrong channel.
+  # Silence is cheap; a polluted evidence array inflates apparent quality.
+  disqualifying_terms:
+    - core
+    - excluding
+    - goods
+    - services
+    - contribution
+    - contributions
+    # NOT "owner occupiers": CPIH's own full name is "...including owner occupiers' housing
+    # costs", so blocking it disqualifies every headline CPIH claim in the bulletin. Adding it
+    # cost the single best CPIH match in the demo before this was caught -- a guard that fires
+    # on a series' OWN NAME is a false-negative generator, not a guard.
+    - seasonally adjusted
+    - annual average
+    - equivalent rent
+
+  # Near-duplicate ceiling on same-section text within a family. Measured baseline on the
+  # demo: 0.806 between consecutive editions of the same section, so 0.93 drops genuine
+  # near-copies without touching the normal month-to-month template reuse. null disables.
+  max_similarity: 0.93
+
+  # A verbatim superlative that contradicts its own paired data is a real risk (caught on
+  # FAS GAIN #58) -- but here auto-dropping is UNSAFE and is off by default.
+  #
+  # Why: every "contradiction" this build produced was a FALSE POSITIVE from channel
+  # mis-attribution, not a bad source claim. Three came from COICOP-04 "housing" absorbing
+  # "housing and household services" / "owner occupiers' housing costs" / "domestic heating
+  # oil"; one came from the retail family, where the bulletin quotes an online-sales share of
+  # 29.4% while the wired CDID (j4mc) reads 28.3% -- a WRONG SERIES VARIANT, not a
+  # contradiction. GAIN #58 could drop safely because its channels were value-verified against
+  # the text; ONS bulletins reference far more series than any channel set holds, so a drop
+  # here silently deletes good records. Superlatives are flagged in meta instead.
+  # Turn this on for a family only AFTER that family's channels are value-verified.
+  drop_on_superlative_contradiction: false
+
+output:
+  path: output/ons_bulletins_cpt.jsonl
+  run_report: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 12         # demo cap. null = full build.
