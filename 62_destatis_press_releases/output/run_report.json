@@ -1,0 +1,185 @@
+{
+  "dataset": "destatis_press_releases",
+  "stats": {
+    "evidence_rejected_no_keyword": 69,
+    "evidence_rejected_reject_term": 4,
+    "evidence_rejected_value_mismatch": 43,
+    "describes": 6,
+    "recites": 2,
+    "emitted": 8,
+    "evidence_claims": 2,
+    "evidence_per_record": 0.25
+  },
+  "config_snapshot": {
+    "data": {
+      "release_url": "https://www.destatis.de/EN/Press/{year}/{month}/{slug}.html",
+      "eurostat_url": "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/{dataset}",
+      "cache_dir": ".cache",
+      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "timeout_s": 120,
+      "retries": 4,
+      "min_interval_s": 2.0,
+      "geo": "DE",
+      "channels": [
+        {
+          "dataset": "prc_hicp_manr",
+          "coicop": "CP00",
+          "unit": "RCH_A",
+          "name": "hicp_annual_rate_pct",
+          "keywords": [
+            "harmonised",
+            "HICP"
+          ],
+          "reject_terms": [
+            "core",
+            "excluding"
+          ]
+        },
+        {
+          "dataset": "prc_hicp_mmor",
+          "coicop": "CP00",
+          "unit": "RCH_M",
+          "name": "hicp_monthly_rate_pct",
+          "keywords": [
+            "harmonised",
+            "HICP"
+          ],
+          "reject_terms": [
+            "core",
+            "excluding"
+          ]
+        },
+        {
+          "dataset": "prc_hicp_midx",
+          "coicop": "CP00",
+          "unit": "I15",
+          "name": "hicp_index_2015_100",
+          "keywords": [
+            "harmonised",
+            "HICP"
+          ],
+          "reject_terms": []
+        },
+        {
+          "dataset": "prc_hicp_manr",
+          "coicop": "CP01",
+          "unit": "RCH_A",
+          "name": "hicp_annual_rate_food_nonalc_pct",
+          "keywords": [
+            "food"
+          ],
+          "reject_terms": [
+            "excluding"
+          ]
+        },
+        {
+          "dataset": "prc_hicp_manr",
+          "coicop": "CP04",
+          "unit": "RCH_A",
+          "name": "hicp_annual_rate_housing_energy_pct",
+          "keywords": [
+            "housing"
+          ],
+          "reject_terms": []
+        },
+        {
+          "dataset": "prc_hicp_manr",
+          "coicop": "CP045",
+          "unit": "RCH_A",
+          "name": "hicp_annual_rate_electricity_gas_fuels_pct",
+          "keywords": [
+            "electricity",
+            "gas",
+            "energy"
+          ],
+          "reject_terms": []
+        },
+        {
+          "dataset": "prc_hicp_manr",
+          "coicop": "CP07",
+          "unit": "RCH_A",
+          "name": "hicp_annual_rate_transport_pct",
+          "keywords": [
+            "transport"
+          ],
+          "reject_terms": []
+        },
+        {
+          "dataset": "prc_hicp_manr",
+          "coicop": "CP11",
+          "unit": "RCH_A",
+          "name": "hicp_annual_rate_restaurants_hotels_pct",
+          "keywords": [
+            "restaurant",
+            "hotel",
+            "catering"
+          ],
+          "reject_terms": []
+        }
+      ],
+      "releases": [
+        {
+          "year": 2024,
+          "month": "01",
+          "slug": "PE24_003_611"
+        },
+        {
+          "year": 2024,
+          "month": "01",
+          "slug": "PE24_020_611"
+        },
+        {
+          "year": 2024,
+          "month": "01",
+          "slug": "PE24_042_611"
+        },
+        {
+          "year": 2024,
+          "month": "02",
+          "slug": "PE24_051_611"
+        },
+        {
+          "year": 2024,
+          "month": "02",
+          "slug": "PE24_078_611"
+        },
+        {
+          "year": 2024,
+          "month": "03",
+          "slug": "PE24_094_611"
+        },
+        {
+          "year": 2024,
+          "month": "04",
+          "slug": "PE24_133_611"
+        },
+        {
+          "year": 2024,
+          "month": "04",
+          "slug": "PE24_150_611"
+        }
+      ]
+    },
+    "series": {
+      "freq": "1M",
+      "window_months": 36,
+      "min_points": 32
+    },
+    "text": {
+      "max_chars": 2000,
+      "min_chars": 300,
+      "selector": "numeric_density",
+      "abstractive_summary": false,
+      "min_words": 18,
+      "drop_chrome": true,
+      "max_similarity": 0.93,
+      "drop_on_superlative_contradiction": false
+    },
+    "output": {
+      "path": "output/NOT_SHIPPABLE_negative_result.jsonl",
+      "run_report": "output/run_report.json",
+      "samples_path": "samples/NOT_SHIPPABLE_negative_result.jsonl",
+      "max_records": null
+    }
+  }
+}
