@@ -1,0 +1,20 @@
+{
+ "built_at": "2026-08-06T19:21:06Z",
+ "config": "/data/defu/Time-series-datasets/05_fnspid/config.fullscale.yaml",
+ "news_csv": "/data/defu/Time-series-datasets/05_fnspid/../../raw_data/05_fnspid/Stock_news/nasdaq_exteral_data.csv",
+ "rows_scanned": 15549299,
+ "candidate_pairs": 1174361,
+ "distinct_tickers": 4653,
+ "distinct_articles": 1173198,
+ "roundup_articles_gt5_tickers": 27222,
+ "drops": {
+  "drop_duplicate_body": 5062,
+  "drop_short_or_missing_body": 3253412,
+  "drop_no_price_csv": 73675,
+  "drop_no_symbol_or_date": 9804627
+ },
+ "elapsed_s": 270.3,
+ "peak_rss_gb": 11.9,
+ "candidates_path": "/data/defu/Time-series-datasets/05_fnspid/.cache/candidates.jsonl",
+ "candidates_bytes": 7870751889
+}
