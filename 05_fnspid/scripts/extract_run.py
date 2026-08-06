@@ -21,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fnspid_emit import company_of, load_ticker_names  # noqa: E402
 from fnspid_emit import split_sentences as _split  # noqa: E402
 
 SYSTEM = ("You classify financial news for a research corpus. You select sentences. You never "
@@ -138,10 +139,7 @@ def main():
 
     tk = rec["meta"]["ticker"]
     body = rec["text"].split("\n\n<ts></ts>")[0]
-    nm = json.load(open("/tmp/claude-1091/-data-defu/8cb78ef9-b56f-4451-809a-2a5ba65e3a46/"
-                        "scratchpad/name_recover.json"))["resolved"].get(tk, tk) \
-        if Path("/tmp/claude-1091/-data-defu/8cb78ef9-b56f-4451-809a-2a5ba65e3a46/"
-                "scratchpad/name_recover.json").exists() else tk
+    nm = company_of(tk, load_ticker_names(ROOT / "data" / "ticker_names.json"))
     sents, user = render(tk, nm, body)
 
     print("=" * 96)
