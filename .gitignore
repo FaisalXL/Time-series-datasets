@@ -17,6 +17,11 @@
 **/output/*.jsonl
 **/output/*.log
 
+# Rendered inspection pages. These embed the record text verbatim, so committing one
+# would put corpus prose back into the repo through a different file extension — the
+# same content the rule above keeps out. Regenerate locally with the render script.
+**/output/*.html
+
 **/NOTION_PAGE.md
 
 # Stale raw XML left in 41_wasde/data — the builder downloads its own copies into
