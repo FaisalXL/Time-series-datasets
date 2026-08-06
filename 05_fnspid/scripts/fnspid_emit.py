@@ -27,6 +27,7 @@ Three decisions encoded here, each of which was a defect in the previous build:
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -65,6 +66,75 @@ _ABBRS = {
     "sept", "oct", "nov", "dec", "q1", "q2", "q3", "q4",
 }
 _BOUNDARY = re.compile(r'([.!?])(["\')\]]?)(\s+)(?=[A-Z0-9"\'(])')
+
+
+# Harvested company names sometimes captured only the legal suffix, or a publisher fragment
+# ("The Motley Fool. Aaon"). A wrong company name actively steers the extraction, so these
+# fall back to the bare ticker instead.
+_BAD_NAME = {"inc", "corp", "corporation", "co", "cos", "ltd", "limited", "llc", "plc", "lp",
+             "group", "holdings", "company", "etf", "trust", "systems", "technologies",
+             "technology", "international", "industries", "partners", "nv", "sa"}
+
+
+def load_ticker_names(path) -> Dict[str, str]:
+    """Load the ticker -> company map, or {} if it is absent (the prompt then uses tickers)."""
+    from pathlib import Path as _P
+    p = _P(path)
+    if not p.exists():
+        return {}
+    with open(p, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+# Publisher bylines the harvester swallowed into the name ("The Motley Fool. Aaon"). Stripped
+# by an explicit list rather than by splitting on ". ", because 51 legitimate names contain a
+# real ". " -- "Core U.S. Aggregate Bond", "JPMorgan BetaBuilders U.S. Equity" -- and a naive
+# split turns those into "Aggregate Bond".
+_PUBLISHER_PREFIX = ("the motley fool. ", "motley fool. ", "fool. ")
+
+
+def company_of(ticker: str, names: Dict[str, str]) -> str:
+    nm = (names.get(ticker) or "").strip()
+    for p in _PUBLISHER_PREFIX:
+        if nm.lower().startswith(p):
+            nm = nm[len(p):].strip()
+            break
+    if not nm or len(nm) < 4 or nm.strip(". ").lower() in _BAD_NAME:
+        return ticker
+    return nm
+
+
+_EXCHANGES = ("NASDAQ", "NYSE", "NYSEARCA", "NYSEAMERICAN", "NYSEMKT", "AMEX", "OTC",
+              "OTCMKTS", "OTCBB", "CBOE", "BATS", "TSX", "TSXV", "LSE", "SYMBOL", "TICKER")
+
+
+def symbol_named_in_text(sym: str, title: str, head: str) -> bool:
+    """Does this article actually name this ticker?
+
+    Explicit exchange markers count at any ticker length; a bare word-boundary match only
+    counts at >=3 chars, because 1-2 letter tickers collide with ordinary English ("A",
+    "IT", "ON", "ALL").
+
+    The colon spacing is NOT optional to get right. FNSPID wires write both `(NYSE: A)` and
+    `(NYSE:A)`, and the no-space form is 23.2% of all markers (measured over 40k pairs). A
+    fixed-string test for `"(NYSE: {s})"` misses every one of them -- and for a 1-2 char
+    ticker the marker is the ONLY route to acceptance, since the bare word match is
+    disabled at that length. So short tickers were being rejected even when the article
+    named them explicitly.
+
+    KNOWN BIAS that remains, measured on the 3k sample: 1-2 char tickers are 0.5% of the
+    records this accepts but 20.2% of the ones it rejects. Kept as a recorded feature, NOT
+    as a keep/drop gate -- the LLM role verdict decides that.
+    """
+    hay = f"{title}\n{head}"
+    s = re.escape(sym.upper())
+    if re.search(rf"\((?:{'|'.join(_EXCHANGES)})\s*:\s*{s}\s*\)", hay, re.I):
+        return True
+    if re.search(rf"(?:\$|\bTICKER\s+){s}\b", hay, re.I):
+        return True
+    if len(sym) >= 3 and re.search(rf"\b{s}\b", hay):
+        return True
+    return False
 
 
 def split_sentences(text: str) -> List[str]:

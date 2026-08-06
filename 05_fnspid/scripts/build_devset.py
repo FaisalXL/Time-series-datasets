@@ -45,7 +45,8 @@ import pyarrow.csv as pv
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fnspid_emit import CHANNEL_SPEC, make_record, truncate_at_sentence, figures_in_series  # noqa: E402
+from fnspid_emit import (CHANNEL_SPEC, make_record, truncate_at_sentence,  # noqa: E402
+                         figures_in_series, symbol_named_in_text)
 
 ROOT = Path(__file__).resolve().parents[1]
 NEWS_COLS = ["Date", "Article_title", "Stock_symbol", "Article", "Url"]
@@ -65,24 +66,9 @@ def resolve(p: str) -> Path:
     return q if q.is_absolute() else (ROOT / q)
 
 
-def norm_symbol_hit(sym: str, title: str, head: str) -> bool:
-    """Mirror of build_cpt_from_hf.symbol_mentioned, kept deliberately identical in spirit.
-
-    Explicit ticker markers for any length; a bare word-boundary match only for >=3 chars,
-    because a 1-2 letter ticker collides with ordinary words.
-    """
-    hay = f"{title}\n{head}"
-    up = hay.upper()
-    s = sym.upper()
-    for pat in (f"(SYMBOL: {s})", f"(NASDAQ: {s})", f"(NYSE: {s})", f"(NYSEARCA: {s})",
-                f"(AMEX: {s})", f"(OTC: {s})", f"${s}", f"TICKER {s}"):
-        if pat in up:
-            return True
-    if len(s) >= 3:
-        import re as _re
-        if _re.search(rf"\b{_re.escape(s)}\b", hay):
-            return True
-    return False
+# The symbol test now lives in fnspid_emit so stage 1 of the full build and this devset
+# cannot drift apart; `norm_symbol_hit` is kept as the local name used below.
+norm_symbol_hit = symbol_named_in_text
 
 
 class PriceTable:
