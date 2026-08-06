@@ -1,0 +1,117 @@
+{
+ "built_at": "2026-08-04T20:03:45Z",
+ "config": "/data/defu/Time-series-datasets/05_fnspid/config.fullscale.yaml",
+ "universe": {
+  "news_rows_scanned": 15549299,
+  "candidate_pairs": 1174361,
+  "tickers_with_prices": 7693,
+  "pairs_symbol_named": 781079,
+  "pairs_symbol_named_pct": 66.5
+ },
+ "settings": {
+  "history_days": 90,
+  "min_history_days": 32,
+  "text_max_chars": 2240,
+  "max_articles_per_record": 5,
+  "min_article_chars": 200
+ },
+ "kept": {
+  "n": 320,
+  "text_chars": {
+   "median": 2095.0,
+   "p10": 900,
+   "p90": 2220
+  },
+  "truncated_pct": 55.0,
+  "history_days": {
+   "median": 90.0,
+   "min": 33,
+   "max": 90
+  },
+  "era": {
+   "2013-2016": 76,
+   "2021-2023": 75,
+   "2017-2020": 74,
+   "2009-2012": 95
+  },
+  "ticker_tier": {
+   "0": 98,
+   "1": 76,
+   "2": 80,
+   "3": 66
+  },
+  "distinct_tickers": 265,
+  "figures_matching_own_series_mean": 1.059,
+  "figures_matching_own_series_pct_records_ge1": 52.5,
+  "PERMUTATION_CONTROL_mean": 0.559,
+  "PERMUTATION_CONTROL_pct_records_ge1": 35.0
+ },
+ "rejects": {
+  "n": 60,
+  "text_chars": {
+   "median": 2176.0,
+   "p10": 2023,
+   "p90": 2223
+  },
+  "truncated_pct": 95.0,
+  "history_days": {
+   "median": 90.0,
+   "min": 90,
+   "max": 90
+  },
+  "era": {
+   "2013-2016": 17,
+   "2009-2012": 1,
+   "2017-2020": 23,
+   "2021-2023": 19
+  },
+  "ticker_tier": {
+   "1": 16,
+   "0": 39,
+   "2": 5
+  },
+  "distinct_tickers": 57,
+  "figures_matching_own_series_mean": 0.6,
+  "figures_matching_own_series_pct_records_ge1": 35.0,
+  "PERMUTATION_CONTROL_mean": 0.683,
+  "PERMUTATION_CONTROL_pct_records_ge1": 36.7
+ },
+ "roundups": {
+  "n": 30,
+  "text_chars": {
+   "median": 2145.5,
+   "p10": 1706,
+   "p90": 2234
+  },
+  "truncated_pct": 86.7,
+  "history_days": {
+   "median": 90.0,
+   "min": 36,
+   "max": 90
+  },
+  "era": {
+   "2021-2023": 23,
+   "2017-2020": 4,
+   "2009-2012": 2,
+   "2013-2016": 1
+  },
+  "ticker_tier": {
+   "1": 6,
+   "0": 20,
+   "2": 3,
+   "3": 1
+  },
+  "distinct_tickers": 29,
+  "figures_matching_own_series_mean": 0.667,
+  "figures_matching_own_series_pct_records_ge1": 40.0,
+  "PERMUTATION_CONTROL_mean": 0.933,
+  "PERMUTATION_CONTROL_pct_records_ge1": 43.3
+ },
+ "drops": {
+  "kept": {
+   "insufficient_history": 7
+  },
+  "rejects": {},
+  "roundups": {}
+ }
+}
