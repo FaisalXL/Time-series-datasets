@@ -128,9 +128,12 @@ Do four things.
 
 3. Write a factual summary of what happened to {company} during this period, in at most
    {max_words} words. Rules: state only facts present in the articles above; every number you write must
-   appear verbatim in those articles; cover the distinct events across ALL the articles, not
-   just the largest one; name dates where the articles give them; do not predict or
-   characterise future price movement; do not add analysis of your own.
+   appear verbatim in those articles, except that you may round a large figure the way a
+   journalist would ("5,823,912 shares" -> "over 5.8 million"); cover the distinct events
+   across ALL the articles, not just the largest one; name dates where the articles give
+   them; do not predict or characterise future price movement; do not add analysis of your
+   own; DO NOT cite sentence numbers -- write no bracketed references such as [9] or
+   [75, 86], they are not part of the summary.
 
 4. Write the relation in 12 words or fewer. Name the mechanism.
 

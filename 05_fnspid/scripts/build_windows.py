@@ -86,6 +86,46 @@ def load_calendar(prices_dir: Path, ticker: str, csv_cols: List[str]):
     return [dates[i] for i in order], {c: [vals[c][i] for i in order] for c in csv_cols}
 
 
+_WORD = __import__("re").compile(r"[a-z0-9]+")
+
+
+def _shingles(text: str, k: int = 8, step: int = 10, cap: int = 6000) -> set:
+    """Hashed 8-word shingles, sampled every `step` words over the first `cap` chars.
+
+    Sampled rather than exhaustive, and hashed rather than kept as strings, because this runs
+    on every article of every window -- ~650k calls for the 90-day set. Step 10 still catches
+    republished wire copy, which shares long verbatim blocks, and cut the pass from >10 min
+    to a couple of minutes.
+    """
+    w = _WORD.findall(text.lower()[:cap])
+    return {hash(" ".join(w[i:i + k])) for i in range(0, max(1, len(w) - k), step)}
+
+
+def dedup_articles(items: List[tuple], thresh: float = 0.5) -> Tuple[List[tuple], int]:
+    """Drop near-duplicate articles inside a window, keeping the first of each group.
+
+    The wires republish one story many times: a DSS window held five Benzinga market wraps
+    ("Midway through trading Tuesday...", "Following the market opening...", "Toward the end
+    of trading...") that were the same report at three times of day. Verbatim extraction then
+    faithfully reproduced the same sentence three times. Measured on a 4k-window sample,
+    10.7% of 90-day windows contain at least one near-duplicate.
+
+    Jaccard over 8-word shingles, sampled every 3 words -- cheap enough for <=12 articles per
+    window and robust to the boilerplate header/footer differences between wire copies.
+    """
+    keep: List[tuple] = []
+    sigs: List[set] = []
+    dropped = 0
+    for it in items:
+        s = _shingles(it[1])
+        if any(len(s & p) / (len(s | p) or 1) > thresh for p in sigs):
+            dropped += 1
+            continue
+        keep.append(it)
+        sigs.append(s)
+    return keep, dropped
+
+
 def spread_articles(items: List[tuple], cap: int) -> List[tuple]:
     """Keep at most `cap` articles, spread evenly across the window.
 
@@ -107,6 +147,8 @@ def main() -> None:
     ap.add_argument("--window", type=int, default=90, help="trading days per window")
     ap.add_argument("--min-window", type=int, default=0, help="default: config min_history_days")
     ap.add_argument("--max-articles", type=int, default=12)
+    ap.add_argument("--min-news-span", type=float, default=0.30,
+                    help="news must span at least this fraction of the window, else drop")
     ap.add_argument("--out", default=".cache/windows_90.jsonl")
     ap.add_argument("--report", default="")
     args = ap.parse_args()
@@ -134,6 +176,8 @@ def main() -> None:
     n_win = 0
     arts_per: List[int] = []
     news_per: List[int] = []
+    len_per: List[int] = []
+    span_per: List[float] = []
     t0 = time.time()
 
     def flush(ticker: str, days: Dict[str, list]) -> None:
@@ -171,6 +215,23 @@ def main() -> None:
             if not items:
                 stats["empty_window"] += 1
                 continue
+            items, n_dup = dedup_articles(items)
+            stats["duplicate_articles_dropped"] += n_dup
+
+            # TRIM THE WINDOW TO THE NEWS. Running a fixed W trading days forward from the
+            # anchor regardless of whether coverage continues produces records whose series
+            # is mostly unexplained: a DSS window carried one news day and then 89 trading
+            # days of a -72% collapse that no article mentions. Ending at the last news day
+            # (floored at min_window so the series stays usable) makes the window's length a
+            # property of the source's reporting rather than of our constant.
+            last_news = max(it[0] for it in items)
+            li = bisect.bisect_right(cal, last_news) - 1
+            ei = min(ei, max(li + 1, si + minW))
+            lo, hi = cal[si], cal[ei - 1]
+            span = (bisect.bisect_left(cal, last_news) - si) / max(1, (ei - si) - 1)
+            if span < args.min_news_span:
+                stats["news_span_too_narrow"] += 1
+                continue
             items = spread_articles(items, args.max_articles)
 
             fh.write(json.dumps({
@@ -185,10 +246,13 @@ def main() -> None:
                 "urls": [it[2] for it in items],
                 "titles": [it[3] for it in items],
                 "article_spread_gt5": sum(1 for it in items if it[2] in roundup),
+                "news_span_frac": round(span, 3),
             }, ensure_ascii=False) + "\n")
             n_win += 1
             arts_per.append(len(items))
             news_per.append(len(block))
+            len_per.append(ei - si)
+            span_per.append(span)
 
     cur: Optional[str] = None
     days: Dict[str, list] = {}
@@ -209,7 +273,8 @@ def main() -> None:
 
     report = {
         "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "window_trading_days": W, "min_window": minW, "max_articles": args.max_articles,
+        "window_trading_days_max": W, "min_window": minW, "max_articles": args.max_articles,
+        "min_news_span": args.min_news_span,
         "candidate_pairs_in": seen_rows,
         "windows_out": n_win,
         "articles_per_window": {"median": statistics.median(arts_per),
@@ -217,6 +282,11 @@ def main() -> None:
                                 "mean": round(sum(arts_per) / len(arts_per), 2)} if arts_per else {},
         "news_days_per_window": {"median": statistics.median(news_per),
                                  "p90": sorted(news_per)[int(len(news_per) * .9)]} if news_per else {},
+        "window_length_actual": {"median": statistics.median(len_per),
+                                 "p10": sorted(len_per)[len(len_per) // 10],
+                                 "max": max(len_per)} if len_per else {},
+        "news_span_frac": {"median": round(statistics.median(span_per), 3),
+                           "p10": round(sorted(span_per)[len(span_per) // 10], 3)} if span_per else {},
         "skips": dict(stats),
         "elapsed_s": round(time.time() - t0, 1),
         "out": str(outp), "bytes": outp.stat().st_size,

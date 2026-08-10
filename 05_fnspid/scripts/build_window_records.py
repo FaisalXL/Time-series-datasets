@@ -51,7 +51,10 @@ def resolve(p: str) -> Path:
     return q if q.is_absolute() else (ROOT / q)
 
 
-_NUMTOK = __import__("re").compile(r"\d[\d,]*(?:\.\d+)?")
+_re = __import__("re")
+_NUMTOK = _re.compile(r"\d[\d,]*(?:\.\d+)?")
+# "[9]", "[75, 86]" -- the model citing sentence numbers from the prompt, not stating figures
+_CITE = _re.compile(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]")
 
 
 def _norm(tok: str) -> str:
@@ -77,13 +80,36 @@ def numeric_fidelity(summary: str, source: str, dates=()):
     sample, because the audit renderer highlights exactly these tokens -- if it recomputed
     membership itself the two would drift and the page would flag numbers the gate passed.
     """
-    src = {_norm(m.group(0)) for m in _NUMTOK.finditer(source)}
+    src = set()
+    for m in _NUMTOK.finditer(source):
+        tok = _norm(m.group(0))
+        src.add(tok)
+        # A JOURNALISTIC ROUNDING IS NOT A FABRICATION. "5,823,912 shares" is written up as
+        # "over 5.8 million", and the first version of this gate rejected that summary --
+        # throwing away better text to protect against an invention that had not happened.
+        # So every source figure also registers its rounded restatements at thousand /
+        # million / billion scale. This deliberately widens what passes: the gate exists to
+        # catch invented figures, not to prove every digit was copied.
+        try:
+            v = float(tok)
+        except ValueError:
+            continue
+        for scale in (1.0, 1e3, 1e6, 1e9):
+            s = v / scale
+            if s < 0.1:
+                break
+            src.update({f"{s:.0f}", f"{s:.1f}", f"{s:.2f}", f"{s:g}"})
     for d in dates:                      # "2015-08-19" -> 2015, 08, 8, 19
         parts = str(d).split("-")
         for p in parts:
             src.add(p)
             src.add(p.lstrip("0") or "0")
         src.add(str(d))
+    # Strip the model's own source citations before checking. It emits "[9]", "[75, 86]"
+    # pointing at sentence numbers; those are references to the prompt, not claims about the
+    # world, and scoring them as invented figures rejected summaries that were entirely
+    # sound. The prompt now forbids them too -- this is the belt to that braces.
+    summary = _CITE.sub(" ", summary)
     bad, total = [], 0
     for m in _NUMTOK.finditer(summary):
         tok = _norm(m.group(0))
