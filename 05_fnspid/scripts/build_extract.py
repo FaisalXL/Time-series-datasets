@@ -44,10 +44,40 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from extract_run import HEADERS, LANES, MODEL, SYSTEM, USER_TMPL  # noqa: E402
+from extract_run import (HEADERS, LANES, MODEL, SYSTEM, SYSTEM_V2,  # noqa: E402
+                         USER_TMPL, USER_TMPL_V2)
 from fnspid_emit import company_of, load_ticker_names, split_sentences  # noqa: E402
 
 ROLES = {"primary", "secondary", "incidental", "absent"}
+
+
+def numbered_window(bodies: List[str], days: List[str], char_cap: int):
+    """Number sentences across a window's articles, each introduced by its publication date.
+
+    Returns (sentences, article_index_per_sentence, rendered_block, capped). The rendered
+    block carries the date headers; `sentences` carries only the prose, so an index means the
+    same thing on both sides of the call.
+    """
+    sents: List[str] = []
+    art: List[int] = []
+    lines: List[str] = []
+    used = 0
+    capped = False
+    for ai, body in enumerate(bodies):
+        day = days[ai] if ai < len(days) else ""
+        header = f"\n--- article {ai + 1}, published {day} ---"
+        for s in split_sentences(body):
+            if used + len(s) > char_cap and sents:
+                capped = True
+                return sents, art, "\n".join(lines), capped
+            if header:
+                lines.append(header)
+                header = ""
+            sents.append(s)
+            art.append(ai)
+            lines.append(f"[{len(sents)}] {s}")
+            used += len(s) + 1
+    return sents, art, "\n".join(lines), capped
 
 
 def numbered_sentences(bodies: List[str], char_cap: int) -> Tuple[List[str], List[int], bool]:
@@ -91,10 +121,10 @@ class Endpoint:
         self.consec = 0
         self.tripped = False
 
-    def call(self, user: str) -> Tuple[Optional[dict], str, float, int, int]:
+    def call(self, user: str, system: str = SYSTEM) -> Tuple[Optional[dict], str, float, int, int]:
         payload = json.dumps({
             "model": MODEL,
-            "messages": [{"role": "system", "content": SYSTEM},
+            "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user}],
             "max_tokens": self.max_tokens, "temperature": 0.0,
             # REQUIRED: thinking model. With thinking on it returns content: null.
@@ -150,7 +180,8 @@ def stream_candidates(path: Path, done: set, limit: int, stride: int) -> Iterato
         if stride > 1 and i % stride:
             continue
         c = json.loads(line)
-        if f"{c['t']}|{c['d']}" in done:
+        # window records key on the window start; v1 pair records key on the news date
+        if f"{c['t']}|{c.get('w_start') or c['d']}" in done:
             continue
         yield c
         n += 1
@@ -206,21 +237,41 @@ def main() -> None:
 
     def work(c: dict) -> None:
         nonlocal n_new
-        sents, art, capped = numbered_sentences(c["bodies"], args.char_cap)
-        if not sents:
-            rec = {"t": c["t"], "d": c["d"], "status": "no_sentences"}
+        window = "w_start" in c
+        key = c["w_start"] if window else c["d"]
+        if window:
+            sents, art, block, capped = numbered_window(c["bodies"], c.get("days", []),
+                                                        args.char_cap)
+            user = USER_TMPL_V2.format(ticker=c["t"], company=company_of(c["t"], names),
+                                       period_start=c["w_start"], period_end=c["w_end"],
+                                       sentences=block)
+            system = SYSTEM_V2
         else:
-            v, status, el, pt, ct = ep.call(render(c["t"], company_of(c["t"], names), sents))
-            rec = {"t": c["t"], "d": c["d"], "status": status, "n_sents": len(sents),
+            sents, art, capped = numbered_sentences(c["bodies"], args.char_cap)
+            user = render(c["t"], company_of(c["t"], names), sents)
+            system = SYSTEM
+        if not sents:
+            rec = {"t": c["t"], "d": key, "status": "no_sentences"}
+        else:
+            v, status, el, pt, ct = ep.call(user, system)
+            rec = {"t": c["t"], "d": key, "status": status, "n_sents": len(sents),
                    "sent_chars": sum(len(s) for s in sents), "capped": capped,
                    "n_articles": len(c["bodies"])}
             if status == "ok":
                 role = str(v.get("role", "")).strip().lower()
                 idxs = [i for i in (v.get("sentences") or []) if isinstance(i, int)]
                 bad = [i for i in idxs if not (1 <= i <= len(sents))]
+                # ORDER IS THE PAYLOAD in v2: the model ranks by importance and the assembler
+                # fills the token budget from the front. Sorting here would throw the ranking
+                # away and silently restore the blind truncation v2 exists to remove. Dedup
+                # keeps the FIRST occurrence, i.e. the model's highest placement.
+                ranked: List[int] = []
+                for i in idxs:
+                    if 1 <= i <= len(sents) and i not in ranked:
+                        ranked.append(i)
                 rec.update({
                     "role": role if role in ROLES else "invalid_role",
-                    "sentences": [i for i in sorted(set(idxs)) if 1 <= i <= len(sents)],
+                    "sentences": ranked,
                     "invalid_idx": len(bad),
                     "relation": str(v.get("relation", ""))[:160],
                     "confidence": v.get("confidence"),

@@ -60,6 +60,44 @@ Do three things.
 Output this JSON only:
 {{"role":"primary|secondary|incidental|absent","sentences":[int,...],"relation":"...","confidence":0.0-1.0}}"""
 
+# v2: one window's worth of coverage, ranked by importance. See prompts/extract_v2.md for the
+# reasoning, in particular why the model is still not shown the price series.
+USER_TMPL_V2 = """TICKER: {ticker}
+COMPANY: {company}
+PERIOD: {period_start} to {period_end}
+
+Below is every article published about this company during that period, as numbered
+sentences. Each article is introduced by its publication date.
+
+{sentences}
+
+Do three things.
+
+1. Decide the role of {company} across this period's coverage. Use exactly one value:
+   "primary"    - at least one article reports on {company} itself: its results, guidance,
+                  products, management, filings, analyst coverage of it, or its own share move.
+   "secondary"  - no article is about {company}, but at least one states a specific effect on
+                  it: a supplier or customer event, a named peer comparison, a rate or
+                  commodity move the article ties to this company or its sector.
+   "incidental" - {company} is named but never substantively discussed: ticker enumerations,
+                  one-line table rows, passing comparisons, promotional boilerplate.
+   "absent"     - the coverage does not discuss {company} at all.
+
+2. Rank the sentence numbers that a reader would need to understand what happened to
+   {company} during this period. MOST IMPORTANT FIRST. Only the first part of your list will
+   be used, so the order carries the decision. Prefer sentences that report a concrete event,
+   figure, or decision over ones that restate context. Do not include a sentence that says
+   nothing about {company}. Do not invent numbers. Return an empty list for "absent".
+
+3. Write the relation in 12 words or fewer. Name the mechanism. Do not restate a headline.
+
+Output this JSON only:
+{{"role":"primary|secondary|incidental|absent","sentences":[int,...],"relation":"...","confidence":0.0-1.0}}"""
+
+SYSTEM_V2 = ("You classify financial news for a research corpus. You select and rank sentences. "
+             "You never write new text. You never predict price movement. You output only "
+             "compact JSON.")
+
 # Endpoint updated 2026-08-06. The ds-serv11 lanes (8004-8007) died and never recovered; this
 # is the replacement gateway. Single endpoint, HTTPS, FP8 weights, max_model_len 32768.
 LANES = ["https://enigmalab.dev/llm/qwen36/v1/chat/completions"]
