@@ -241,6 +241,11 @@ def make_record(
     domain: str = "finance",
     region: str = "US",
     text_source: str = "third_party",
+    # `real` for verbatim extraction; `generated` when an LLM summary is the record text.
+    # The frozen vocab is {real, generated} -- there is no `llm_summarized` slot, so a
+    # summarised record must declare `generated` and carries SCHEMA §7's minority + sign-off
+    # condition with it. Passed explicitly so the caller cannot ship a summary as `real`.
+    text_quality: str = "real",
     extra_meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build one v1-compliant FNSPID record. Raises ValueError if it would fail the gate."""
@@ -278,6 +283,7 @@ def make_record(
         license=license,
         source=source,
         text_source=text_source,
+        text_quality=text_quality,
         dataset="fnspid",
         series_id=f"fnspid_{ticker}_{news_date}",
         domain=domain,

@@ -98,6 +98,49 @@ SYSTEM_V2 = ("You classify financial news for a research corpus. You select and 
              "You never write new text. You never predict price movement. You output only "
              "compact JSON.")
 
+# v3: one call returns BOTH a coverage-constrained ranked extraction AND a summary, so the
+# extractive-vs-summarised decision moves out of the GPU stage entirely. See prompts/extract_v3.md.
+USER_TMPL_V3 = """TICKER: {ticker}
+COMPANY: {company}
+PERIOD: {period_start} to {period_end}
+
+Below is every article published about this company during that period, as numbered
+sentences. Each article is introduced by its publication date.
+
+{sentences}
+
+Do four things.
+
+1. Decide the role of {company} across this period's coverage. Use exactly one value:
+   "primary"    - at least one article reports on {company} itself: its results, guidance,
+                  products, management, filings, analyst coverage of it, or its own share move.
+   "secondary"  - no article is about {company}, but at least one states a specific effect on
+                  it: a supplier or customer event, a named peer comparison, a rate or
+                  commodity move the article ties to this company or its sector.
+   "incidental" - {company} is named but never substantively discussed.
+   "absent"     - the coverage does not discuss {company} at all.
+
+2. Rank sentence numbers a reader needs to understand what happened to {company} in this
+   period, MOST IMPORTANT FIRST. COVER AS MANY DISTINCT EVENTS AS YOU CAN: take at most two
+   sentences from any one article before moving to another article, and prefer a new event
+   over a second detail about an event you already covered. Prefer concrete events, figures
+   and decisions over restated context. Do not invent numbers. Empty list for "absent".
+
+3. Write a factual summary of what happened to {company} during this period, in at most 220
+   words. Rules: state only facts present in the articles above; every number you write must
+   appear verbatim in those articles; cover the distinct events across ALL the articles, not
+   just the largest one; name dates where the articles give them; do not predict or
+   characterise future price movement; do not add analysis of your own.
+
+4. Write the relation in 12 words or fewer. Name the mechanism.
+
+Output this JSON only:
+{{"role":"primary|secondary|incidental|absent","sentences":[int,...],"summary":"...","relation":"...","confidence":0.0-1.0}}"""
+
+SYSTEM_V3 = ("You classify financial news for a research corpus. You select and rank sentences, "
+             "and you write strictly factual summaries grounded only in the text you are given. "
+             "You never predict price movement. You output only compact JSON.")
+
 # Endpoint updated 2026-08-06. The ds-serv11 lanes (8004-8007) died and never recovered; this
 # is the replacement gateway. Single endpoint, HTTPS, FP8 weights, max_model_len 32768.
 LANES = ["https://enigmalab.dev/llm/qwen36/v1/chat/completions"]

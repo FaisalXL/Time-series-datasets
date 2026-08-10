@@ -44,8 +44,8 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from extract_run import (HEADERS, LANES, MODEL, SYSTEM, SYSTEM_V2,  # noqa: E402
-                         USER_TMPL, USER_TMPL_V2)
+from extract_run import (HEADERS, LANES, MODEL, SYSTEM, SYSTEM_V2, SYSTEM_V3,  # noqa: E402
+                         USER_TMPL, USER_TMPL_V2, USER_TMPL_V3)
 from fnspid_emit import company_of, load_ticker_names, split_sentences  # noqa: E402
 
 ROLES = {"primary", "secondary", "incidental", "absent"}
@@ -202,6 +202,8 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="stop after N new pairs")
     ap.add_argument("--stride", type=int, default=1, help="take every Nth candidate (spread sample)")
     ap.add_argument("--batch", type=int, default=4000)
+    ap.add_argument("--prompt", default="v2", choices=["v2", "v3"],
+                    help="v2 = ranked extraction only; v3 = extraction + summary in one call")
     args = ap.parse_args()
 
     key = os.environ.get("VLLM_KEY")
@@ -242,10 +244,11 @@ def main() -> None:
         if window:
             sents, art, block, capped = numbered_window(c["bodies"], c.get("days", []),
                                                         args.char_cap)
-            user = USER_TMPL_V2.format(ticker=c["t"], company=company_of(c["t"], names),
-                                       period_start=c["w_start"], period_end=c["w_end"],
-                                       sentences=block)
-            system = SYSTEM_V2
+            tmpl, system = ((USER_TMPL_V3, SYSTEM_V3) if args.prompt == "v3"
+                            else (USER_TMPL_V2, SYSTEM_V2))
+            user = tmpl.format(ticker=c["t"], company=company_of(c["t"], names),
+                               period_start=c["w_start"], period_end=c["w_end"],
+                               sentences=block)
         else:
             sents, art, capped = numbered_sentences(c["bodies"], args.char_cap)
             user = render(c["t"], company_of(c["t"], names), sents)
@@ -269,9 +272,14 @@ def main() -> None:
                 for i in idxs:
                     if 1 <= i <= len(sents) and i not in ranked:
                         ranked.append(i)
+                summary = str(v.get("summary") or "").strip()
                 rec.update({
                     "role": role if role in ROLES else "invalid_role",
                     "sentences": ranked,
+                    # stored raw and UNVALIDATED here; stage 3 runs the numeric-fidelity gate
+                    # and decides whether this or the extraction becomes the record text
+                    "summary": summary,
+                    "summary_chars": len(summary),
                     "invalid_idx": len(bad),
                     "relation": str(v.get("relation", ""))[:160],
                     "confidence": v.get("confidence"),
