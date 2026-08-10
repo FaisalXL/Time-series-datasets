@@ -1,0 +1,94 @@
+{
+ "built_at": "2026-08-10T20:33:11Z",
+ "purpose": "bound the non-numeric hallucination rate the other guards cannot see",
+ "caveat": "verifier is the same model that wrote the summaries; this bounds the problem, it does not certify the corpus",
+ "overlap_threshold": 0.2,
+ "records": 55,
+ "claims": 465,
+ "ALL": {
+  "claims": 465,
+  "supported": 448,
+  "weak_citation": 15,
+  "unsupported": 2,
+  "supported_pct": 96.3,
+  "overlap_median": 0.714
+ },
+ "NUMERIC_CLAIMS": {
+  "claims": 397,
+  "supported": 383,
+  "weak_citation": 14,
+  "supported_pct": 96.5,
+  "overlap_median": 0.714
+ },
+ "NON_NUMERIC_CLAIMS": {
+  "claims": 68,
+  "supported": 65,
+  "unsupported": 2,
+  "weak_citation": 1,
+  "supported_pct": 95.6,
+  "overlap_median": 0.691
+ },
+ "elapsed_s": 15.3,
+ "unsupported_examples": [
+  {
+   "ticker": "ATLO",
+   "numeric": false,
+   "claim": "This payment marked the fourth consecutive quarter that ATLO paid the same dividend amount."
+  },
+  {
+   "ticker": "EWW",
+   "numeric": false,
+   "claim": "These articles analyze demographic shifts, inflation rates, and unemployment statistics across the region but do not report specific financial events, price movements, or fund flows directly affecting"
+  }
+ ],
+ "weak_citation_examples": [
+  {
+   "ticker": "BG",
+   "overlap": 0.125,
+   "claim": "Additionally, in April 2012, Bunge was listed as a partner of Solazyme, a company developing algae-based fuels, with the partnership expected to help cultivate end-market opportunities for Solazyme.",
+   "cited": "Perhaps of greatest importance, Solazyme has partnered with a range of firms, including Tyson Foods (NYSE: TSN ) , Chevron (NYSE: CVX ) , Bunge (NYSE: BG ) , Unilever (NYSE: UN ) and others."
+  },
+  {
+   "ticker": "EWC",
+   "overlap": 0.111,
+   "claim": "In an article published on 2011-01-03, the ETF was reported to have risen about 15 percent in 2010.",
+   "cited": "Canada iShares MSCI Canada Index (NYSE: EWC ) Canadian stocks had a decent run in 2010 -- the ETF noted above rose about 15% this year."
+  },
+  {
+   "ticker": "AMGN",
+   "overlap": 0.1,
+   "claim": "Amgen was mentioned in daily market reports covering the period from May 22 to July 31, 2013.",
+   "cited": "Stocks such as Johnson & Johnson (NYSE: JNJ ), Pfizer Inc. (NYSE: PFE ), Amgen, Inc. (NASDAQ: AMGN ), Zimmer Holdings, Inc. (NYSE: ZMH ) and Merck & Co., Inc. (NYSE: MRK ) gained 0.7%, 0.3%, 2.0%, 0.3% and 4.7%, respectively. Stocks such as Pfizer Inc. (NYSE: PFE ), Amgen, Inc. (NASDAQ: AMGN ), Myla"
+  },
+  {
+   "ticker": "EEM",
+   "overlap": 0.182,
+   "claim": "New options contracts for May 1, 2020, became available on March 12, 2020, with the stock trading around $33.91.",
+   "cited": "Investors in iShares Trust - iShares MSCI Emerging Markets ETF (Symbol: EEM) saw new options begin trading today, for the May 1st expiration. To an investor already interested in purchasing shares of EEM, that could represent an attractive alternative to paying $33.91/share today."
+  },
+  {
+   "ticker": "EVA",
+   "overlap": 0.182,
+   "claim": "Enviva Partners (EVA) experienced significant volatility and corporate developments between March and April 2023.",
+   "cited": "Enviva (EVA) fell almost 12% after the wood-pellets heating company disclosed plans for a $250 million private investment in public equity transaction."
+  },
+  {
+   "ticker": "EVA",
+   "overlap": 0.167,
+   "claim": "By early April, analyst sentiment appeared positive.",
+   "cited": "On April 4, 2023, Truist Securities maintained coverage of Enviva Partners with a Buy recommendation."
+  },
+  {
+   "ticker": "WST",
+   "overlap": 0.182,
+   "claim": "Stock prices fluctuated, with shares trading around $44 in October and rising to approximately $51.72 by mid-January.",
+   "cited": "As a percentage of WST's recent stock price of $44.00, this dividend works out to approximately 0.25%. Looking at the universe of stocks we cover at Dividend Channel , on 1/16/15, West Pharmaceutical Services, Inc. (Symbol: WST) will trade ex-dividend, for its quarterly dividend of $0.11, payable on"
+  },
+  {
+   "ticker": "UUP",
+   "overlap": 0.0,
+   "claim": "Articles published between October 15 and November 3, 2009, discuss the U.S. dollar's performance and its impact on markets.",
+   "cited": "Over the past year, the American dollar has collapsed. Sterling is strengthening against the US dollar but still weak against the Euro. Dollar."
+  }
+ ]
+}
