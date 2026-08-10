@@ -137,7 +137,9 @@ Do four things.
    changes, growth rates, differences, margins or ratios that the articles do not already
    state. Write "rose to $2.50 from $1.88" rather than "rose 33%" -- the levels carry more
    information than the ratio, and a figure you calculated cannot be checked against the
-   source.
+   source. Summarise the FACTS; do not describe the article set itself. Never write sentences
+   like "these articles analyse X but do not report Y" -- a reader of the corpus cannot see
+   the articles, so commentary about them is not information about {company}.
 
 4. Write the relation in 12 words or fewer. Name the mechanism.
 
