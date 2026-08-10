@@ -64,15 +64,22 @@ _NUMTOK = _re.compile(
     # Excluding it too made "$9.93." at the end of a sentence match nothing at all, and made
     # "$1.5 billion." parse as 1.5 with the magnitude silently dropped -- which is how a
     # stricter-looking gate ended up rejecting six times as many sound summaries.
-    r"(%|k|m|mm|bn|b|tn|thousand|million|billion|trillion)?(?![a-z0-9])",
+    r"(%|k|m|mm|mln|mn|bn|bln|b|tn|thousand|million|billion|trillion)?"
+    # Ordinals were invisible: in "the 64th quarter" the trailing "th" tripped the letter
+    # guard, so 64 never matched at all and a figure plainly present in the source was
+    # reported as an invention.
+    r"(?:st|nd|rd|th)?(?![a-z0-9])",
     _re.I)
 # "[9]", "[75, 86]" -- the model citing sentence numbers from the prompt, not stating figures
 _CITE = _re.compile(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]")
 # separators that can sit between the two ends of a written range: "-", en/em dash, "to",
 # optionally with a currency symbol on the second number
 _RANGE_SEP = _re.compile(r"\s*(?:-|\u2013|\u2014|to)\s*[$\u20ac\u00a3]?\s*")
-_SCALE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "mm": 1e6, "million": 1e6,
-          "b": 1e9, "bn": 1e9, "billion": 1e9, "tn": 1e12, "trillion": 1e12}
+# "mln"/"bln" are how several wires abbreviate millions and billions; omitting them meant
+# "$287.3 mln" in an article never matched "$287.3 million" in a summary.
+_SCALE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "mm": 1e6, "mln": 1e6, "mn": 1e6,
+          "million": 1e6, "b": 1e9, "bn": 1e9, "bln": 1e9, "billion": 1e9,
+          "tn": 1e12, "trillion": 1e12}
 
 
 def parse_numbers(text: str):

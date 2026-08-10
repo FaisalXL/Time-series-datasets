@@ -41,7 +41,7 @@ from typing import Any, Dict, List
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_extract import Endpoint, numbered_window  # noqa: E402
-from build_window_records import numeric_fidelity  # noqa: E402
+from build_window_records import numeric_fidelity, parse_numbers  # noqa: E402
 
 SYSTEM = ("You check whether a figure appears in a set of source articles. You answer with a "
           "sentence number or null. You output only compact JSON.")
@@ -65,6 +65,65 @@ Answer with the number of the single sentence that states it. Answer 0 if no sen
 
 Output this JSON only:
 {{"sentence": <integer>}}"""
+
+DERIVE_SYSTEM = ("You identify whether a figure can be computed from figures stated in source "
+                 "text. You report the operation and its inputs. You never do the arithmetic "
+                 "yourself. You output only compact JSON.")
+
+DERIVE_USER = """The numbered sentences below are the complete source articles about {company}.
+
+{sentences}
+
+This figure appears in a summary of those articles but is not stated in them:
+
+    {figure}
+
+Can it be computed from figures that ARE stated? If so, report the operation and its inputs.
+Use exactly one operation name:
+  pct_change   - percentage change from an earlier value to a later one
+  difference   - one value minus another
+  sum          - values added together
+  ratio        - one value divided by another
+  share_of     - one value as a percentage of another
+
+Report the input numbers exactly as written in the sentences, and the sentence number each
+one comes from. Do NOT calculate the result -- only name the operation and its inputs.
+If the figure cannot be obtained this way, use "none".
+
+Output this JSON only:
+{{"op": "<name>", "operands": [<number>, ...], "sentences": [<integer>, ...]}}"""
+
+
+def check_derivation(op, operands, target, tol):
+    """Recompute the claimed derivation OURSELVES and compare to the figure as written.
+
+    The model names the operation and its inputs; the arithmetic is done here. That is the
+    whole point -- a model that reports 33% from $1.88 and $2.50 is checkable, and one that
+    reports 43% from the same inputs is caught by the same code path. Trusting the model's
+    own result would verify nothing.
+    """
+    try:
+        xs = [float(x) for x in operands]
+    except (TypeError, ValueError):
+        return False, None
+    try:
+        if op == "pct_change" and len(xs) == 2 and xs[0]:
+            got = (xs[1] - xs[0]) / abs(xs[0]) * 100.0
+        elif op == "difference" and len(xs) == 2:
+            got = xs[1] - xs[0]
+        elif op == "sum" and xs:
+            got = sum(xs)
+        elif op == "ratio" and len(xs) == 2 and xs[1]:
+            got = xs[0] / xs[1]
+        elif op == "share_of" and len(xs) == 2 and xs[1]:
+            got = xs[0] / xs[1] * 100.0
+        else:
+            return False, None
+    except ZeroDivisionError:
+        return False, None
+    # allow either sign convention for a change, and the figure's own written precision
+    return (abs(got - target) <= max(tol, abs(target) * 0.01)
+            or abs(abs(got) - abs(target)) <= max(tol, abs(target) * 0.01)), round(got, 4)
 
 # `0` rather than `null` for "not found" is deliberate. Asked for null, the model replied with
 # a bare `null` -- a correct answer, but not a JSON object, so the parser saw no braces, burned
@@ -157,18 +216,50 @@ def main() -> None:
                     d in want for d in _re.findall(r"\d+", sents[idx - 1]) if len(d) >= 2))
                 if not cited_ok:
                     ok = False
-                    stats["upheld_citation_unsupported"] += 1
-                    results.append({"figure": tok, "status": "ok", "supported": False,
-                                    "sentence_index": idx, "rejected_citation": True,
-                                    "sentence": sents[idx - 1][:300]})
-                    continue
+                    stats["citation_unsupported"] += 1
+                    idx = 0
+            if not ok:
+                # SECOND PHASE: the figure may be DERIVED rather than stated -- "33%" computed
+                # from "$2.50" against "$1.88". The model names the operation and its inputs;
+                # the arithmetic is done here, so a correct derivation is admitted and a wrong
+                # one is caught by the same code path. Trusting the model's own result would
+                # verify nothing.
+                d, dstatus, _e, _p, _c = ep.call(
+                    DERIVE_USER.format(company=w["t"], sentences=block, figure=tok),
+                    DERIVE_SYSTEM)
+                if dstatus == "ok" and isinstance(d, dict) and d.get("op") not in (None, "none"):
+                    tgt = next(((v, t2) for _s, v, t2 in parse_numbers(tok)), None)
+                    cites = [i for i in (d.get("sentences") or []) if isinstance(i, int)
+                             and 1 <= i <= len(sents)]
+                    cited_text = " ".join(sents[i - 1] for i in cites)
+                    src_vals = {round(v, 6) for _s, v, _t in parse_numbers(cited_text)}
+                    operands = d.get("operands") or []
+                    inputs_present = bool(cites) and all(
+                        any(abs(float(x) - v) <= max(1e-9, abs(v) * 0.005) for v in src_vals)
+                        for x in operands if isinstance(x, (int, float)))
+                    if tgt and inputs_present:
+                        good, got = check_derivation(d["op"], operands, tgt[0], tgt[1])
+                        if good:
+                            ok = True
+                            stats["overturned_derived"] += 1
+                            results.append({
+                                "figure": tok, "status": "ok", "supported": True,
+                                "derived": {"op": d["op"], "operands": operands,
+                                            "sentences": cites, "recomputed": got},
+                                "sentence": cited_text[:300]})
+                            continue
+                        stats["upheld_bad_arithmetic"] += 1
+                    else:
+                        stats["upheld_operands_not_in_source"] += 1
+                results.append({"figure": tok, "status": "ok", "supported": False,
+                                "sentence_index": idx or None})
+                stats["upheld_not_found"] += 1
+                continue
             results.append({
-                "figure": tok, "status": "ok", "supported": bool(ok),
-                "sentence_index": idx if ok else None,
-                "sentence": sents[idx - 1][:300] if ok else None,
+                "figure": tok, "status": "ok", "supported": True,
+                "sentence_index": idx, "sentence": sents[idx - 1][:300],
             })
-            stats["overturned" if ok else
-                  ("upheld_not_found" if idx in (0, None) else "upheld_bad_index")] += 1
+            stats["overturned_stated"] += 1
         with lock:
             fh.write(json.dumps({"t": w["t"], "d": w["w_start"], "figures": results},
                                 ensure_ascii=False) + "\n")
@@ -182,7 +273,7 @@ def main() -> None:
         "summaries_seen": n_sum, "records_adjudicated": len(jobs),
         "figures_checked": tot, "verdicts": dict(stats),
         "failure_reasons": dict(ep.fail),
-        "overturn_rate_pct": round(100 * stats["overturned"] / max(1, tot), 1),
+        "overturn_rate_pct": round(100 * (stats["overturned_stated"] + stats["overturned_derived"]) / max(1, tot), 1),
         "elapsed_s": round(time.time() - t0, 1), "out": str(outp),
     }, indent=1))
 

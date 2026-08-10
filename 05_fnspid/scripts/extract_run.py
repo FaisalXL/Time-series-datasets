@@ -133,7 +133,11 @@ Do four things.
    across ALL the articles, not just the largest one; name dates where the articles give
    them; do not predict or characterise future price movement; do not add analysis of your
    own; DO NOT cite sentence numbers -- write no bracketed references such as [9] or
-   [75, 86], they are not part of the summary.
+   [75, 86], they are not part of the summary. DO NOT COMPUTE NEW FIGURES: no percentage
+   changes, growth rates, differences, margins or ratios that the articles do not already
+   state. Write "rose to $2.50 from $1.88" rather than "rose 33%" -- the levels carry more
+   information than the ratio, and a figure you calculated cannot be checked against the
+   source.
 
 4. Write the relation in 12 words or fewer. Name the mechanism.
 

@@ -1,5 +1,5 @@
 {
- "built_at": "2026-08-10T19:06:49Z",
+ "built_at": "2026-08-10T19:39:37Z",
  "purpose": "human audit of LLM role/extraction/summary quality on window records",
  "record_shape": "window",
  "prompt": "extract_v3",
@@ -8,42 +8,42 @@
  "total": 60,
  "by_window_length": {
   "90": {
-   "pool": 176,
+   "pool": 171,
    "selected": 30,
-   "gate_fallbacks_included": 2,
+   "gate_fallbacks_included": 1,
    "article_count_cuts": [
     6,
     12
    ],
    "era": {
     "2021-2023": 7,
-    "2017-2020": 7,
     "2009-2012": 8,
-    "2013-2016": 8
+    "2013-2016": 8,
+    "2017-2020": 7
    },
    "articles_per_record_median": 6.0,
-   "text_chars_median": 1261.5
+   "text_chars_median": 1021.5
   },
   "30": {
-   "pool": 175,
+   "pool": 176,
    "selected": 30,
    "gate_fallbacks_included": 4,
    "article_count_cuts": [
     4,
-    10
+    11
    ],
    "era": {
-    "2021-2023": 9,
-    "2017-2020": 7,
+    "2021-2023": 8,
+    "2017-2020": 8,
     "2009-2012": 8,
     "2013-2016": 6
    },
-   "articles_per_record_median": 5.0,
-   "text_chars_median": 1358.5
+   "articles_per_record_median": 5.5,
+   "text_chars_median": 1256.0
   }
  },
- "numbers_checked": 1318,
- "numbers_unsupported": 7,
- "records_where_gate_forced_extraction": 6,
+ "numbers_checked": 1287,
+ "numbers_unsupported": 9,
+ "records_where_gate_forced_extraction": 5,
  "out": "/data/defu/Time-series-datasets/05_fnspid/output/devset.jsonl"
 }
