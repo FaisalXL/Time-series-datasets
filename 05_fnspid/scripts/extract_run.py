@@ -126,8 +126,8 @@ Do four things.
    over a second detail about an event you already covered. Prefer concrete events, figures
    and decisions over restated context. Do not invent numbers. Empty list for "absent".
 
-3. Write a factual summary of what happened to {company} during this period, in at most 220
-   words. Rules: state only facts present in the articles above; every number you write must
+3. Write a factual summary of what happened to {company} during this period, in at most
+   {max_words} words. Rules: state only facts present in the articles above; every number you write must
    appear verbatim in those articles; cover the distinct events across ALL the articles, not
    just the largest one; name dates where the articles give them; do not predict or
    characterise future price movement; do not add analysis of your own.

@@ -73,7 +73,9 @@ def numeric_fidelity(summary: str, source: str, dates=()):
     invention. `dates` therefore carries every date the prompt exposed, decomposed into the
     components a writer would actually use.
 
-    Returns (n_numbers, n_unsupported, [examples]).
+    Returns (n_numbers, n_unsupported, [every unsupported token]). The full list, not a
+    sample, because the audit renderer highlights exactly these tokens -- if it recomputed
+    membership itself the two would drift and the page would flag numbers the gate passed.
     """
     src = {_norm(m.group(0)) for m in _NUMTOK.finditer(source)}
     for d in dates:                      # "2015-08-19" -> 2015, 08, 8, 19
@@ -99,7 +101,7 @@ def numeric_fidelity(summary: str, source: str, dates=()):
         if cands & src:
             continue
         bad.append(m.group(0))
-    return total, len(bad), bad[:5]
+    return total, len(bad), bad
 
 
 def fill_budget(sents: List[str], ranked: List[int], budget: int) -> List[int]:
@@ -255,7 +257,7 @@ def main() -> None:
                     "extractive_text": extractive if quality == "generated" else None,
                     "summary_text": summary if quality != "generated" else None,
                     "summary_numeric_fidelity": (
-                        {"numbers": n_num, "unsupported": n_bad, "examples": examples}
+                        {"numbers": n_num, "unsupported": n_bad, "tokens": examples}
                         if summary else None),
                     "window_start": w["w_start"], "window_end": w["w_end"],
                     "window_trading_days": len(wd),

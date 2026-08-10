@@ -202,6 +202,8 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="stop after N new pairs")
     ap.add_argument("--stride", type=int, default=1, help="take every Nth candidate (spread sample)")
     ap.add_argument("--batch", type=int, default=4000)
+    ap.add_argument("--summary-words", type=int, default=220,
+                    help="v3 summary length cap; 220 leaves ~59% of the char budget unused")
     ap.add_argument("--prompt", default="v2", choices=["v2", "v3"],
                     help="v2 = ranked extraction only; v3 = extraction + summary in one call")
     args = ap.parse_args()
@@ -246,9 +248,11 @@ def main() -> None:
                                                         args.char_cap)
             tmpl, system = ((USER_TMPL_V3, SYSTEM_V3) if args.prompt == "v3"
                             else (USER_TMPL_V2, SYSTEM_V2))
-            user = tmpl.format(ticker=c["t"], company=company_of(c["t"], names),
-                               period_start=c["w_start"], period_end=c["w_end"],
-                               sentences=block)
+            fmt = dict(ticker=c["t"], company=company_of(c["t"], names),
+                       period_start=c["w_start"], period_end=c["w_end"], sentences=block)
+            if args.prompt == "v3":
+                fmt["max_words"] = args.summary_words
+            user = tmpl.format(**fmt)
         else:
             sents, art, capped = numbered_sentences(c["bodies"], args.char_cap)
             user = render(c["t"], company_of(c["t"], names), sents)
