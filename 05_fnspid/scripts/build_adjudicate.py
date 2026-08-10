@@ -86,12 +86,13 @@ Use exactly one operation name:
   ratio        - one value divided by another
   share_of     - one value as a percentage of another
 
-Report the input numbers exactly as written in the sentences, and the sentence number each
-one comes from. Do NOT calculate the result -- only name the operation and its inputs.
+Report each input as a STRING copied exactly as the sentence writes it, INCLUDING any
+magnitude word or symbol ("US$25m", "8.7m", "$1.88"), and the sentence number it comes from.
+Do NOT calculate the result -- only name the operation and its inputs.
 If the figure cannot be obtained this way, use "none".
 
 Output this JSON only:
-{{"op": "<name>", "operands": [<number>, ...], "sentences": [<integer>, ...]}}"""
+{{"op": "<name>", "operands": ["<as written>", ...], "sentences": [<integer>, ...]}}"""
 
 
 def check_derivation(op, operands, target, tol):
@@ -227,16 +228,26 @@ def main() -> None:
                 d, dstatus, _e, _p, _c = ep.call(
                     DERIVE_USER.format(company=w["t"], sentences=block, figure=tok),
                     DERIVE_SYSTEM)
+                reason = "upheld_not_found"
                 if dstatus == "ok" and isinstance(d, dict) and d.get("op") not in (None, "none"):
                     tgt = next(((v, t2) for _s, v, t2 in parse_numbers(tok)), None)
                     cites = [i for i in (d.get("sentences") or []) if isinstance(i, int)
                              and 1 <= i <= len(sents)]
                     cited_text = " ".join(sents[i - 1] for i in cites)
                     src_vals = {round(v, 6) for _s, v, _t in parse_numbers(cited_text)}
-                    operands = d.get("operands") or []
-                    inputs_present = bool(cites) and all(
-                        any(abs(float(x) - v) <= max(1e-9, abs(v) * 0.005) for v in src_vals)
-                        for x in operands if isinstance(x, (int, float)))
+                    # Operands are parsed with the SAME parser as the target, so "US$25m"
+                    # becomes 25,000,000 on both sides. Taking them as bare numbers compared
+                    # an unscaled 25 against a scaled 16,300,000 and rejected a derivation
+                    # that was laid out explicitly in the article.
+                    raw_ops = d.get("operands") or []
+                    operands = []
+                    for x in raw_ops:
+                        vals = [v for _s, v, _t in parse_numbers(str(x))]
+                        if vals:
+                            operands.append(vals[0])
+                    inputs_present = bool(cites) and len(operands) == len(raw_ops) and all(
+                        any(abs(x - v) <= max(1e-9, abs(v) * 0.005) for v in src_vals)
+                        for x in operands)
                     if tgt and inputs_present:
                         good, got = check_derivation(d["op"], operands, tgt[0], tgt[1])
                         if good:
@@ -248,12 +259,16 @@ def main() -> None:
                                             "sentences": cites, "recomputed": got},
                                 "sentence": cited_text[:300]})
                             continue
-                        stats["upheld_bad_arithmetic"] += 1
+                        reason = "upheld_bad_arithmetic"
                     else:
-                        stats["upheld_operands_not_in_source"] += 1
+                        reason = "upheld_operands_not_in_source"
+                else:
+                    reason = "upheld_not_found"
+                # one figure, one verdict: the fall-through used to increment the specific
+                # reason AND the generic one, so the counts exceeded the figures checked
+                stats[reason] += 1
                 results.append({"figure": tok, "status": "ok", "supported": False,
-                                "sentence_index": idx or None})
-                stats["upheld_not_found"] += 1
+                                "sentence_index": idx or None, "reason": reason})
                 continue
             results.append({
                 "figure": tok, "status": "ok", "supported": True,
@@ -268,7 +283,9 @@ def main() -> None:
         list(ex.map(work, jobs))
     fh.close()
 
-    tot = sum(stats.values())
+    # count figures, not stat increments: `citation_unsupported` is a sub-event recorded
+    # alongside the final verdict, so summing the counter over-reports what was checked
+    tot = sum(len(j["tokens"]) for j in jobs)
     print(json.dumps({
         "summaries_seen": n_sum, "records_adjudicated": len(jobs),
         "figures_checked": tot, "verdicts": dict(stats),

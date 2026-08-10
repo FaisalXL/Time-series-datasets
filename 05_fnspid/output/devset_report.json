@@ -1,5 +1,5 @@
 {
- "built_at": "2026-08-10T19:39:37Z",
+ "built_at": "2026-08-10T20:12:16Z",
  "purpose": "human audit of LLM role/extraction/summary quality on window records",
  "record_shape": "window",
  "prompt": "extract_v3",
