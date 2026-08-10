@@ -74,7 +74,7 @@ def mark_numbers(text: str, bad_tokens: List[str]) -> str:
     out, last = [], 0
     for m in _NUMTOK.finditer(text):
         out.append(html.escape(text[last:m.start()]))
-        tok = m.group(0)
+        tok = m.group(0).strip()   # must match numeric_fidelity's own token form
         if remaining.get(tok, 0) > 0:
             remaining[tok] -= 1
             cls = "num-bad"

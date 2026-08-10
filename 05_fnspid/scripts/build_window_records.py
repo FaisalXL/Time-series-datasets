@@ -19,6 +19,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import bisect
 import collections
 import json
 import statistics
@@ -52,81 +53,118 @@ def resolve(p: str) -> Path:
 
 
 _re = __import__("re")
-_NUMTOK = _re.compile(r"\d[\d,]*(?:\.\d+)?")
+# Matches a number and, optionally, the magnitude word or symbol attached to it. The
+# leading-dot alternative is not cosmetic: the wires write "$.8" for eight tenths, and a
+# pattern requiring a leading digit sees only "8" -- which is how a correct summary saying
+# "$0.8" got scored as an invention.
+_NUMTOK = _re.compile(
+    r"(?<![\d.])(\d[\d,]*(?:\.\d+)?|\.\d+)\s*"
+    # The trailing guard excludes letters and digits but NOT a period: the decimal part is
+    # already consumed greedily above, so any period still ahead is sentence punctuation.
+    # Excluding it too made "$9.93." at the end of a sentence match nothing at all, and made
+    # "$1.5 billion." parse as 1.5 with the magnitude silently dropped -- which is how a
+    # stricter-looking gate ended up rejecting six times as many sound summaries.
+    r"(%|k|m|mm|bn|b|tn|thousand|million|billion|trillion)?(?![a-z0-9])",
+    _re.I)
 # "[9]", "[75, 86]" -- the model citing sentence numbers from the prompt, not stating figures
 _CITE = _re.compile(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]")
+# separators that can sit between the two ends of a written range: "-", en/em dash, "to",
+# optionally with a currency symbol on the second number
+_RANGE_SEP = _re.compile(r"\s*(?:-|\u2013|\u2014|to)\s*[$\u20ac\u00a3]?\s*")
+_SCALE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "mm": 1e6, "million": 1e6,
+          "b": 1e9, "bn": 1e9, "billion": 1e9, "tn": 1e12, "trillion": 1e12}
 
 
-def _norm(tok: str) -> str:
-    return tok.replace(",", "").rstrip(".")
+def parse_numbers(text: str):
+    """Yield (token, value, tolerance) for every number, resolving magnitude words.
+
+    Comparing number STRINGS was the original design and it was wrong in both directions.
+    "US$437k" in an article and "$437,000" in a summary are the same fact and never matched;
+    so are "5,823,912 shares" and "over 5.8 million". Parsing to a value and carrying a
+    tolerance derived from the written precision handles every one of those uniformly,
+    instead of accreting a special case per format.
+
+    `tolerance` is half a unit in the last significant place, i.e. exactly the rounding the
+    written form implies. "5.8 million" tolerates +/-50,000 and so matches 5,823,912;
+    "$9.9 billion" tolerates +/-50,000,000 and still cannot match 1,234,000,000.
+    """
+    ms = list(_NUMTOK.finditer(text))
+    for k, m in enumerate(ms):
+        raw, suf = m.group(1), (m.group(2) or "").lower()
+        # RANGES SHARE THEIR MAGNITUDE. Guidance is written "$4.09-$4.13 billion", where only
+        # the second number carries the word; read literally the first is 4.09 and gets
+        # compared against a source figure of 4.09 billion. So a bare number immediately
+        # followed by a range separator and a scaled number inherits that scale.
+        if not suf and k + 1 < len(ms):
+            gap = text[m.end():ms[k + 1].start()]
+            nxt = (ms[k + 1].group(2) or "").lower()
+            if nxt and nxt != "%" and len(gap) <= 6 and _RANGE_SEP.fullmatch(gap):
+                suf = nxt
+        digits = raw.replace(",", "")
+        try:
+            val = float(digits)
+        except ValueError:
+            continue
+        if suf and suf != "%":
+            val *= _SCALE.get(suf, 1.0)
+        # significant places as WRITTEN: trailing zeros of an integer are not significant
+        # ("437,000" is a rounded 437k, not a claim to unit precision)
+        if "." in digits:
+            dec = len(digits.split(".", 1)[1])
+            tol = 0.5 * (10 ** -dec)
+        else:
+            stripped = digits.rstrip("0")
+            tol = 0.5 * (10 ** (len(digits) - len(stripped))) if stripped else 0.5
+        if suf and suf != "%":
+            tol *= _SCALE.get(suf, 1.0)
+        yield m.group(0).strip(), val, max(tol, 1e-9)
 
 
 def numeric_fidelity(summary: str, source: str, dates=()):
-    """Every number in an LLM summary must occur in the source it was shown.
+    """Does every number in the summary correspond to one the model was actually shown?
 
-    This is the gate that makes summarisation shippable. The corpus's whole value is real
-    figures paired with a real series, so a fabricated "$2.3bn" is far more damaging than a
-    dropped article -- and unlike prose drift, a wrong number is cheap to detect.
+    This is the gate that makes summarisation shippable. The corpus's value is real figures
+    against a real series, so a fabricated "$2.3bn" is far worse than a dropped article -- and
+    unlike prose drift, a wrong number is cheap to detect.
 
-    THE PREMISE HAD TO BE CHECKED BEFORE THE GATE COULD BE TRUSTED. A first version flagged
-    ~50% of summaries, which looked like a damning hallucination rate and was almost entirely
-    the checker's fault: it left the trailing period on "2015." so it never matched "2015",
-    and it compared only against article bodies while the prompt ALSO showed the model each
-    article's publication date. The model writing "August 23, 2015" was then scored as an
-    invention. `dates` therefore carries every date the prompt exposed, decomposed into the
-    components a writer would actually use.
+    IT TOOK THREE PASSES TO GET THE PREMISE RIGHT, and every error was the gate rejecting
+    sound summaries rather than letting inventions through:
+      * v1 left the trailing period on "2015." so it never matched "2015", and compared only
+        against article bodies although the prompt ALSO showed each article's publication
+        date -- "August 23, 2015" scored as an invention. ~50% of summaries were rejected.
+      * v2 still compared strings, so "US$437k" vs "$437,000" and "$.8" vs "$0.8" failed, as
+        did any journalistic rounding of a large figure.
+      * This version compares VALUES with a tolerance taken from the written precision, which
+        subsumes all of those without a special case for each.
 
-    Returns (n_numbers, n_unsupported, [every unsupported token]). The full list, not a
-    sample, because the audit renderer highlights exactly these tokens -- if it recomputed
-    membership itself the two would drift and the page would flag numbers the gate passed.
+    A match is: some number the model was shown lies within the rounding implied by how the
+    summary wrote its own figure. That is deliberately permissive -- it detects invented
+    magnitudes, not misattributed ones. A summary that moves a correct figure onto the wrong
+    subject passes here and is a job for the human review, not for this check.
+
+    Returns (n_numbers, n_unsupported, [every unsupported token]).
     """
-    src = set()
-    for m in _NUMTOK.finditer(source):
-        tok = _norm(m.group(0))
-        src.add(tok)
-        # A JOURNALISTIC ROUNDING IS NOT A FABRICATION. "5,823,912 shares" is written up as
-        # "over 5.8 million", and the first version of this gate rejected that summary --
-        # throwing away better text to protect against an invention that had not happened.
-        # So every source figure also registers its rounded restatements at thousand /
-        # million / billion scale. This deliberately widens what passes: the gate exists to
-        # catch invented figures, not to prove every digit was copied.
-        try:
-            v = float(tok)
-        except ValueError:
-            continue
-        for scale in (1.0, 1e3, 1e6, 1e9):
-            s = v / scale
-            if s < 0.1:
-                break
-            src.update({f"{s:.0f}", f"{s:.1f}", f"{s:.2f}", f"{s:g}"})
-    for d in dates:                      # "2015-08-19" -> 2015, 08, 8, 19
-        parts = str(d).split("-")
-        for p in parts:
-            src.add(p)
-            src.add(p.lstrip("0") or "0")
-        src.add(str(d))
-    # Strip the model's own source citations before checking. It emits "[9]", "[75, 86]"
-    # pointing at sentence numbers; those are references to the prompt, not claims about the
-    # world, and scoring them as invented figures rejected summaries that were entirely
-    # sound. The prompt now forbids them too -- this is the belt to that braces.
-    summary = _CITE.sub(" ", summary)
+    src = [v for _t, v, _tol in parse_numbers(source)]
+    for d in dates:                      # publication dates were shown in the prompt headers
+        for part in str(d).split("-"):
+            try:
+                src.append(float(part))
+            except ValueError:
+                pass
+    src.sort()
+
+    def supported(val: float, tol: float) -> bool:
+        i = bisect.bisect_left(src, val - tol)
+        return i < len(src) and src[i] <= val + tol
+
+    # Strip the model's own citations first: "[9]", "[75, 86]" point at prompt sentence
+    # numbers. They are references, not claims about the world, and scoring them as figures
+    # rejected summaries that were entirely sound. The prompt forbids them too.
     bad, total = [], 0
-    for m in _NUMTOK.finditer(summary):
-        tok = _norm(m.group(0))
+    for tok, val, tol in parse_numbers(_CITE.sub(" ", summary)):
         total += 1
-        if tok in src:
-            continue
-        try:
-            f = float(tok)
-        except ValueError:
-            continue
-        # tolerate a rounded restatement of a source figure: 12.34 -> 12.3
-        cands = {f"{f:.1f}", f"{f:.2f}", f"{f:g}"}
-        if f == int(f):
-            cands.add(str(int(f)))
-        if cands & src:
-            continue
-        bad.append(m.group(0))
+        if not supported(val, tol):
+            bad.append(tok)
     return total, len(bad), bad
 
 
