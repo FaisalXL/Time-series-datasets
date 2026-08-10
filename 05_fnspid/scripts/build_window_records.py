@@ -193,6 +193,8 @@ def main() -> None:
     ap.add_argument("--out", default="output/window90.jsonl")
     ap.add_argument("--report", default="")
     ap.add_argument("--roles", default="primary,secondary")
+    ap.add_argument("--adjudications", default="",
+                    help="stage 2.5 output; overturns figures the value check could not place")
     ap.add_argument("--text-from", default="extraction", choices=["extraction", "summary"],
                     help="which variant becomes `text`; summary falls back on a fidelity fail")
     ap.add_argument("--floor", type=int, default=300)
@@ -216,6 +218,15 @@ def main() -> None:
     print(f"verdicts {len(verdicts):,}  budget {budget} chars  roles {sorted(keep_roles)}",
           flush=True)
 
+    # Stage 2.5 verdicts on figures the value matcher could not place. Absent file = no
+    # adjudication, and every flagged figure stands as a rejection.
+    adjud: Dict[str, dict] = {}
+    if args.adjudications and resolve(args.adjudications).exists():
+        for line in open(resolve(args.adjudications), encoding="utf-8"):
+            a = json.loads(line)
+            adjud[f"{a['t']}|{a['d']}"] = {f["figure"]: f["supported"] for f in a["figures"]}
+        print(f"adjudications loaded: {len(adjud):,} records", flush=True)
+
     outp = resolve(args.out)
     outp.parent.mkdir(parents=True, exist_ok=True)
     fh = open(outp, "w", encoding="utf-8")
@@ -233,6 +244,7 @@ def main() -> None:
     fid_fail: collections.Counter = collections.Counter()
     used_summary = 0
     fell_back = 0
+    overturned_total = 0
     tickers: set = set()
     t0 = time.time()
     seen = 0
@@ -281,6 +293,16 @@ def main() -> None:
         shown_dates = list(w.get("days", [])) + [w["w_start"], w["w_end"]]
         n_num, n_bad, examples = (numeric_fidelity(summary, source_text, shown_dates)
                                   if summary else (0, 0, []))
+        # A figure the value check could not place is not yet a rejection: stage 2.5 may have
+        # found it stated in a form the matcher cannot express ("fiscal '22", "$436-million",
+        # "$4.3 mln"). Only figures with no adjudication, or an upheld one, still count.
+        adj = adjud.get(f"{w['t']}|{w['w_start']}", {})
+        unresolved = [t for t in examples if not adj.get(t)]
+        if examples and adj:
+            n_overturned = len(examples) - len(unresolved)
+            if n_overturned:
+                overturned_total += n_overturned
+        n_bad = len(unresolved)
         summary_ok = bool(summary) and n_bad == 0 and len(summary) >= args.floor
         if not summary:
             fid_fail["no_summary"] += 1
@@ -386,6 +408,7 @@ def main() -> None:
         "text_from": args.text_from,
         "records_using_summary": used_summary,
         "records_fell_back_to_extraction": fell_back,
+        "figures_overturned_by_adjudication": overturned_total,
         "summary_numeric_fidelity_mean": round(sum(fid_rates) / len(fid_rates), 4) if fid_rates else None,
         "summary_gate_failures": dict(fid_fail),
         "text_chars": {"median": statistics.median(tc),

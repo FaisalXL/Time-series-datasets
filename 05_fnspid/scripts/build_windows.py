@@ -89,6 +89,19 @@ def load_calendar(prices_dir: Path, ticker: str, csv_cols: List[str]):
 _WORD = __import__("re").compile(r"[a-z0-9]+")
 
 
+# UPSTREAM CORRUPTION IN FNSPID: the digit "1" is sometimes replaced by the literal string
+# "Array" -- "20Array5" for 2015, "$Array.64 billion" for $1.64bn, "mid-20Array4" for 2014.
+# It looks like an array interpolated into a string somewhere in the original scrape. Only
+# DIGIT-ADJACENT occurrences are corruption: "Array Biopharma" is a real company (ARRY), so a
+# bare word match would throw away sound articles. Measured at 0.097% of articles.
+#
+# These articles are DROPPED rather than repaired. Substituting the digit back would be
+# editing third-party source text, which is exactly what `text_quality: real` promises we do
+# not do -- and a record whose numbers we quietly rewrote could never be audited against its
+# source.
+_CORRUPT = __import__("re").compile(r"(?:\d\s*Array|Array\s*[.,]?\s*\d)")
+
+
 def _shingles(text: str, k: int = 8, step: int = 10, cap: int = 6000) -> set:
     """Hashed 8-word shingles, sampled every `step` words over the first `cap` chars.
 
@@ -215,6 +228,13 @@ def main() -> None:
             if not items:
                 stats["empty_window"] += 1
                 continue
+            n_corrupt = sum(1 for it in items if _CORRUPT.search(it[1]))
+            if n_corrupt:
+                items = [it for it in items if not _CORRUPT.search(it[1])]
+                stats["corrupt_articles_dropped"] += n_corrupt
+                if not items:
+                    stats["window_empty_after_corruption"] += 1
+                    continue
             items, n_dup = dedup_articles(items)
             stats["duplicate_articles_dropped"] += n_dup
 

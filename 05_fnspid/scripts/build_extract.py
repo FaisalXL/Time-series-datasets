@@ -121,7 +121,24 @@ class Endpoint:
         self.consec = 0
         self.tripped = False
 
-    def call(self, user: str, system: str = SYSTEM) -> Tuple[Optional[dict], str, float, int, int]:
+    def call_raw(self, user: str, system: str = SYSTEM):
+        """Return the model's text, with retries, and no expectation of JSON.
+
+        For single-value answers, demanding a JSON object is a mistake dressed as rigour: ask
+        for `{"sentence": null}` and the model replies `null`, ask for an integer sentinel and
+        it replies `0`. Both are correct answers that the object-shaped parser scored as
+        failures and burned four retries on. Callers wanting one value should parse leniently.
+        """
+        out = {"content": None}
+        orig, self._raw = getattr(self, "_raw", False), True
+        try:
+            v, status, el, pt, ct = self.call(user, system, _raw_sink=out)
+        finally:
+            self._raw = orig
+        return out["content"], status, el, pt, ct
+
+    def call(self, user: str, system: str = SYSTEM,
+             _raw_sink: Optional[dict] = None) -> Tuple[Optional[dict], str, float, int, int]:
         payload = json.dumps({
             "model": MODEL,
             "messages": [{"role": "system", "content": system},
@@ -144,21 +161,37 @@ class Endpoint:
                 content = (ch.get("message") or {}).get("content") or ""
                 usage = d.get("usage") or {}
                 pt, ct = usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
+                # Parse-shaped failures are recorded like transport ones. They used to
+                # `continue` straight past the counter below, so a run could exhaust its
+                # retries on unparsable output and still report `transport_failures: {}` --
+                # the report looked clean precisely when it should have been loudest.
+                if _raw_sink is not None:
+                    if not content.strip():
+                        last = "empty_content"
+                        with self.lock:
+                            self.fail[last] += 1
+                        continue
+                    _raw_sink["content"] = content
+                    with self.lock:
+                        self.consec = 0
+                    return None, "ok", el, pt, ct
                 if ch.get("finish_reason") == "length":
                     last = "truncated_output"
-                    continue                       # index list overran max_tokens; retry
-                lo, hi = content.find("{"), content.rfind("}")
-                if lo < 0 or hi <= lo:
-                    last = "no_json"
-                    continue
-                try:
-                    v = json.loads(content[lo:hi + 1])
-                except json.JSONDecodeError:
-                    last = "bad_json"
-                    continue
+                elif content.find("{") < 0 or content.rfind("}") <= content.find("{"):
+                    last = "no_json" if content.strip() else "empty_content"
+                else:
+                    lo, hi = content.find("{"), content.rfind("}")
+                    try:
+                        v = json.loads(content[lo:hi + 1])
+                    except json.JSONDecodeError:
+                        last = "bad_json"
+                    else:
+                        with self.lock:
+                            self.consec = 0
+                        return v, "ok", el, pt, ct
                 with self.lock:
-                    self.consec = 0
-                return v, "ok", el, pt, ct
+                    self.fail[last] += 1
+                continue
             except urllib.error.HTTPError as e:
                 last = f"http_{e.code}"
             except Exception as e:                 # timeout, reset, DNS, malformed frame
