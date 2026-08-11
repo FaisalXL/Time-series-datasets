@@ -1,0 +1,35 @@
+{
+ "built_at": "2026-08-11T02:02:09Z",
+ "endpoint": "https://enigmalab.dev/llm/qwen36/v1/chat/completions",
+ "model": "Qwen/Qwen3.6-35B-A3B",
+ "concurrency": 64,
+ "char_cap": 24000,
+ "pairs_new": 135509,
+ "pairs_total_with_verdict": 135509,
+ "elapsed_s": 12567.4,
+ "rate_per_s": 10.78,
+ "status": {
+  "ok": 135509
+ },
+ "roles": {
+  "primary": 118961,
+  "incidental": 11861,
+  "absent": 1396,
+  "secondary": 3291
+ },
+ "transport_failures": {
+  "truncated_output": 23,
+  "bad_json": 12,
+  "http_502": 13,
+  "URLError": 3
+ },
+ "circuit_tripped": false,
+ "latency_s": {
+  "median": 5.71,
+  "p90": 7.927
+ },
+ "prompt_tokens": {
+  "median": 6787,
+  "p90": 7561
+ }
+}

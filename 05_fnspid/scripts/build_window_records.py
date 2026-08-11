@@ -33,6 +33,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_extract import numbered_window  # noqa: E402
+from extract_run import MODEL  # noqa: E402
 from fnspid_emit import (CHANNEL_SPEC, figures_in_series, make_record,  # noqa: E402
                          truncate_at_sentence)
 
@@ -252,6 +253,7 @@ def main() -> None:
     used_summary = 0
     fell_back = 0
     overturned_total = 0
+    prompt_seen = None
     tickers: set = set()
     t0 = time.time()
     seen = 0
@@ -271,6 +273,8 @@ def main() -> None:
         if role not in keep_roles:
             drops["role_" + str(role)] += 1
             continue
+        if prompt_seen is None:
+            prompt_seen = "extract_v3" if "summary" in v else "extract_v2"
         ranked = v.get("sentences") or []
         if not ranked:
             drops["no_sentences_selected"] += 1
@@ -362,8 +366,12 @@ def main() -> None:
                     "lookahead_safe": False,
                     "article_spread_gt5": w.get("article_spread_gt5", 0),
                     "extraction": {
-                        "prompt": "extract_v2",
-                        "model": "Qwen/Qwen3.6-35B-A3B",
+                        # Derived from the verdict, not hardcoded. A literal "extract_v2" here
+                        # stamped the wrong prompt version onto 120,522 records built with v3
+                        # -- provenance that is silently wrong is worse than absent, because
+                        # nothing downstream has any reason to doubt it.
+                        "prompt": "extract_v3" if "summary" in v else "extract_v2",
+                        "model": MODEL,
                         "role": role,
                         "relation": v.get("relation"),
                         "confidence": v.get("confidence"),
@@ -402,7 +410,7 @@ def main() -> None:
 
     report = {
         "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "record_shape": "window", "prompt": "extract_v2",
+        "record_shape": "window", "prompt": prompt_seen or "unknown",
         "policy": {"roles_kept": sorted(keep_roles), "budget_chars": budget,
                    "floor_chars": args.floor, "text_from": args.text_from},
         "windows_seen": seen, "records_kept": kept,

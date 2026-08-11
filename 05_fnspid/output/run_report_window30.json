@@ -1,0 +1,69 @@
+{
+ "built_at": "2026-08-11T03:17:22Z",
+ "record_shape": "window",
+ "prompt": "extract_v3",
+ "policy": {
+  "roles_kept": [
+   "primary",
+   "secondary"
+  ],
+  "budget_chars": 2240,
+  "floor_chars": 300,
+  "text_from": "summary"
+ },
+ "windows_seen": 135509,
+ "records_kept": 120522,
+ "distinct_tickers": 4155,
+ "roles_observed": {
+  "primary": 118961,
+  "incidental": 11861,
+  "secondary": 3291,
+  "absent": 1396
+ },
+ "drops": {
+  "role_incidental": 11861,
+  "no_sentences_selected": 1579,
+  "role_absent": 1396,
+  "below_floor": 137,
+  "nothing_fits_budget": 14
+ },
+ "era": {
+  "2021-2023": 42267,
+  "2017-2020": 41463,
+  "2013-2016": 30553,
+  "2009-2012": 6239
+ },
+ "n_articles_used": {
+  "1": 150,
+  "2": 16080,
+  "3": 14576,
+  "4": 12340,
+  "5": 10148,
+  "6": 8702,
+  "7": 7752,
+  "8": 5632,
+  "9": 4600,
+  "10": 3960,
+  "11": 3320,
+  "12": 33262
+ },
+ "ranked_share_used": 0.969,
+ "text_from": "summary",
+ "records_using_summary": 118607,
+ "records_fell_back_to_extraction": 2052,
+ "figures_overturned_by_adjudication": 2904,
+ "summary_numeric_fidelity_mean": 0.9992,
+ "summary_gate_failures": {
+  "unsupported_number": 1827,
+  "too_short": 225
+ },
+ "text_chars": {
+  "median": 1142.0,
+  "p10": 739,
+  "p90": 1605
+ },
+ "figures_matching_own_series_mean": 1.077,
+ "PERMUTATION_CONTROL_mean": 0.442,
+ "elapsed_s": 235.0,
+ "output_path": "/data/defu/Time-series-datasets/05_fnspid/output/fnspid_cpt_window30.jsonl"
+}
