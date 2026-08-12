@@ -1,0 +1,3045 @@
+[
+ {
+  "family": "retailsales",
+  "path": "businessindustryandtrade/retailindustry",
+  "n_editions_total": 136,
+  "datasets": [
+   [
+    "businessindustryandtrade/retailindustry/datasets/retailsales",
+    "drsi"
+   ]
+  ],
+  "n_candidate_series": 621,
+  "n_sampled": 8,
+  "n_claims": 273,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "june2026",
+   "january2025",
+   "august2023",
+   "march2022",
+   "october2020",
+   "may2019",
+   "december2017",
+   "july2016"
+  ],
+  "prose_vocab_size": 510,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 49,
+   "search_space_control": 34.5,
+   "search_space_ratio": 1.42,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.056,
+   "n_series_tested": 621,
+   "bonferroni_alpha": 1.610305958132045e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.3
+ },
+ {
+  "family": "gdpmonthlyestimateuk",
+  "path": "economy/grossdomesticproductgdp",
+  "n_editions_total": 97,
+  "datasets": [
+   [
+    "economy/grossdomesticproductgdp/datasets/bluebook",
+    "bb"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/businessinvestment",
+    "cxnv"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/gdpmonthlyestimateuktimeseriesdataset",
+    "mgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/preliminaryestimateofgdp",
+    "pgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/quarterlynationalaccounts",
+    "qna"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/secondestimateofgdp",
+    "pn2"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/unitedkingdomeconomicaccounts",
+    "ukea"
+   ]
+  ],
+  "n_candidate_series": 207,
+  "n_sampled": 8,
+  "n_claims": 575,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "may2026",
+   "may2025",
+   "may2024",
+   "may2023",
+   "may2022",
+   "may2021",
+   "may2020",
+   "may2019"
+  ],
+  "prose_vocab_size": 565,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.0,
+   "search_space_ratio": null,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 207,
+   "bonferroni_alpha": 4.830917874396135e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.3
+ },
+ {
+  "family": "jobsandvacanciesintheuk",
+  "path": "employmentandlabourmarket/peopleinwork/employmentandemployeetypes",
+  "n_editions_total": 89,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/employmentandemployeetypes/datasets/labourmarketstatistics",
+    "lms"
+   ]
+  ],
+  "n_candidate_series": 1404,
+  "n_sampled": 8,
+  "n_claims": 149,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "july2026",
+   "august2025",
+   "september2024",
+   "october2023",
+   "november2022",
+   "december2021",
+   "january2021",
+   "february2020"
+  ],
+  "prose_vocab_size": 328,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 21,
+   "search_space_control": 16.2,
+   "search_space_ratio": 1.29,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.012,
+   "n_series_tested": 1404,
+   "bonferroni_alpha": 7.122507122507123e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.4
+ },
+ {
+  "family": "regionallabourmarket",
+  "path": "employmentandlabourmarket/peopleinwork/employmentandemployeetypes",
+  "n_editions_total": 131,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/employmentandemployeetypes/datasets/labourmarketstatistics",
+    "lms"
+   ]
+  ],
+  "n_candidate_series": 1404,
+  "n_sampled": 8,
+  "n_claims": 244,
+  "period_shapes": {
+   "month": 7,
+   "year_only": 1
+  },
+  "sample": [
+   "july2026",
+   "march2025",
+   "june2023",
+   "february2022",
+   "october2020",
+   "june2019",
+   "february2018",
+   "oct2016"
+  ],
+  "prose_vocab_size": 227,
+  "nonidentifying_claims": 7,
+  "floor": {
+   "search_space_real": 73,
+   "search_space_control": 64.8,
+   "search_space_ratio": 1.13,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.046,
+   "n_series_tested": 1404,
+   "bonferroni_alpha": 7.122507122507123e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.4
+ },
+ {
+  "family": "overseastravelandtourism",
+  "path": "peoplepopulationandcommunity/leisureandtourism",
+  "n_editions_total": 63,
+  "datasets": [
+   [
+    "peoplepopulationandcommunity/leisureandtourism/datasets/internationalpassengersurveytimeseriesspreadsheet",
+    "ott"
+   ]
+  ],
+  "n_candidate_series": 8,
+  "n_sampled": 8,
+  "n_claims": 269,
+  "period_shapes": {
+   "month": 7,
+   "year_only": 1
+  },
+  "sample": [
+   "december2022provisionalresults",
+   "may2022provisionalresults",
+   "october2019provisionalresults",
+   "february2019provisionalresults",
+   "novemberanddecember2017provisionalresults",
+   "provisionalresultsformay2017",
+   "oct2016",
+   "provisionalresultsformarch2016"
+  ],
+  "prose_vocab_size": 191,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 17,
+   "search_space_control": 6.0,
+   "search_space_ratio": 2.83,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.75,
+   "n_series_tested": 8,
+   "bonferroni_alpha": 0.000125
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.0
+ },
+ {
+  "family": "uklabourmarket",
+  "path": "employmentandlabourmarket/peopleinwork/employmentandemployeetypes",
+  "n_editions_total": 136,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/employmentandemployeetypes/datasets/labourmarketstatistics",
+    "lms"
+   ]
+  ],
+  "n_candidate_series": 1404,
+  "n_sampled": 8,
+  "n_claims": 234,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "july2026",
+   "february2025",
+   "september2023",
+   "april2022",
+   "november2020",
+   "june2019",
+   "january2018",
+   "august2016"
+  ],
+  "prose_vocab_size": 378,
+  "nonidentifying_claims": 12,
+  "floor": {
+   "search_space_real": 39,
+   "search_space_control": 44.8,
+   "search_space_ratio": 0.87,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.032,
+   "n_series_tested": 1404,
+   "bonferroni_alpha": 7.122507122507123e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.4
+ },
+ {
+  "family": "mergersandacquisitionsinvolvingukcompanies",
+  "path": "businessindustryandtrade/changestobusiness/mergersandacquisitions",
+  "n_editions_total": 47,
+  "datasets": [
+   [
+    "businessindustryandtrade/changestobusiness/mergersandacquisitions/datasets/mergersandacquisitionsuk",
+    "am"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "publicsectoremployment",
+  "path": "employmentandlabourmarket/peopleinwork/publicsectorpersonnel",
+  "n_editions_total": 46,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/publicsectorpersonnel/datasets/publicsectoremploymenttimeseriesdataset",
+    "pse"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "employmentintheuk",
+  "path": "employmentandlabourmarket/peopleinwork/employmentandemployeetypes",
+  "n_editions_total": 85,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/employmentandemployeetypes/datasets/labourmarketstatistics",
+    "lms"
+   ]
+  ],
+  "n_candidate_series": 1404,
+  "n_sampled": 8,
+  "n_claims": 164,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "july2026",
+   "september2025",
+   "november2024",
+   "september2023",
+   "november2022",
+   "january2022",
+   "march2021",
+   "may2020"
+  ],
+  "prose_vocab_size": 265,
+  "nonidentifying_claims": 1,
+  "floor": {
+   "search_space_real": 33,
+   "search_space_control": 30.8,
+   "search_space_ratio": 1.07,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.022,
+   "n_series_tested": 1404,
+   "bonferroni_alpha": 7.122507122507123e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.4
+ },
+ {
+  "family": "earningsandemploymentfrompayasyouearnrealtimeinformationuk",
+  "path": "employmentandlabourmarket/peopleinwork/earningsandworkinghours",
+  "n_editions_total": 80,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/earningsandworkinghours/datasets/averageweeklyearnings",
+    "emp"
+   ]
+  ],
+  "n_candidate_series": 458,
+  "n_sampled": 8,
+  "n_claims": 359,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "july2026",
+   "september2025",
+   "november2024",
+   "january2024",
+   "march2023",
+   "may2022",
+   "july2021",
+   "september2020"
+  ],
+  "prose_vocab_size": 342,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.0,
+   "search_space_ratio": null,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 458,
+   "bonferroni_alpha": 2.1834061135371177e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.1
+ },
+ {
+  "family": "consumertrends",
+  "path": "economy/nationalaccounts/satelliteaccounts",
+  "n_editions_total": 45,
+  "datasets": [
+   [
+    "economy/nationalaccounts/satelliteaccounts/datasets/consumertrends",
+    "ct"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "averageweeklyearningsingreatbritain",
+  "path": "employmentandlabourmarket/peopleinwork/employmentandemployeetypes",
+  "n_editions_total": 89,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/employmentandemployeetypes/datasets/labourmarketstatistics",
+    "lms"
+   ]
+  ],
+  "n_candidate_series": 1404,
+  "n_sampled": 8,
+  "n_claims": 266,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "july2026",
+   "august2025",
+   "september2024",
+   "october2023",
+   "november2022",
+   "december2021",
+   "january2021",
+   "february2020"
+  ],
+  "prose_vocab_size": 359,
+  "nonidentifying_claims": 3,
+  "floor": {
+   "search_space_real": 5,
+   "search_space_control": 7.8,
+   "search_space_ratio": 0.65,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.006,
+   "n_series_tested": 1404,
+   "bonferroni_alpha": 7.122507122507123e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.4
+ },
+ {
+  "family": "publicsectorfinances",
+  "path": "economy/governmentpublicsectorandtaxes/publicsectorfinance",
+  "n_editions_total": 136,
+  "datasets": [
+   [
+    "economy/governmentpublicsectorandtaxes/publicsectorfinance/datasets/maastrichtsupplementarytablestimeseries",
+    "edp"
+   ],
+   [
+    "economy/governmentpublicsectorandtaxes/publicsectorfinance/datasets/publicsectorfinances",
+    "pusf"
+   ]
+  ],
+  "n_candidate_series": 521,
+  "n_sampled": 8,
+  "n_claims": 794,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "june2026",
+   "january2025",
+   "august2023",
+   "march2022",
+   "october2020",
+   "may2019",
+   "december2017",
+   "july"
+  ],
+  "prose_vocab_size": 793,
+  "nonidentifying_claims": 1,
+  "floor": {
+   "search_space_real": 89,
+   "search_space_control": 75.0,
+   "search_space_ratio": 1.19,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.144,
+   "n_series_tested": 521,
+   "bonferroni_alpha": 1.9193857965451054e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.5
+ },
+ {
+  "family": "youngpeoplenotineducationemploymentortrainingneet",
+  "path": "employmentandlabourmarket/peoplenotinwork/unemployment",
+  "n_editions_total": 46,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peoplenotinwork/unemployment/datasets/claimantcountandvacanciesdataset",
+    "unem"
+   ]
+  ],
+  "n_candidate_series": 317,
+  "n_sampled": 8,
+  "n_claims": 104,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "may2026",
+   "february2025",
+   "august2023",
+   "may2022",
+   "march2021",
+   "november2019",
+   "august2018",
+   "may2017"
+  ],
+  "prose_vocab_size": 148,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 2,
+   "search_space_control": 1.5,
+   "search_space_ratio": 1.33,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.005,
+   "n_series_tested": 317,
+   "bonferroni_alpha": 3.1545741324921135e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.1
+ },
+ {
+  "family": "businessinvestment",
+  "path": "economy/grossdomesticproductgdp",
+  "n_editions_total": 82,
+  "datasets": [
+   [
+    "economy/grossdomesticproductgdp/datasets/bluebook",
+    "bb"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/businessinvestment",
+    "cxnv"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/gdpmonthlyestimateuktimeseriesdataset",
+    "mgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/preliminaryestimateofgdp",
+    "pgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/quarterlynationalaccounts",
+    "qna"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/secondestimateofgdp",
+    "pn2"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/unitedkingdomeconomicaccounts",
+    "ukea"
+   ]
+  ],
+  "n_candidate_series": 207,
+  "n_sampled": 8,
+  "n_claims": 307,
+  "period_shapes": {
+   "month_to_month": 8
+  },
+  "sample": [
+   "janaurytomarch2026revisedresults",
+   "octobertodecember2024revisedresults",
+   "julytoseptember2023revisedresults",
+   "apriltojune2022revisedresults",
+   "januarytomarch2021revisedresults",
+   "januarytomarch2019revisedresults",
+   "apriltojune2017revisedresults",
+   "quarter1jantomar2016revisedresults"
+  ],
+  "prose_vocab_size": 404,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.0,
+   "search_space_ratio": null,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 207,
+   "bonferroni_alpha": 4.830917874396135e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.2
+ },
+ {
+  "family": "ukgovernmentdebtanddeficitforeurostatmaast",
+  "path": "economy/governmentpublicsectorandtaxes/publicspending",
+  "n_editions_total": 33,
+  "datasets": [
+   [
+    "economy/governmentpublicsectorandtaxes/publicspending/datasets/maastrichtsupplementarytablesedp2timeseries",
+    "edp2"
+   ],
+   [
+    "economy/governmentpublicsectorandtaxes/publicspending/datasets/maastrictsupplementarytabe",
+    "edp3"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "profitabilityofukcompanies",
+  "path": "economy/nationalaccounts/uksectoraccounts",
+  "n_editions_total": 29,
+  "datasets": [
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/capitalstock",
+    "capstk"
+   ],
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/nationalbalancesheet",
+    "nbs"
+   ],
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/profitabilityofukcompanies",
+    "prof"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "indexofproduction",
+  "path": "economy/economicoutputandproductivity/output",
+  "n_editions_total": 135,
+  "datasets": [
+   [
+    "economy/economicoutputandproductivity/output/datasets/indexofproduction",
+    "diop"
+   ],
+   [
+    "economy/economicoutputandproductivity/output/datasets/indexofservices",
+    "ios1"
+   ]
+  ],
+  "n_candidate_series": 1529,
+  "n_sampled": 8,
+  "n_claims": 205,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "may2026",
+   "january2025",
+   "september2023",
+   "may2022",
+   "january2021",
+   "september2019",
+   "may2018",
+   "jan2017"
+  ],
+  "prose_vocab_size": 333,
+  "nonidentifying_claims": 17,
+  "floor": {
+   "search_space_real": 98,
+   "search_space_control": 91.5,
+   "search_space_ratio": 1.07,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.06,
+   "n_series_tested": 1529,
+   "bonferroni_alpha": 6.540222367560497e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.5
+ },
+ {
+  "family": "labourproductivity",
+  "path": "employmentandlabourmarket/peopleinwork/labourproductivity",
+  "n_editions_total": 23,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/labourproductivity/datasets/labourproductivity",
+    "prdy"
+   ],
+   [
+    "employmentandlabourmarket/peopleinwork/labourproductivity/datasets/regionalproductivitytimeseries",
+    "rprd"
+   ],
+   [
+    "employmentandlabourmarket/peopleinwork/labourproductivity/datasets/unitlabourcostandunitwagecosttimeseries",
+    "ucst"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "quarterlysectoraccounts",
+  "path": "economy/nationalaccounts/uksectoraccounts",
+  "n_editions_total": 40,
+  "datasets": [
+   [
+    "economy/grossdomesticproductgdp/datasets/unitedkingdomeconomicaccounts",
+    "ukea"
+   ],
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/capitalstock",
+    "capstk"
+   ],
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/nationalbalancesheet",
+    "nbs"
+   ],
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/profitabilityofukcompanies",
+    "prof"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "ukmanufacturerssalesbyproductprodcom",
+  "path": "businessindustryandtrade/manufacturingandproductionindustry",
+  "n_editions_total": 20,
+  "datasets": [
+   [
+    "businessindustryandtrade/manufacturingandproductionindustry/datasets/turnoverandordersintheproductionandservicesindustriesdataset",
+    "topsi"
+   ]
+  ],
+  "n_candidate_series": 163,
+  "n_sampled": 8,
+  "n_claims": 0,
+  "period_shapes": {
+   "year_only": 8
+  },
+  "sample": [
+   "2025",
+   "2023",
+   "2021results",
+   "2019results",
+   "2018provisionalresults",
+   "2017provisionalresults",
+   "provisionalestimates2016",
+   "provisionalestimates2015"
+  ],
+  "status": "too_few_claims"
+ },
+ {
+  "family": "mq5investmentbyinsurancecompaniespensionfundsandtrusts",
+  "path": "economy/investmentspensionsandtrusts",
+  "n_editions_total": 18,
+  "datasets": [
+   [
+    "economy/investmentspensionsandtrusts/datasets/investmentbyinsurancecompaniespensionfundsandtrusts",
+    "mq5"
+   ],
+   [
+    "economy/investmentspensionsandtrusts/datasets/shareownership",
+    "srs"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "fundedoccupationalpensionschemesintheuk",
+  "path": "economy/investmentspensionsandtrusts",
+  "n_editions_total": 17,
+  "datasets": [
+   [
+    "economy/investmentspensionsandtrusts/datasets/investmentbyinsurancecompaniespensionfundsandtrusts",
+    "mq5"
+   ],
+   [
+    "economy/investmentspensionsandtrusts/datasets/shareownership",
+    "srs"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "annualsmallareapopulationestimates",
+  "path": "peoplepopulationandcommunity/populationandmigration/populationestimates",
+  "n_editions_total": 15,
+  "datasets": [
+   [
+    "peoplepopulationandcommunity/populationandmigration/populationestimates/datasets/populationestimatestimeseriesdataset",
+    "pop"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "annualsurveyofhoursandearnings",
+  "path": "employmentandlabourmarket/peopleinwork/earningsandworkinghours",
+  "n_editions_total": 15,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/earningsandworkinghours/datasets/averageweeklyearnings",
+    "emp"
+   ]
+  ],
+  "n_candidate_series": 458,
+  "n_sampled": 8,
+  "n_claims": 0,
+  "period_shapes": {
+   "year_only": 8
+  },
+  "sample": [
+   "2025",
+   "2024",
+   "2023",
+   "2022",
+   "2021",
+   "2020",
+   "2019",
+   "2018"
+  ],
+  "status": "too_few_claims"
+ },
+ {
+  "family": "annualmidyearpopulationestimates",
+  "path": "peoplepopulationandcommunity/populationandmigration/populationestimates",
+  "n_editions_total": 15,
+  "datasets": [
+   [
+    "peoplepopulationandcommunity/populationandmigration/populationestimates/datasets/populationestimatestimeseriesdataset",
+    "pop"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "indexoflabourcostsperhourilch",
+  "path": "employmentandlabourmarket/peopleinwork/earningsandworkinghours",
+  "n_editions_total": 24,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/earningsandworkinghours/datasets/averageweeklyearnings",
+    "emp"
+   ]
+  ],
+  "n_candidate_series": 458,
+  "n_sampled": 8,
+  "n_claims": 213,
+  "period_shapes": {
+   "month_to_month": 8
+  },
+  "sample": [
+   "julytoseptember2020",
+   "julytoseptember2019experimentalstatistics",
+   "octobertodecember2018experimentalstatistics",
+   "januarytomarch2018",
+   "apriltojune2017",
+   "julytosept2016",
+   "quarter4octtodec2015experimental",
+   "2015-06-18"
+  ],
+  "prose_vocab_size": 274,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.0,
+   "search_space_ratio": null,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 458,
+   "bonferroni_alpha": 2.1834061135371177e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.1
+ },
+ {
+  "family": "indexofservices",
+  "path": "economy/economicoutputandproductivity/output",
+  "n_editions_total": 136,
+  "datasets": [
+   [
+    "economy/economicoutputandproductivity/output/datasets/indexofproduction",
+    "diop"
+   ],
+   [
+    "economy/economicoutputandproductivity/output/datasets/indexofservices",
+    "ios1"
+   ]
+  ],
+  "n_candidate_series": 1529,
+  "n_sampled": 8,
+  "n_claims": 202,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "may2026",
+   "december2024",
+   "july2023",
+   "february2022",
+   "september2020",
+   "april2019",
+   "november2017",
+   "june2016"
+  ],
+  "prose_vocab_size": 397,
+  "nonidentifying_claims": 1,
+  "floor": {
+   "search_space_real": 19,
+   "search_space_control": 26.5,
+   "search_space_ratio": 0.72,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.017,
+   "n_series_tested": 1529,
+   "bonferroni_alpha": 6.540222367560497e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.6
+ },
+ {
+  "family": "ukgrossdomesticexpenditureonresearchanddevelopment",
+  "path": "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure",
+  "n_editions_total": 14,
+  "datasets": [
+   [
+    "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure/datasets/businessenterpriseresearchanddevelopmenttimeseriesspreadsheet",
+    "berd"
+   ],
+   [
+    "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure/datasets/governmentexpenditureonresearchanddevelopment",
+    "gerd"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "worklesshouseholdsforregionsacrosstheuk",
+  "path": "employmentandlabourmarket/peoplenotinwork/unemployment",
+  "n_editions_total": 14,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peoplenotinwork/unemployment/datasets/claimantcountandvacanciesdataset",
+    "unem"
+   ]
+  ],
+  "n_candidate_series": 317,
+  "n_sampled": 8,
+  "n_claims": 0,
+  "period_shapes": {
+   "year_only": 8
+  },
+  "sample": [
+   "2025",
+   "2024",
+   "2023",
+   "2022",
+   "2021",
+   "2020",
+   "2019",
+   "2018"
+  ],
+  "status": "too_few_claims"
+ },
+ {
+  "family": "foreigndirectinvestmentinvolvingukcompanies",
+  "path": "economy/nationalaccounts/balanceofpayments",
+  "n_editions_total": 14,
+  "datasets": [
+   [
+    "economy/nationalaccounts/balanceofpayments/datasets/balanceofpayments",
+    "pnbp"
+   ],
+   [
+    "economy/nationalaccounts/balanceofpayments/datasets/pinkbook",
+    "pb"
+   ],
+   [
+    "economy/nationalaccounts/balanceofpayments/datasets/tradeingoodsmretsallbopeu2013timeseriesspreadsheet",
+    "mret"
+   ]
+  ],
+  "n_candidate_series": 1567,
+  "n_sampled": 8,
+  "n_claims": 0,
+  "period_shapes": {
+   "year_only": 8
+  },
+  "sample": [
+   "2024",
+   "2023",
+   "2022",
+   "2021",
+   "2020",
+   "2019",
+   "2018",
+   "2017"
+  ],
+  "status": "too_few_claims"
+ },
+ {
+  "family": "businessenterpriseresearchanddevelopment",
+  "path": "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure",
+  "n_editions_total": 14,
+  "datasets": [
+   [
+    "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure/datasets/businessenterpriseresearchanddevelopmenttimeseriesspreadsheet",
+    "berd"
+   ],
+   [
+    "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure/datasets/governmentexpenditureonresearchanddevelopment",
+    "gerd"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "ukgovernmentexpenditureonscienceengineeringandtechnology",
+  "path": "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure",
+  "n_editions_total": 13,
+  "datasets": [
+   [
+    "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure/datasets/businessenterpriseresearchanddevelopmenttimeseriesspreadsheet",
+    "berd"
+   ],
+   [
+    "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure/datasets/governmentexpenditureonresearchanddevelopment",
+    "gerd"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "nationalbalancesheet",
+  "path": "economy/nationalaccounts/uksectoraccounts",
+  "n_editions_total": 13,
+  "datasets": [
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/capitalstock",
+    "capstk"
+   ],
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/nationalbalancesheet",
+    "nbs"
+   ],
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/profitabilityofukcompanies",
+    "prof"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "gdpukregionsandcountries",
+  "path": "economy/grossdomesticproductgdp",
+  "n_editions_total": 16,
+  "datasets": [
+   [
+    "economy/grossdomesticproductgdp/datasets/bluebook",
+    "bb"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/businessinvestment",
+    "cxnv"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/gdpmonthlyestimateuktimeseriesdataset",
+    "mgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/preliminaryestimateofgdp",
+    "pgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/quarterlynationalaccounts",
+    "qna"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/secondestimateofgdp",
+    "pn2"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/unitedkingdomeconomicaccounts",
+    "ukea"
+   ]
+  ],
+  "n_candidate_series": 207,
+  "n_sampled": 8,
+  "n_claims": 170,
+  "period_shapes": {
+   "month_to_month": 8
+  },
+  "sample": [
+   "julytoseptember2022",
+   "januarytomarch2022",
+   "julytoseptember2021",
+   "januarytomarch2021",
+   "julytoseptember2020",
+   "januarytomarch2020",
+   "julytoseptember2019",
+   "januarytomarch2019"
+  ],
+  "prose_vocab_size": 161,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.0,
+   "search_space_ratio": null,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 207,
+   "bonferroni_alpha": 4.830917874396135e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.2
+ },
+ {
+  "family": "capitalstocksconsumptionoffixedcapital",
+  "path": "economy/nationalaccounts/uksectoraccounts",
+  "n_editions_total": 12,
+  "datasets": [
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/capitalstock",
+    "capstk"
+   ],
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/nationalbalancesheet",
+    "nbs"
+   ],
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/profitabilityofukcompanies",
+    "prof"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "businessregisterandemploymentsurveybresprovisionalresults",
+  "path": "employmentandlabourmarket/peopleinwork/employmentandemployeetypes",
+  "n_editions_total": 13,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/employmentandemployeetypes/datasets/labourmarketstatistics",
+    "lms"
+   ]
+  ],
+  "n_candidate_series": 1404,
+  "n_sampled": 8,
+  "n_claims": 0,
+  "period_shapes": {
+   "year_only": 8
+  },
+  "sample": [
+   "provisionalresults2023",
+   "provisionalresults2022revisedresults2021",
+   "2021",
+   "provisionalresults2020",
+   "2019",
+   "2018",
+   "provisionalresults2017revisedresults2016",
+   "provisionalresults2016revisedresults2015"
+  ],
+  "status": "too_few_claims"
+ },
+ {
+  "family": "populationestimatesbymaritalstatusandlivingarrangements",
+  "path": "peoplepopulationandcommunity/populationandmigration/populationestimates",
+  "n_editions_total": 10,
+  "datasets": [
+   [
+    "peoplepopulationandcommunity/populationandmigration/populationestimates/datasets/populationestimatestimeseriesdataset",
+    "pop"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "quarterlynationalaccounts",
+  "path": "economy/grossdomesticproductgdp",
+  "n_editions_total": 47,
+  "datasets": [
+   [
+    "economy/grossdomesticproductgdp/datasets/bluebook",
+    "bb"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/businessinvestment",
+    "cxnv"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/gdpmonthlyestimateuktimeseriesdataset",
+    "mgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/preliminaryestimateofgdp",
+    "pgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/quarterlynationalaccounts",
+    "qna"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/secondestimateofgdp",
+    "pn2"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/unitedkingdomeconomicaccounts",
+    "ukea"
+   ]
+  ],
+  "n_candidate_series": 207,
+  "n_sampled": 8,
+  "n_claims": 943,
+  "period_shapes": {
+   "month_to_month": 8
+  },
+  "sample": [
+   "januarytomarch2026",
+   "octobertodecember2024",
+   "julytoseptember2023",
+   "apriltojune2022",
+   "januarytomarch2021",
+   "octobertodecember2019",
+   "julytoseptember2018",
+   "aprtojun2017"
+  ],
+  "prose_vocab_size": 902,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 1.0,
+   "search_space_ratio": 0.0,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.005,
+   "n_series_tested": 207,
+   "bonferroni_alpha": 4.830917874396135e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.3
+ },
+ {
+  "family": "gdpfirstquarterlyestimateuk",
+  "path": "economy/grossdomesticproductgdp",
+  "n_editions_total": 32,
+  "datasets": [
+   [
+    "economy/grossdomesticproductgdp/datasets/bluebook",
+    "bb"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/businessinvestment",
+    "cxnv"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/gdpmonthlyestimateuktimeseriesdataset",
+    "mgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/preliminaryestimateofgdp",
+    "pgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/quarterlynationalaccounts",
+    "qna"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/secondestimateofgdp",
+    "pn2"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/unitedkingdomeconomicaccounts",
+    "ukea"
+   ]
+  ],
+  "n_candidate_series": 207,
+  "n_sampled": 8,
+  "n_claims": 614,
+  "period_shapes": {
+   "month_to_month": 8
+  },
+  "sample": [
+   "januarytomarch2026",
+   "januarytomarch2025",
+   "januarytomarch2024",
+   "januarytomarch2023",
+   "januarytomarch2022",
+   "januarytomarch2021",
+   "januarytomarch2020",
+   "januarytomarch2019"
+  ],
+  "prose_vocab_size": 738,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.0,
+   "search_space_ratio": null,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 207,
+   "bonferroni_alpha": 4.830917874396135e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.3
+ },
+ {
+  "family": "secondestimateofgdp",
+  "path": "economy/grossdomesticproductgdp",
+  "n_editions_total": 15,
+  "datasets": [
+   [
+    "economy/grossdomesticproductgdp/datasets/bluebook",
+    "bb"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/businessinvestment",
+    "cxnv"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/gdpmonthlyestimateuktimeseriesdataset",
+    "mgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/preliminaryestimateofgdp",
+    "pgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/quarterlynationalaccounts",
+    "qna"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/secondestimateofgdp",
+    "pn2"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/unitedkingdomeconomicaccounts",
+    "ukea"
+   ]
+  ],
+  "n_candidate_series": 207,
+  "n_sampled": 8,
+  "n_claims": 258,
+  "period_shapes": {
+   "month_to_month": 4,
+   "year_only": 4
+  },
+  "sample": [
+   "januarytomarch2018",
+   "octobertodecember2017",
+   "julytoseptember2017",
+   "apriltojune2017",
+   "quarter1jantomar2017",
+   "quarter4octtodec2016",
+   "quarter3julytosept2016",
+   "quarter2aprtojun2016"
+  ],
+  "prose_vocab_size": 413,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.5,
+   "search_space_ratio": 0.0,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.002,
+   "n_series_tested": 207,
+   "bonferroni_alpha": 4.830917874396135e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.2
+ },
+ {
+  "family": "childrenlivinginlongtermworklesshouseholdsintheuk",
+  "path": "employmentandlabourmarket/peoplenotinwork/unemployment",
+  "n_editions_total": 9,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peoplenotinwork/unemployment/datasets/claimantcountandvacanciesdataset",
+    "unem"
+   ]
+  ],
+  "n_candidate_series": 317,
+  "n_sampled": 8,
+  "n_claims": 0,
+  "period_shapes": {
+   "year_only": 8
+  },
+  "sample": [
+   "2024",
+   "2023",
+   "2022",
+   "2021",
+   "2020",
+   "2019",
+   "2018",
+   "2017"
+  ],
+  "status": "too_few_claims"
+ },
+ {
+  "family": "ownershipofukquotedshares",
+  "path": "economy/investmentspensionsandtrusts",
+  "n_editions_total": 8,
+  "datasets": [
+   [
+    "economy/investmentspensionsandtrusts/datasets/investmentbyinsurancecompaniespensionfundsandtrusts",
+    "mq5"
+   ],
+   [
+    "economy/investmentspensionsandtrusts/datasets/shareownership",
+    "srs"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "genderpaygapintheuk",
+  "path": "employmentandlabourmarket/peopleinwork/earningsandworkinghours",
+  "n_editions_total": 8,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/earningsandworkinghours/datasets/averageweeklyearnings",
+    "emp"
+   ]
+  ],
+  "n_candidate_series": 458,
+  "n_sampled": 8,
+  "n_claims": 0,
+  "period_shapes": {
+   "year_only": 8
+  },
+  "sample": [
+   "2025",
+   "2024",
+   "2023",
+   "2022",
+   "2021",
+   "2020",
+   "2019",
+   "2018"
+  ],
+  "status": "too_few_claims"
+ },
+ {
+  "family": "exportsandimportsstatisticsbycountryforuktradeinservices",
+  "path": "businessindustryandtrade/internationaltrade",
+  "n_editions_total": 10,
+  "datasets": [
+   [
+    "businessindustryandtrade/internationaltrade/datasets/uktradeingoodsbyclassificationofproductbyactivity",
+    "mq10"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "overseastravelandtourismprovisional",
+  "path": "peoplepopulationandcommunity/leisureandtourism",
+  "n_editions_total": 8,
+  "datasets": [
+   [
+    "peoplepopulationandcommunity/leisureandtourism/datasets/internationalpassengersurveytimeseriesspreadsheet",
+    "ott"
+   ]
+  ],
+  "n_candidate_series": 8,
+  "n_sampled": 8,
+  "n_claims": 187,
+  "period_shapes": {
+   "month_to_month": 8
+  },
+  "sample": [
+   "januarytomarchandapriltojune2025",
+   "julytoseptemberandoctobertodecember2024",
+   "apriltojune2024",
+   "januarytomarch2024",
+   "julytoseptember2023",
+   "apriltojune2023",
+   "januarytomarch2023",
+   "julytoseptember2022"
+  ],
+  "prose_vocab_size": 130,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 2,
+   "search_space_control": 2.0,
+   "search_space_ratio": 1.0,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.25,
+   "n_series_tested": 8,
+   "bonferroni_alpha": 0.000125
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.0
+ },
+ {
+  "family": "lowandhighpayuk",
+  "path": "employmentandlabourmarket/peopleinwork/earningsandworkinghours",
+  "n_editions_total": 8,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/earningsandworkinghours/datasets/averageweeklyearnings",
+    "emp"
+   ]
+  ],
+  "n_candidate_series": 458,
+  "n_sampled": 8,
+  "n_claims": 0,
+  "period_shapes": {
+   "year_only": 8
+  },
+  "sample": [
+   "2025",
+   "2024",
+   "2023",
+   "2022",
+   "2021",
+   "2020",
+   "2019",
+   "2018"
+  ],
+  "status": "too_few_claims"
+ },
+ {
+  "family": "civilservicestatistics",
+  "path": "employmentandlabourmarket/peopleinwork/publicsectorpersonnel",
+  "n_editions_total": 7,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/publicsectorpersonnel/datasets/publicsectoremploymenttimeseriesdataset",
+    "pse"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "unitedkingdombalanceofpaymentsthepinkbook",
+  "path": "economy/nationalaccounts/balanceofpayments",
+  "n_editions_total": 10,
+  "datasets": [
+   [
+    "economy/nationalaccounts/balanceofpayments/datasets/balanceofpayments",
+    "pnbp"
+   ],
+   [
+    "economy/nationalaccounts/balanceofpayments/datasets/pinkbook",
+    "pb"
+   ],
+   [
+    "economy/nationalaccounts/balanceofpayments/datasets/tradeingoodsmretsallbopeu2013timeseriesspreadsheet",
+    "mret"
+   ]
+  ],
+  "n_candidate_series": 1567,
+  "n_sampled": 8,
+  "n_claims": 0,
+  "period_shapes": {
+   "year_only": 8
+  },
+  "sample": [
+   "2025",
+   "2024",
+   "2023",
+   "2022",
+   "2021",
+   "2020",
+   "2019",
+   "2018"
+  ],
+  "status": "too_few_claims"
+ },
+ {
+  "family": "workingandworklesshouseholds",
+  "path": "employmentandlabourmarket/peopleinwork/employmentandemployeetypes",
+  "n_editions_total": 40,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/employmentandemployeetypes/datasets/labourmarketstatistics",
+    "lms"
+   ]
+  ],
+  "n_candidate_series": 1404,
+  "n_sampled": 8,
+  "n_claims": 345,
+  "period_shapes": {
+   "month_to_month": 8
+  },
+  "sample": [
+   "januarytomarch2026",
+   "octobertodecember2024",
+   "januarytomarch2023",
+   "octobertodecember2021",
+   "julytoseptember2020",
+   "januarytomarch2019",
+   "octobertodecember2017",
+   "aprtojune2016"
+  ],
+  "prose_vocab_size": 210,
+  "nonidentifying_claims": 4,
+  "floor": {
+   "search_space_real": 32,
+   "search_space_control": 31.0,
+   "search_space_ratio": 1.03,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.022,
+   "n_series_tested": 1404,
+   "bonferroni_alpha": 7.122507122507123e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.3
+ },
+ {
+  "family": "attitudestowardscovid19amongpassengersarrivingintotheukfebruary2021tojune2021",
+  "path": "peoplepopulationandcommunity/leisureandtourism",
+  "n_editions_total": 8,
+  "datasets": [
+   [
+    "peoplepopulationandcommunity/leisureandtourism/datasets/internationalpassengersurveytimeseriesspreadsheet",
+    "ott"
+   ]
+  ],
+  "n_candidate_series": 8,
+  "n_sampled": 8,
+  "n_claims": 283,
+  "period_shapes": {
+   "span_years": 8
+  },
+  "sample": [
+   "october2021tomarch2022",
+   "september2021tofebruary2022",
+   "august2021tojanuary2022",
+   "february2022",
+   "june2021tonovember2021",
+   "march2021toaugust2021",
+   "september2021",
+   "august2021"
+  ],
+  "prose_vocab_size": 264,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.0,
+   "search_space_ratio": null,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 8,
+   "bonferroni_alpha": 0.000125
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.0
+ },
+ {
+  "family": "grossdomesticproductpreliminaryestimate",
+  "path": "economy/grossdomesticproductgdp",
+  "n_editions_total": 15,
+  "datasets": [
+   [
+    "economy/grossdomesticproductgdp/datasets/bluebook",
+    "bb"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/businessinvestment",
+    "cxnv"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/gdpmonthlyestimateuktimeseriesdataset",
+    "mgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/preliminaryestimateofgdp",
+    "pgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/quarterlynationalaccounts",
+    "qna"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/secondestimateofgdp",
+    "pn2"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/unitedkingdomeconomicaccounts",
+    "ukea"
+   ]
+  ],
+  "n_candidate_series": 207,
+  "n_sampled": 8,
+  "n_claims": 250,
+  "period_shapes": {
+   "month_to_month": 3,
+   "month": 2,
+   "year_only": 3
+  },
+  "sample": [
+   "januarytomarch2018",
+   "octobertodecember2017",
+   "julytoseptember2017",
+   "aprtojune2017",
+   "jantomar2017",
+   "octtodec2016",
+   "julytosept2016",
+   "aprtojune2016"
+  ],
+  "prose_vocab_size": 369,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.0,
+   "search_space_ratio": null,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 207,
+   "bonferroni_alpha": 4.830917874396135e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.2
+ },
+ {
+  "family": "thenationalbalancesheetandcapitalstockspreliminaryestimatesuk",
+  "path": "economy/nationalaccounts/uksectoraccounts",
+  "n_editions_total": 5,
+  "datasets": [
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/capitalstock",
+    "capstk"
+   ],
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/nationalbalancesheet",
+    "nbs"
+   ],
+   [
+    "economy/nationalaccounts/uksectoraccounts/datasets/profitabilityofukcompanies",
+    "prof"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "internationaltradeinservices",
+  "path": "businessindustryandtrade/internationaltrade",
+  "n_editions_total": 8,
+  "datasets": [
+   [
+    "businessindustryandtrade/internationaltrade/datasets/uktradeingoodsbyclassificationofproductbyactivity",
+    "mq10"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "regionalgrossvalueaddedincomeapproach",
+  "path": "economy/grossvalueaddedgva",
+  "n_editions_total": 5,
+  "datasets": [
+   [
+    "economy/grossvalueaddedgva/datasets/grossvalueaddedindustryweightstimeseriesdataset",
+    "wgdp"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "uktourismsatelliteaccountuktsa",
+  "path": "economy/nationalaccounts/satelliteaccounts",
+  "n_editions_total": 5,
+  "datasets": [
+   [
+    "economy/nationalaccounts/satelliteaccounts/datasets/consumertrends",
+    "ct"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "eugovernmentdeficitanddebtreturnincludingmaastrichtsupplementarydatatables",
+  "path": "economy/governmentpublicsectorandtaxes/publicspending",
+  "n_editions_total": 5,
+  "datasets": [
+   [
+    "economy/governmentpublicsectorandtaxes/publicspending/datasets/maastrichtsupplementarytablesedp2timeseries",
+    "edp2"
+   ],
+   [
+    "economy/governmentpublicsectorandtaxes/publicspending/datasets/maastrictsupplementarytabe",
+    "edp3"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "internationaltradeinuknationsregionsandcities",
+  "path": "businessindustryandtrade/internationaltrade",
+  "n_editions_total": 5,
+  "datasets": [
+   [
+    "businessindustryandtrade/internationaltrade/datasets/uktradeingoodsbyclassificationofproductbyactivity",
+    "mq10"
+   ]
+  ],
+  "n_candidate_series": 0,
+  "status": "no_monthly_series"
+ },
+ {
+  "family": "employeesintheukbyindustry",
+  "path": "employmentandlabourmarket/peopleinwork/employmentandemployeetypes",
+  "n_editions_total": 6,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/employmentandemployeetypes/datasets/labourmarketstatistics",
+    "lms"
+   ]
+  ],
+  "n_candidate_series": 1404,
+  "n_sampled": 6,
+  "n_claims": 0,
+  "period_shapes": {
+   "year_only": 6
+  },
+  "sample": [
+   "2023",
+   "provisionalresults2022revisedresults2021",
+   "2021",
+   "provisionalresults2020",
+   "2019",
+   "2018"
+  ],
+  "status": "too_few_claims"
+ },
+ {
+  "family": "employeesintheukbyregion",
+  "path": "employmentandlabourmarket/peopleinwork/employmentandemployeetypes",
+  "n_editions_total": 6,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/employmentandemployeetypes/datasets/labourmarketstatistics",
+    "lms"
+   ]
+  ],
+  "n_candidate_series": 1404,
+  "n_sampled": 6,
+  "n_claims": 0,
+  "period_shapes": {
+   "year_only": 6
+  },
+  "sample": [
+   "2023",
+   "provisionalresults2022revisedresults2021",
+   "provisionalresults2021",
+   "provisionalresults2020",
+   "2019",
+   "2018"
+  ],
+  "status": "too_few_claims"
+ },
+ {
+  "family": "regionaleconomicactivitybygrossdomesticproductuk",
+  "path": "economy/grossdomesticproductgdp",
+  "n_editions_total": 6,
+  "datasets": [
+   [
+    "economy/grossdomesticproductgdp/datasets/bluebook",
+    "bb"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/businessinvestment",
+    "cxnv"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/gdpmonthlyestimateuktimeseriesdataset",
+    "mgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/preliminaryestimateofgdp",
+    "pgdp"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/quarterlynationalaccounts",
+    "qna"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/secondestimateofgdp",
+    "pn2"
+   ],
+   [
+    "economy/grossdomesticproductgdp/datasets/unitedkingdomeconomicaccounts",
+    "ukea"
+   ]
+  ],
+  "n_candidate_series": 207,
+  "n_sampled": 6,
+  "n_claims": 0,
+  "period_shapes": {
+   "year_range": 6
+  },
+  "sample": [
+   "1998to2023",
+   "1998to2022",
+   "1998to2021",
+   "1998to2020",
+   "1998to2019",
+   "1998to2018"
+  ],
+  "status": "too_few_claims"
+ },
+ {
+  "family": "lowpay",
+  "path": "employmentandlabourmarket/peopleinwork/earningsandworkinghours",
+  "n_editions_total": 5,
+  "datasets": [
+   [
+    "employmentandlabourmarket/peopleinwork/earningsandworkinghours/datasets/averageweeklyearnings",
+    "emp"
+   ]
+  ],
+  "n_candidate_series": 458,
+  "n_sampled": 5,
+  "n_claims": 237,
+  "period_shapes": {
+   "year_only": 1,
+   "month": 4
+  },
+  "sample": [
+   "apr2016",
+   "april2015",
+   "2014-11-19",
+   "2013-12-12",
+   "2012-11-22"
+  ],
+  "prose_vocab_size": 200,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.0,
+   "search_space_ratio": null,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 458,
+   "bonferroni_alpha": 2.1834061135371177e-06
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.1
+ },
+ {
+  "family": "balanceofpayments",
+  "path": "economy/nationalaccounts/balanceofpayments",
+  "n_editions_total": 47,
+  "datasets": [
+   [
+    "economy/nationalaccounts/balanceofpayments/datasets/balanceofpayments",
+    "pnbp"
+   ],
+   [
+    "economy/nationalaccounts/balanceofpayments/datasets/pinkbook",
+    "pb"
+   ],
+   [
+    "economy/nationalaccounts/balanceofpayments/datasets/tradeingoodsmretsallbopeu2013timeseriesspreadsheet",
+    "mret"
+   ]
+  ],
+  "n_candidate_series": 1567,
+  "n_sampled": 8,
+  "n_claims": 455,
+  "period_shapes": {
+   "month_to_month": 7,
+   "year_only": 1
+  },
+  "sample": [
+   "januarytomarch2026",
+   "octobertodecember2024",
+   "julytoseptember2023",
+   "apriltojune2022",
+   "januarytomarch2021",
+   "octobertodecember2019",
+   "julytoseptember2018",
+   "apriltojune2017"
+  ],
+  "prose_vocab_size": 455,
+  "nonidentifying_claims": 25,
+  "floor": {
+   "search_space_real": 35,
+   "search_space_control": 36.0,
+   "search_space_ratio": 0.97,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.023,
+   "n_series_tested": 1567,
+   "bonferroni_alpha": 6.381620931716656e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.5
+ },
+ {
+  "family": "housepriceindex",
+  "path": "economy/inflationandpriceindices",
+  "n_editions_total": 107,
+  "datasets": [
+   [
+    "economy/inflationandpriceindices/datasets/aerospaceandelectronicscostindices",
+    "mm19"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/consumerpriceindices",
+    "mm23"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindex",
+    "mm22"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindexstatisticalbulletindataset",
+    "ppi"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/serviceproducerpriceindices",
+    "sppi"
+   ]
+  ],
+  "n_candidate_series": 5001,
+  "n_sampled": 8,
+  "n_claims": 294,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "december2023",
+   "november2022",
+   "october2021",
+   "september2020",
+   "august2019",
+   "july2018",
+   "june2017",
+   "may2016"
+  ],
+  "prose_vocab_size": 246,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.5,
+   "search_space_ratio": 0.0,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 5001,
+   "bonferroni_alpha": 1.9996000799840033e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 1.0
+ },
+ {
+  "family": "indexofprivatehousingrentalprices",
+  "path": "economy/inflationandpriceindices",
+  "n_editions_total": 103,
+  "datasets": [
+   [
+    "economy/inflationandpriceindices/datasets/aerospaceandelectronicscostindices",
+    "mm19"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/consumerpriceindices",
+    "mm23"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindex",
+    "mm22"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindexstatisticalbulletindataset",
+    "ppi"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/serviceproducerpriceindices",
+    "sppi"
+   ]
+  ],
+  "n_candidate_series": 5001,
+  "n_sampled": 8,
+  "n_claims": 241,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "january2024",
+   "january2023",
+   "january2022",
+   "january2021",
+   "january2020",
+   "january2019",
+   "january2018",
+   "jan2017"
+  ],
+  "prose_vocab_size": 233,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.2,
+   "search_space_ratio": 0.0,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 5001,
+   "bonferroni_alpha": 1.9996000799840033e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 1.0
+ },
+ {
+  "family": "producerpriceinflation",
+  "path": "economy/inflationandpriceindices",
+  "n_editions_total": 128,
+  "datasets": [
+   [
+    "economy/inflationandpriceindices/datasets/aerospaceandelectronicscostindices",
+    "mm19"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/consumerpriceindices",
+    "mm23"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindex",
+    "mm22"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindexstatisticalbulletindataset",
+    "ppi"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/serviceproducerpriceindices",
+    "sppi"
+   ]
+  ],
+  "n_candidate_series": 5001,
+  "n_sampled": 8,
+  "n_claims": 441,
+  "period_shapes": {
+   "month_to_month": 2,
+   "month": 6
+  },
+  "sample": [
+   "june2026includingservicesapriltojune2026",
+   "july2024",
+   "march2023includingservicesjanuarytomarch2023",
+   "october2021",
+   "june2020",
+   "february2019",
+   "october2017",
+   "june2016"
+  ],
+  "prose_vocab_size": 384,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.5,
+   "search_space_ratio": 0.0,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 5001,
+   "bonferroni_alpha": 1.9996000799840033e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 1.1
+ },
+ {
+  "family": "consumerpriceinflation",
+  "path": "economy/inflationandpriceindices",
+  "n_editions_total": 136,
+  "datasets": [
+   [
+    "economy/inflationandpriceindices/datasets/aerospaceandelectronicscostindices",
+    "mm19"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/consumerpriceindices",
+    "mm23"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindex",
+    "mm22"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindexstatisticalbulletindataset",
+    "ppi"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/serviceproducerpriceindices",
+    "sppi"
+   ]
+  ],
+  "n_candidate_series": 5001,
+  "n_sampled": 8,
+  "n_claims": 490,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "june2026",
+   "january2025",
+   "august2023",
+   "march2022",
+   "october2020",
+   "may2019",
+   "december2017",
+   "july2016"
+  ],
+  "prose_vocab_size": 491,
+  "nonidentifying_claims": 106,
+  "floor": {
+   "search_space_real": 125,
+   "search_space_control": 131.0,
+   "search_space_ratio": 0.95,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 35,
+   "selected_control": 0.75,
+   "selected_ratio": 46.67
+  },
+  "null_model": {
+   "mean_control_per_series": 0.026,
+   "n_series_tested": 5001,
+   "bonferroni_alpha": 1.9996000799840033e-07
+  },
+  "channels": [
+   {
+    "cdid": "l564",
+    "title": "CPIH ANNUAL RATE: Services 2015=100",
+    "ons_unit": "%",
+    "claims": 6,
+    "months": 3,
+    "spec": 2,
+    "control": 0.0,
+    "null_lambda": 0.026,
+    "p_value": 4.3876013933186186e-13,
+    "p_bonferroni": 2.194239456798641e-09,
+    "n_points": 450,
+    "unit": "cpih_annual_rate_services",
+    "require": {
+     "measure": [
+      "cpih"
+     ],
+     "restriction": [],
+     "segments": [
+      [
+       "services"
+      ]
+     ]
+    }
+   },
+   {
+    "cdid": "d7nm",
+    "title": "CPI ANNUAL RATE: Goods 2015=100",
+    "ons_unit": "%",
+    "claims": 5,
+    "months": 3,
+    "spec": 2,
+    "control": 0.0,
+    "null_lambda": 0.026,
+    "p_value": 1.0055734023239893e-10,
+    "p_bonferroni": 5.02887258502227e-07,
+    "n_points": 450,
+    "unit": "cpi_annual_rate_goods",
+    "require": {
+     "measure": [
+      "cpi"
+     ],
+     "restriction": [],
+     "segments": [
+      [
+       "goods"
+      ]
+     ]
+    }
+   },
+   {
+    "cdid": "l55o",
+    "title": "CPIH ANNUAL RATE 00: ALL ITEMS 2015=100",
+    "ons_unit": "%",
+    "claims": 14,
+    "months": 7,
+    "spec": 1,
+    "control": 0.0,
+    "null_lambda": 0.026,
+    "p_value": 0.0,
+    "p_bonferroni": 0.0,
+    "n_points": 450,
+    "unit": "cpih_annual_rate_00_all_items",
+    "require": {
+     "measure": [
+      "cpih"
+     ],
+     "restriction": [],
+     "segments": []
+    }
+   },
+   {
+    "cdid": "d7g7",
+    "title": "CPI ANNUAL RATE 00: ALL ITEMS 2015=100",
+    "ons_unit": "%",
+    "claims": 10,
+    "months": 5,
+    "spec": 1,
+    "control": 0.75,
+    "null_lambda": 0.75,
+    "p_value": 7.863360518278739e-09,
+    "p_bonferroni": 3.9324665951911975e-05,
+    "n_points": 450,
+    "unit": "cpi_annual_rate_00_all_items",
+    "require": {
+     "measure": [
+      "cpi"
+     ],
+     "restriction": [],
+     "segments": []
+    }
+   }
+  ],
+  "n_channels": 4,
+  "evidence_per_sampled_edition": 4.38,
+  "status": "ok",
+  "secs": 1.3
+ },
+ {
+  "family": "privaterentandhousepricesuk",
+  "path": "economy/inflationandpriceindices",
+  "n_editions_total": 29,
+  "datasets": [
+   [
+    "economy/inflationandpriceindices/datasets/aerospaceandelectronicscostindices",
+    "mm19"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/consumerpriceindices",
+    "mm23"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindex",
+    "mm22"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindexstatisticalbulletindataset",
+    "ppi"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/serviceproducerpriceindices",
+    "sppi"
+   ]
+  ],
+  "n_candidate_series": 5001,
+  "n_sampled": 8,
+  "n_claims": 673,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "july2026",
+   "april2026",
+   "january2026",
+   "october2025",
+   "july2025",
+   "april2025",
+   "january2025",
+   "october2024"
+  ],
+  "prose_vocab_size": 238,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 0,
+   "search_space_control": 0.0,
+   "search_space_ratio": null,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.0,
+   "n_series_tested": 5001,
+   "bonferroni_alpha": 1.9996000799840033e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.9
+ },
+ {
+  "family": "servicesproducerpriceindices",
+  "path": "economy/inflationandpriceindices",
+  "n_editions_total": 24,
+  "datasets": [
+   [
+    "economy/inflationandpriceindices/datasets/aerospaceandelectronicscostindices",
+    "mm19"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/consumerpriceindices",
+    "mm23"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindex",
+    "mm22"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindexstatisticalbulletindataset",
+    "ppi"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/serviceproducerpriceindices",
+    "sppi"
+   ]
+  ],
+  "n_candidate_series": 5001,
+  "n_sampled": 8,
+  "n_claims": 325,
+  "period_shapes": {
+   "month_to_month": 8
+  },
+  "sample": [
+   "apriltojune2020",
+   "julytoseptember2019",
+   "octobertodecember2018",
+   "januarytomarch2018",
+   "apriltojune2017",
+   "julytosept2016",
+   "quarter4octtodec2015",
+   "2015-05-27"
+  ],
+  "prose_vocab_size": 403,
+  "nonidentifying_claims": 0,
+  "floor": {
+   "search_space_real": 10,
+   "search_space_control": 6.0,
+   "search_space_ratio": 1.67,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.001,
+   "n_series_tested": 5001,
+   "bonferroni_alpha": 1.9996000799840033e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 1.0
+ },
+ {
+  "family": "economicactivityandsocialchangeintheukrealtimeindicators",
+  "path": "economy/economicoutputandproductivity/output",
+  "n_editions_total": 249,
+  "datasets": [
+   [
+    "economy/economicoutputandproductivity/output/datasets/indexofproduction",
+    "diop"
+   ],
+   [
+    "economy/economicoutputandproductivity/output/datasets/indexofservices",
+    "ios1"
+   ]
+  ],
+  "n_candidate_series": 1529,
+  "n_sampled": 8,
+  "n_claims": 444,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "23july2026",
+   "29august2025",
+   "23january2025",
+   "6june2024",
+   "19october2023",
+   "16march2023",
+   "4august2022",
+   "16december2021"
+  ],
+  "prose_vocab_size": 665,
+  "nonidentifying_claims": 18,
+  "floor": {
+   "search_space_real": 62,
+   "search_space_control": 51.0,
+   "search_space_ratio": 1.22,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.033,
+   "n_series_tested": 1529,
+   "bonferroni_alpha": 6.540222367560497e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 1.6
+ },
+ {
+  "family": "householdcostsindicesforukhouseholdgroups",
+  "path": "economy/inflationandpriceindices",
+  "n_editions_total": 11,
+  "datasets": [
+   [
+    "economy/inflationandpriceindices/datasets/aerospaceandelectronicscostindices",
+    "mm19"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/consumerpriceindices",
+    "mm23"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindex",
+    "mm22"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/producerpriceindexstatisticalbulletindataset",
+    "ppi"
+   ],
+   [
+    "economy/inflationandpriceindices/datasets/serviceproducerpriceindices",
+    "sppi"
+   ]
+  ],
+  "n_candidate_series": 5001,
+  "n_sampled": 8,
+  "n_claims": 367,
+  "period_shapes": {
+   "month_to_month": 7,
+   "span_years": 1
+  },
+  "sample": [
+   "januarytomarch2026",
+   "octobertodecember2025",
+   "julytoseptember2025",
+   "apriltojune2025",
+   "januarytomarch2025",
+   "octobertodecember2024",
+   "july2024toseptember2024",
+   "april2024tojune2024"
+  ],
+  "prose_vocab_size": 248,
+  "nonidentifying_claims": 9,
+  "floor": {
+   "search_space_real": 10,
+   "search_space_control": 7.2,
+   "search_space_ratio": 1.38,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.001,
+   "n_series_tested": 5001,
+   "bonferroni_alpha": 1.9996000799840033e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 0.9
+ },
+ {
+  "family": "uktrade",
+  "path": "economy/nationalaccounts/balanceofpayments",
+  "n_editions_total": 136,
+  "datasets": [
+   [
+    "businessindustryandtrade/internationaltrade/datasets/uktradeingoodsbyclassificationofproductbyactivity",
+    "mq10"
+   ],
+   [
+    "economy/nationalaccounts/balanceofpayments/datasets/balanceofpayments",
+    "pnbp"
+   ],
+   [
+    "economy/nationalaccounts/balanceofpayments/datasets/pinkbook",
+    "pb"
+   ],
+   [
+    "economy/nationalaccounts/balanceofpayments/datasets/tradeingoodsmretsallbopeu2013timeseriesspreadsheet",
+    "mret"
+   ]
+  ],
+  "n_candidate_series": 1567,
+  "n_sampled": 8,
+  "n_claims": 991,
+  "period_shapes": {
+   "month": 8
+  },
+  "sample": [
+   "may2026",
+   "december2024",
+   "july2023",
+   "february2022",
+   "september2020",
+   "april2019",
+   "november2017",
+   "june2016"
+  ],
+  "prose_vocab_size": 450,
+  "nonidentifying_claims": 232,
+  "floor": {
+   "search_space_real": 205,
+   "search_space_control": 206.2,
+   "search_space_ratio": 0.99,
+   "control_shifts": [
+    7,
+    -5,
+    13,
+    -11
+   ],
+   "note": "search_space_* covers every candidate series in the dataset, most of which never ship; selected_* is the floor for the shipped set",
+   "selected_real": 0,
+   "selected_control": 0,
+   "selected_ratio": null
+  },
+  "null_model": {
+   "mean_control_per_series": 0.132,
+   "n_series_tested": 1567,
+   "bonferroni_alpha": 6.381620931716656e-07
+  },
+  "channels": [],
+  "n_channels": 0,
+  "evidence_per_sampled_edition": 0.0,
+  "status": "no_channels",
+  "secs": 2.6
+ }
+]
