@@ -1,55 +1,70 @@
 #!/usr/bin/env python3
-"""Build CPT world-knowledge JSONL from cricket match narration + per-over ball-by-ball series.
+"""Build CPT world-knowledge JSONL from cricket match narration + per-over series.
 
-One record = one INNINGS: the innings' per-over time series (runs, wickets, cumulative
-runs, run-rate) paired with the real ESPNcricinfo match report that narrates that match
-over by over. The report *describes* the progression the series quantifies → "describes".
-text_quality is always "real"; an innings with no usable recap is dropped (no synthetic
-fallback).
+RECORD SHAPE IS HYBRID, and the split is measured, not stylistic (see README):
 
-Series: Cricsheet bulk per-delivery CSV (ODC-BY 1.0), aggregated per over. Stdlib only.
-Text  : ESPNcricinfo report prose, fetched via the ESPN parent API (site.api.espn.com),
-        which resolves by match_id alone. Report body = JSON `article.story`.
+  two-innings formats (T20/IT20/ODI/ODM) -> one record per INNINGS. Its text is the
+    passage of the ESPNcricinfo report that narrates that innings, selected by an LLM
+    that returns sentence INDICES only (verbatim assembly => text_quality "real") and
+    never sees the series. Contract: prompts/attribute_v1.md.
 
-Cricsheet match_id == ESPNcricinfo match ID → the report join key.
+  four-innings formats (TEST/MDM) -> one record per MATCH: the whole-match per-over
+    series (all innings concatenated, with an innings_index channel) paired with the
+    whole-match recap. Attribution is INVERTED against a permutation control on Tests
+    (7% right innings vs 20% wrong), so it is not used there.
 
-⚠️ LICENSE: ESPNcricinfo report prose is copyrighted / ToS-restricted. The committed
-   output/ + samples/ are a capped 50-record demo for the lead to inspect (internal
-   review, not distribution) — see NOTION_PAGE.md. Keep output.max_records small; do not
-   run/commit a full build or publish until redistribution is cleared.
+Series: Cricsheet bulk per-delivery CSV (ODC-BY 1.0). Text: ESPNcricinfo report prose.
+Cricsheet match_id == ESPNcricinfo match id -> the join key is exact.
 
-Examples:
+⚠️ LICENSE: ESPNcricinfo report prose is copyrighted / ToS-restricted. Every record is
+   tagged `proprietary-review`, which SCHEMA.md §6 defines as excluded from any release
+   until cleared. Building is permitted; releasing is not. See NOTION_PAGE.md.
+
+⚠️ WINDOW FLOOR: a T20 innings is exactly 20 per-over steps, below the 32-step floor used
+   elsewhere in the corpus. Per-innings records for T20/IT20 are shippable only if that
+   floor relaxes to <=16 (the open decision that also gates #58). run_report.json states
+   the count below every candidate floor so the exposure is visible, not buried.
+
   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=5
-  python scripts/build_cpt_jsonl.py
+  python scripts/attribute.py                              # LLM pass (cached, resumable)
   python scripts/build_cpt_jsonl.py --set output.max_records=null
 """
-
 from __future__ import annotations
 
 import argparse
-import csv
-import html as _html
-import io
 import json
 import re
-import ssl
 import sys
-import time
-import urllib.request
 import zipfile
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-try:
-    import yaml
-except ImportError as exc:  # pragma: no cover
-    raise SystemExit("PyYAML required. pip install -r requirements.txt") from exc
+import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "schema"))
+from cricket_lib import (MULTI_INNINGS, ROOT, TWO_INNINGS, http_get,  # noqa: E402
+                         innings_table, load_report, parse_info, report_date,
+                         sentences, strip_html)
+from emit import emit_record  # noqa: E402
+
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
-_SSL = ssl.create_default_context()
-_SSL.check_hostname = False
-_SSL.verify_mode = ssl.CERT_NONE
+# Team scores are written with the word "for"; bowling figures use a hyphen ("Lyon 3-48").
+# Including the hyphen form would inject false positives — measured at 8 per 874 matches
+# where a bowling figure coincides with a real innings total — so it is excluded.
+SCORE_PAIR = re.compile(r"\b(\d{1,3})\s+for\s+(\d{1,3})\b")
+CANDIDATE_FLOORS = (12, 16, 20, 24, 32)
+
+try:
+    import tiktoken
+    _ENC = tiktoken.get_encoding("cl100k_base")
+except Exception:                                     # pragma: no cover
+    _ENC = None
+
+
+def ntok(s: str) -> int:
+    return len(_ENC.encode(s)) if _ENC else max(1, len(s) // 4)
 
 
 # --- config helpers (same conventions as the other packages) ---------------
@@ -93,255 +108,365 @@ def rp(s: str) -> Path:
     return p if p.is_absolute() else ROOT / p
 
 
-# --- HTTP ------------------------------------------------------------------
+# --- alignment: measured per record, never asserted ------------------------
 
-def http_get(url: str, ua: str, timeout: int) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": ua})
-    return urllib.request.urlopen(req, timeout=timeout, context=_SSL).read()
+def recited_scores(text: str) -> set:
+    """(runs, wickets) pairs the prose states, e.g. '187 for 3' or '6 for 194'.
 
+    An ordered PAIR is the point: loose single-number matching on cricket prose has a
+    high coincidence floor (a report is full of two- and three-digit numbers), so a bare
+    total is only accepted for an all-out innings, where the source's own convention
+    drops the wicket count ('Cape Cobras 146').
 
-def download_cached(url: str, dest: Path, ua: str, timeout: int) -> Path:
-    if dest.exists():
-        return dest
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    print(f"Downloading {url} -> {dest.name} (cached after first run)...", file=sys.stderr)
-    dest.write_bytes(http_get(url, ua, timeout))
-    return dest
-
-
-# --- Cricsheet parsing -----------------------------------------------------
-
-def parse_info(raw: bytes) -> Dict[str, Any]:
-    """{match_id}_info.csv -> dict. Repeated keys (team, umpire) collect into lists."""
-    info: Dict[str, Any] = {"team": []}
-    for row in csv.reader(io.StringIO(raw.decode("utf-8"))):
-        if len(row) >= 3 and row[0] == "info":
-            key, val = row[1], row[2]
-            if key == "team":
-                info["team"].append(val)
-            elif key not in info:
-                info[key] = val
-    return info
-
-
-def _num(s: str) -> float:
-    return float(s) if s not in ("", "None", None) else 0.0
-
-
-def per_over_channels(deliveries: List[dict]) -> Tuple[List[int], Dict[str, list]]:
-    """Aggregate one innings' deliveries into per-over channels.
-
-    over index = int(float(ball)); runs = runs_off_bat + extras; wickets = count.
-    Returns (per_over_run_list_indices, {channel_name: [values]}).
+    BOTH score conventions appear in ESPN copy and the order flips between them:
+    English "194 for 4" is runs-first, Australian "6 for 194" is wickets-first, and the
+    latter is 11% of resolvable team scores — reading only the first would silently
+    under-count `recites`. They are disambiguated by the fact that a completed innings
+    cannot lose more than 10 wickets, so the reading is only ambiguous when both numbers
+    are <= 10 (1 occurrence in 874 matches), where both are admitted.
     """
-    runs: Dict[int, int] = {}
-    wkts: Dict[int, int] = {}
-    for d in deliveries:
-        o = int(float(d["ball"]))
-        runs[o] = runs.get(o, 0) + int(_num(d["runs_off_bat"]) + _num(d["extras"]))
-        if d.get("wicket_type"):
-            wkts[o] = wkts.get(o, 0) + 1
-    n = max(runs) + 1 if runs else 0
-    runs_per_over = [runs.get(i, 0) for i in range(n)]
-    wickets_per_over = [wkts.get(i, 0) for i in range(n)]
-    cumulative, s = [], 0
-    for v in runs_per_over:
-        s += v
-        cumulative.append(s)
-    run_rate = [round(cumulative[i] / (i + 1), 2) for i in range(n)]
-    return runs_per_over, {
-        "runs_per_over": runs_per_over,
-        "wickets_per_over": wickets_per_over,
-        "cumulative_runs": cumulative,
-        "run_rate": run_rate,
-    }
+    out = set()
+    for a, b in SCORE_PAIR.findall(text):
+        a, b = int(a), int(b)
+        if b <= 10:
+            out.add((a, b))       # runs-first: "194 for 4"
+        if a <= 10:
+            out.add((b, a))       # wickets-first: "6 for 194"
+    return out
+
+
+def recites_innings(text: str, total_runs: int, wickets: int) -> bool:
+    if (total_runs, wickets) in recited_scores(text):
+        return True
+    if wickets >= 10:                       # all out: written as a bare total
+        return bool(re.search(rf"\b{total_runs}\b", text))
+    return False
+
+
+def measure_alignment(text: str, innings: List[dict]) -> str:
+    """`recites` only if the prose states EVERY innings total the record's series carries."""
+    if innings and all(recites_innings(text, t["total_runs"], t["wickets"]) for t in innings):
+        return "recites"
+    return "describes"
+
+
+# --- text assembly ---------------------------------------------------------
+
+def budget_text(sents: List[str], keep: List[int], priority: List[int],
+                max_tokens: Optional[int]) -> Tuple[str, int]:
+    """Assemble `keep` in DOCUMENT order; if over budget drop the LEAST important first.
+
+    `priority` is most-important-first and victims are taken from its tail. Chronology is
+    preserved in the output because the series is chronological; what goes when the budget
+    binds is what was ranked last — never a tail cut mid-narrative.
+    """
+    chosen = list(keep)
+    dropped = 0
+    if max_tokens:
+        order = [i for i in priority if i in set(chosen)]
+        order += [i for i in chosen if i not in set(order)]   # unranked -> dropped first
+        while chosen and ntok(" ".join(sents[i] for i in sorted(chosen))) > max_tokens and len(chosen) > 1:
+            victim = order.pop() if order else sorted(chosen)[-1]
+            if victim in chosen:
+                chosen.remove(victim)
+                dropped += 1
+    return " ".join(sents[i] for i in sorted(chosen)), dropped
+
+
+def truncate_sentences(text: str, max_tokens: Optional[int]) -> Tuple[str, int]:
+    """Sentence-boundary truncation — the blessed remedy for `describes` over the cap."""
+    if not max_tokens or ntok(text) <= max_tokens:
+        return text, 0
+    sents = sentences(text)
+    out: List[str] = []
+    for s in sents:
+        if ntok(" ".join(out + [s])) > max_tokens and out:
+            break
+        out.append(s)
+    return " ".join(out), len(sents) - len(out)
 
 
 # --- record construction ---------------------------------------------------
 
-def build_records_for_match(match_id: str, deliveries_csv: bytes, info_csv: bytes,
-                            cfg: Dict[str, Any], cache: Path) -> Tuple[List[dict], Dict[str, int]]:
-    d, t = cfg["data"], cfg["text"]
-    info = parse_info(info_csv)
-    rows = list(csv.DictReader(io.StringIO(deliveries_csv.decode("utf-8"))))
-    stat = {"emitted": 0, "short_innings": 0, "no_report": 0}
-    out: List[dict] = []
+def channels_for_innings(t: dict, granularity: str = "per_over") -> List[dict]:
+    """Per-innings channels at over or delivery granularity.
 
-    # Fetch the (whole-match) ESPNcricinfo report once, shared across the innings.
-    report_text, art = fetch_report(match_id, d, cache)
-    min_chars = int(t.get("min_report_chars", 400))
-
-    innings_ids = sorted({r["innings"] for r in rows}, key=lambda x: int(x))
-    for inn in innings_ids:
-        deliveries = [r for r in rows if r["innings"] == inn]
-        if not deliveries:
-            continue
-        batting = deliveries[0]["batting_team"]
-        bowling = deliveries[0]["bowling_team"]
-        _, chans = per_over_channels(deliveries)
-        n_over = len(chans["runs_per_over"])
-        if n_over < int(d["min_overs"]):
-            stat["short_innings"] += 1
-            continue
-
-        # No usable recap for this match (~26% of IPL) → drop (no synthetic fallback).
-        if not report_text or len(report_text) < min_chars:
-            stat["no_report"] += 1
-            continue
-
-        report_url = d["espn_report_url_template"].format(match_id=match_id)
-        # No generated/templated framing text: the <ts></ts> placeholder is appended directly
-        # to the real ESPNcricinfo report, nothing else is added.
-        text = f"{report_text}\n\n<ts></ts>"
-
-        timeseries = [
-            {"values": chans["runs_per_over"], "unit": "runs_per_over", "freq": "1over"},
-            {"values": chans["wickets_per_over"], "unit": "wickets_per_over", "freq": "1over"},
-            {"values": chans["cumulative_runs"], "unit": "cumulative_runs", "freq": "1over"},
-            {"values": chans["run_rate"], "unit": "run_rate", "freq": "1over"},
-        ]
-
-        rec = {
-            "text": text,
-            "timeseries": timeseries,
-            "task_type": "world_knowledge",
-            "text_quality": "real",
-            "match_id": match_id,
-            "event": info.get("event"),
-            "season": info.get("season"),
-            "match_type": info.get("match_type"),
-            "batting_team": batting,
-            "bowling_team": bowling,
-            "innings": int(inn),
-            "venue": info.get("venue"),
-            "city": info.get("city"),
-            "start_date": info.get("date"),
-            "overs_bowled": n_over,
-            "total_runs": chans["cumulative_runs"][-1],
-            "wickets": sum(chans["wickets_per_over"]),
-            "winner": info.get("winner"),
-            "report_url": report_url,
-            "report_headline": art.get("headline"),
-            "report_byline": art.get("byline"),
-            "report_published": art.get("published"),
-            "report_type": art.get("type"),
-            "dataset": "cricket_report_overseries",
-            "source": "cricsheet.org + site.api.espn.com",
-            "series_id": f"cros_{match_id}_inn{inn}",
-        }
-        out.append(rec)
-        stat["emitted"] += 1
-    return out, stat
-
-
-def _strip_html(s: str) -> str:
-    """ESPN `article.story` is HTML with `<video1>`/`<photo1>` placeholder tags."""
-    s = re.sub(r"<(?:video|photo|inline)\d*[^>]*>", "", s)
-    s = re.sub(r"</(?:p|h[1-6]|li|div|ul|ol)>", "\n\n", s)
-    s = re.sub(r"<br\s*/?>", "\n", s)
-    s = re.sub(r"<[^>]+>", "", s)
-    s = _html.unescape(s)
-    s = re.sub(r"[ \t]+", " ", s)
-    s = re.sub(r"\n{3,}", "\n\n", s)
-    return s.strip()
-
-
-def fetch_report(match_id: str, d: dict, cache: Path) -> Tuple[Optional[str], dict]:
-    """Fetch the ESPNcricinfo match report via the ESPN parent sports API.
-
-    KEY: www.espncricinfo.com and hs-consumer-api.espncricinfo.com 403 bots, but the
-    ESPN *parent* host `site.api.espn.com` does not, and resolves purely by `event` —
-    so the Cricsheet match_id alone is enough (the {league} path segment is just a
-    required carrier; any valid cricket league id works for any match). Returns
-    (clean_report_text | None, article_meta). Cached per match_id.
-
-    NOTE: `article.story` is the whole-MATCH report, so both innings of a match share
-    the exact same prose (only the paired timeseries + innings-level fields differ).
+    `per_delivery` exists because a T20 innings is exactly 20 per-over steps — below the
+    32-step window floor used elsewhere in the corpus — but ~125 deliveries. Measured over
+    the full build: at floor 32, per-over keeps 6,885 of 20,678 records and per-delivery
+    keeps 20,675. `1play` is already in validate.py's FREQ_RE, so this needs no schema
+    change, and the last `cumulative_runs*` value is the same innings total either way, so
+    the alignment tier and its permutation control are unaffected.
     """
-    fp = cache / "espn" / f"{match_id}.json"
-    if fp.exists():
-        raw = fp.read_bytes()
+    if granularity == "per_delivery":
+        return [
+            {"values": t["runs_per_ball"], "unit": "runs_per_ball", "freq": "1play"},
+            {"values": t["wickets_per_ball"], "unit": "wickets_per_ball", "freq": "1play"},
+            {"values": t["cumulative_runs_ball"], "unit": "cumulative_runs", "freq": "1play"},
+            {"values": t["run_rate_ball"], "unit": "run_rate", "freq": "1play"},
+        ]
+    return [
+        {"values": t["runs_per_over"], "unit": "runs_per_over", "freq": "1over"},
+        {"values": t["wickets_per_over"], "unit": "wickets_per_over", "freq": "1over"},
+        {"values": t["cumulative_runs"], "unit": "cumulative_runs", "freq": "1over"},
+        {"values": t["run_rate"], "unit": "run_rate", "freq": "1over"},
+    ]
+
+
+def channels_for_match(table: List[dict]) -> List[dict]:
+    """Whole-match series: innings concatenated, cumulative/run-rate reset per innings."""
+    runs, wkts, cum, rr, idx = [], [], [], [], []
+    for k, t in enumerate(table, start=1):
+        runs += t["runs_per_over"]
+        wkts += t["wickets_per_over"]
+        cum += t["cumulative_runs"]
+        rr += t["run_rate"]
+        idx += [k] * t["overs"]
+    return [
+        {"values": runs, "unit": "runs_per_over", "freq": "1over"},
+        {"values": wkts, "unit": "wickets_per_over", "freq": "1over"},
+        {"values": cum, "unit": "cumulative_runs_in_innings", "freq": "1over"},
+        {"values": rr, "unit": "run_rate_in_innings", "freq": "1over"},
+        {"values": idx, "unit": "innings_index", "freq": "1over"},
+    ]
+
+
+def common_meta(mid: str, info: dict, art: dict) -> Dict[str, Any]:
+    return {
+        "match_id": mid,
+        "match_type": (info.get("match_type") or "").upper(),
+        "gender": info.get("gender"),
+        "event": info.get("event"),
+        "season": info.get("season"),
+        "venue": info.get("venue"),
+        "city": info.get("city"),
+        "winner": info.get("winner"),
+        "toss_winner": info.get("toss_winner"),
+        "report_headline": art.get("headline"),
+        "report_byline": art.get("byline"),
+        # `published` is a CMS re-stamp (wrong by >30d in 72% of articles); this is the real one
+        "report_posted": report_date(art),
+        "report_type": art.get("type"),
+    }
+
+
+def build_match(mid: str, dcsv: bytes, icsv: bytes, cfg: Dict[str, Any],
+                cache: Path, stat: Counter) -> List[dict]:
+    d, t, sh = cfg["data"], cfg["text"], cfg["shape"]
+    info = parse_info(icsv)
+    table = innings_table(dcsv)
+    if not table:
+        stat["no_innings"] += 1
+        return []
+    fmt = (info.get("match_type") or "").upper()
+    text, art = load_report(mid, d, cache)
+    if not text or len(text) < int(t["min_report_chars"]):
+        stat["no_report"] += 1
+        return []
+
+    url = d["espn_report_url_template"].format(match_id=mid)
+    dates = info.get("dates") or [info.get("date")]
+    p_start = (dates[0] or "").replace("/", "-") or None
+    p_end = (dates[-1] or "").replace("/", "-") or None
+    maxtok = t.get("max_tokens")
+    per_innings = (fmt in TWO_INNINGS and sh.get("two_innings_mode") == "per_innings")
+    # per-match (TEST/MDM) always stays per-over: those series already run ~360 steps, and
+    # per-delivery would turn a whole Test into ~2,700 points at 5.3x the datapoints.
+    gran = str(sh.get("series_granularity", "per_over"))
+
+    out: List[dict] = []
+    if per_innings:
+        fp = cache / "attrib" / f"{mid}.json"
+        if not fp.exists():
+            stat["no_attribution"] += 1
+            return []
+        att = json.loads(fp.read_text())
+        sents = sentences(text)
+        if att.get("n_sents") != len(sents):
+            stat["attrib_stale"] += 1          # report changed since attribution — redo it
+            return []
+        shared = [i for i in att.get("shared", []) if i < len(sents)]
+        for tb in table:
+            inn = tb["innings"]
+            own = [i for i in att.get("innings", {}).get(str(inn), []) if i < len(sents)]
+            if tb["overs"] < int(d["min_overs"]):
+                stat["short_innings"] += 1
+                continue
+            if len(own) < int(sh.get("min_attributed_sentences", 2)):
+                stat["innings_not_narrated"] += 1
+                continue
+            keep = sorted(set(own) | set(shared))
+            # Most-important-first. The lede (shared[0]) leads: it is the sentence that
+            # names both sides and recites the innings totals, so it is what grounds the
+            # record and the last thing that should go. Then this innings' own narrative in
+            # the model's ranking, then the rest of the shared bucket — whose tail is the
+            # contested/unassigned prose swept in by the repair, i.e. the cheapest to lose.
+            priority = (shared[:1] + own + shared[1:])
+            body, dropped = budget_text(sents, keep, priority, maxtok)
+            stat["budget_dropped_sentences"] += dropped
+            align = measure_alignment(body, [tb])
+            meta = common_meta(mid, info, art)
+            meta.update({
+                "record_shape": "per_innings", "innings": int(inn),
+                "batting_team": tb["batting_team"], "bowling_team": tb["bowling_team"],
+                "overs_bowled": tb["overs"], "total_runs": tb["total_runs"],
+                "wickets": tb["wickets"],
+                "text_sentences_own": len(own), "text_sentences_shared": len(shared),
+                "series_granularity": gran, "balls": tb["balls"],
+                "attribution": "prompts/attribute_v1.md",
+            })
+            out.append(emit_record(
+                text=f"{body}\n\n<ts></ts>", timeseries=channels_for_innings(tb, gran),
+                alignment=align, license="proprietary-review", text_source="third_party",
+                source=url, dataset="cricket_report_overseries",
+                series_id=f"cricket_report_overseries:{mid}:inn{inn}",
+                domain="sports", region="global",
+                period_start=p_start, period_end=p_end, meta=meta))
+            stat[f"emit_{align}"] += 1
     else:
-        url = d["espn_summary_url"].format(league=d["espn_carrier_league"], match_id=match_id)
-        try:
-            raw = http_get(url, d["user_agent"], int(d["timeout_s"]))
-        except Exception:
-            return None, {}
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        fp.write_bytes(raw)
-        time.sleep(float(d.get("request_delay_s", 0.4)))
-    try:
-        art = (json.loads(raw).get("article") or {})
-    except Exception:
-        return None, {}
-    story = _strip_html(art.get("story") or "")
-    return (story or None), art
+        total_overs = sum(tb["overs"] for tb in table)
+        if total_overs < int(d["min_overs"]):
+            stat["short_match"] += 1
+            return []
+        body, dropped = truncate_sentences(text, maxtok)
+        stat["truncated_sentences"] += dropped
+        if dropped:
+            stat["records_truncated"] += 1
+        align = measure_alignment(body, table)
+        meta = common_meta(mid, info, art)
+        meta.update({
+            "record_shape": "per_match", "innings_count": len(table),
+            "overs_total": total_overs,
+            "innings_totals": [{"innings": int(tb["innings"]), "batting_team": tb["batting_team"],
+                                "runs": tb["total_runs"], "wickets": tb["wickets"],
+                                "overs": tb["overs"]} for tb in table],
+        })
+        out.append(emit_record(
+            text=f"{body}\n\n<ts></ts>", timeseries=channels_for_match(table),
+            alignment=align, license="proprietary-review", text_source="third_party",
+            source=url, dataset="cricket_report_overseries",
+            series_id=f"cricket_report_overseries:{mid}:match",
+            domain="sports", region="global",
+            period_start=p_start, period_end=p_end, meta=meta))
+        stat[f"emit_{align}"] += 1
+    return out
 
 
-def validate(rec: dict, channels: Sequence[str]) -> List[str]:
-    e = []
-    if rec["text"].count("<ts></ts>") != 1:
-        e.append("ts token count")
-    ts = rec.get("timeseries", [])
-    if [c["unit"] for c in ts] != list(channels):
-        e.append("channel set/order mismatch")
-    lens = {len(c["values"]) for c in ts}
-    if len(lens) != 1:
-        e.append(f"channel length mismatch {sorted(lens)}")
-    if lens and next(iter(lens)) != rec["overs_bowled"]:
-        e.append("length != overs_bowled")
-    return e
+# --- permutation control ---------------------------------------------------
+
+def permutation_control(records: List[dict]) -> Dict[str, Any]:
+    """The corpus standard for an alignment claim (#08: 20.1% true vs 0.0% permuted).
+
+    TRUE   : does this record's own prose recite its own series' innings total(s)?
+    CONTROL: does it recite the totals of a DIFFERENT match of the same format?
+    A control near the true rate means the match is coincidence, not alignment.
+    """
+    by_fmt: Dict[str, List[dict]] = defaultdict(list)
+    for r in records:
+        by_fmt[r["meta"]["match_type"]].append(r)
+    rows = {}
+    for fmt, rs in by_fmt.items():
+        if len(rs) < 2:
+            continue
+        true_hit = ctrl_hit = n_ctrl = 0
+        for i, r in enumerate(rs):
+            # The control partner must be a DIFFERENT MATCH. Records are emitted in match
+            # order, so the neighbour of a per-innings record is the *other innings of its
+            # own match* — whose total the shared lede legitimately recites. Pairing with
+            # that would measure the lede, not coincidence, and silently inflate the control.
+            other = None
+            for step in range(1, len(rs)):
+                cand = rs[(i + step) % len(rs)]
+                if cand["meta"]["match_id"] != r["meta"]["match_id"]:
+                    other = cand
+                    break
+            if other is None:
+                continue
+            n_ctrl += 1
+            tots = ([{"total_runs": r["meta"]["total_runs"], "wickets": r["meta"]["wickets"]}]
+                    if r["meta"]["record_shape"] == "per_innings"
+                    else [{"total_runs": x["runs"], "wickets": x["wickets"]}
+                          for x in r["meta"]["innings_totals"]])
+            otots = ([{"total_runs": other["meta"]["total_runs"], "wickets": other["meta"]["wickets"]}]
+                     if other["meta"]["record_shape"] == "per_innings"
+                     else [{"total_runs": x["runs"], "wickets": x["wickets"]}
+                           for x in other["meta"]["innings_totals"]])
+            txt = r["text"]
+            true_hit += all(recites_innings(txt, t["total_runs"], t["wickets"]) for t in tots)
+            ctrl_hit += all(recites_innings(txt, t["total_runs"], t["wickets"]) for t in otots)
+        n = len(rs)
+        if not n_ctrl:
+            continue
+        rows[fmt] = {"n": n, "n_control": n_ctrl,
+                     "true": round(true_hit / n, 4), "control": round(ctrl_hit / n_ctrl, 4),
+                     "lift_pp": round(100 * (true_hit / n - ctrl_hit / n_ctrl), 1)}
+    return rows
+
+
+def floor_exposure(records: List[dict]) -> Dict[str, Any]:
+    """How many records survive each candidate window floor (the open #58 decision)."""
+    lens = [len(r["timeseries"][0]["values"]) for r in records]
+    return {str(f): sum(1 for x in lens if x >= f) for f in CANDIDATE_FLOORS}
 
 
 # --- pipeline --------------------------------------------------------------
 
 def run(cfg: Dict[str, Any], dry: bool) -> Dict[str, Any]:
-    d, t, out_cfg = cfg["data"], cfg["text"], cfg["output"]
+    d, out_cfg = cfg["data"], cfg["output"]
     cache = rp(d["cache_dir"])
-    channels = d["channels"]
     maxrec = out_cfg.get("max_records")
 
-    zpath = download_cached(d["cricsheet_zip_url"], cache / "cricsheet.zip",
-                            d["user_agent"], int(d["timeout_s"]))
+    zpath = cache / "all_csv2.zip"
+    if not zpath.exists():
+        zpath.parent.mkdir(parents=True, exist_ok=True)
+        print(f"Downloading {d['cricsheet_zip_url']} (cached after first run)...", file=sys.stderr)
+        zpath.write_bytes(http_get(d["cricsheet_zip_url"], d["user_agent"], int(d["timeout_s"])))
     z = zipfile.ZipFile(zpath)
-    match_ids = sorted(
-        n[:-4] for n in z.namelist()
-        if n.endswith(".csv") and not n.endswith("_info.csv")
-    )
+    names = set(z.namelist())
+    mids = sorted(n[:-4] for n in names
+                  if n.endswith(".csv") and not n.endswith("_info.csv"))
 
-    stats = {"matches_scanned": 0, "innings_seen": 0, "emitted": 0,
-             "short_innings": 0, "no_report": 0, "invalid": 0, "no_info": 0}
+    stat: Counter = Counter()
     records: List[dict] = []
-
-    for mid in match_ids:
-        info_name = f"{mid}_info.csv"
-        if info_name not in z.namelist():
-            stats["no_info"] += 1
+    for mid in mids:
+        if f"{mid}_info.csv" not in names:
+            stat["no_info"] += 1
             continue
-        stats["matches_scanned"] += 1
-        recs, mstat = build_records_for_match(
-            mid, z.read(f"{mid}.csv"), z.read(info_name), cfg, cache)
-        stats["innings_seen"] += mstat["emitted"] + mstat["short_innings"] + mstat["no_report"]
-        stats["short_innings"] += mstat["short_innings"]
-        stats["no_report"] += mstat["no_report"]
-        for rec in recs:
-            verr = validate(rec, channels)
-            if verr:
-                stats["invalid"] += 1
-                continue
-            records.append(rec)
-            stats["emitted"] += 1
-            if maxrec is not None and len(records) >= int(maxrec):
-                break
+        stat["matches_scanned"] += 1
+        try:
+            recs = build_match(mid, z.read(f"{mid}.csv"), z.read(f"{mid}_info.csv"),
+                               cfg, cache, stat)
+        except ValueError as e:                       # emit_record rejected it — loud, not silent
+            stat["invalid"] += 1
+            if stat["invalid"] <= 3:
+                print(f"  invalid {mid}: {e}", file=sys.stderr)
+            continue
+        records.extend(recs)
         if maxrec is not None and len(records) >= int(maxrec):
+            records = records[:int(maxrec)]
             break
 
+    fmt_counts = Counter(r["meta"]["match_type"] for r in records)
+    shape_counts = Counter(r["meta"]["record_shape"] for r in records)
+    toks = [ntok(r["text"].replace("<ts></ts>", "")) for r in records]
+    toks_sorted = sorted(toks)
     report = {
         "cricsheet_zip_url": d["cricsheet_zip_url"],
-        "report_source": "site.api.espn.com",
-        "min_overs": d["min_overs"],
-        "channels": channels,
-        "stats": stats,
+        "report_source": "site.web.api.espn.com (site.api.espn.com 403s Akamai since 2026-08)",
+        "record_shape": dict(cfg["shape"]),
+        "stats": dict(stat),
+        "records": len(records),
+        "by_format": dict(fmt_counts),
+        "by_shape": dict(shape_counts),
+        "alignment": {"recites": stat.get("emit_recites", 0),
+                      "describes": stat.get("emit_describes", 0)},
+        "permutation_control": permutation_control(records) if records else {},
+        "window_floor_exposure": floor_exposure(records) if records else {},
+        "text_tokens": {
+            "median": toks_sorted[len(toks_sorted) // 2] if toks else 0,
+            "p90": toks_sorted[int(0.9 * len(toks_sorted))] if toks else 0,
+            "over_500": sum(1 for x in toks if x > 500),
+        },
         "config_snapshot": cfg,
         "dry_run": dry,
     }
@@ -349,9 +474,9 @@ def run(cfg: Dict[str, Any], dry: bool) -> Dict[str, Any]:
     if dry:
         if records:
             print("\n--- sample record ---")
-            r0 = dict(records[0])
-            print(json.dumps(r0, ensure_ascii=False, indent=2)[:2400])
-        print("\n" + json.dumps(stats, indent=2))
+            print(json.dumps(records[0], ensure_ascii=False, indent=2)[:2600])
+        print("\n" + json.dumps({k: v for k, v in report.items()
+                                 if k not in ("config_snapshot",)}, indent=2))
         return report
 
     op = rp(out_cfg["output_path"]); op.parent.mkdir(parents=True, exist_ok=True)
@@ -368,17 +493,17 @@ def run(cfg: Dict[str, Any], dry: bool) -> Dict[str, Any]:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Build cricket per-over + narration → CPT JSONL")
+    ap = argparse.ArgumentParser(description="Build cricket narration + per-over CPT JSONL")
     ap.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     ap.add_argument("--set", dest="set", action="append", default=[])
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
-    cfg = load_config(args.config, args.set)
-    rep = run(cfg, dry=args.dry_run)
+    rep = run(load_config(args.config, args.set), dry=args.dry_run)
     s = rep["stats"]
-    print(f"\nDone: {s['emitted']} records "
-          f"(matches {s['matches_scanned']}, innings {s['innings_seen']}, "
-          f"short={s['short_innings']}, no_report={s['no_report']}, invalid={s['invalid']}).",
+    print(f"\nDone: {rep['records']} records "
+          f"(matches {s.get('matches_scanned', 0)}, no_report {s.get('no_report', 0)}, "
+          f"no_attribution {s.get('no_attribution', 0)}, invalid {s.get('invalid', 0)}) "
+          f"— recites {rep['alignment']['recites']} / describes {rep['alignment']['describes']}",
           file=sys.stderr)
 
 

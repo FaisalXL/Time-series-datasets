@@ -2,3 +2,12 @@ pyyaml>=6.0
 # Cricsheet parsing (download, unzip, per-over aggregation) uses ONLY the standard
 # library (zipfile / csv / urllib) — no pandas, no duckdb. PyYAML is used only to
 # read config.example.yaml. Works on stock Python 3.9+.
+
+# Innings attribution for two-innings formats (scripts/attribute.py). Only needed when
+# shape.two_innings_mode == "per_innings"; the per-match variant is stdlib + PyYAML.
+# The endpoint is OpenAI-compatible (vLLM); the key is read from $VLLM_KEY, never committed.
+openai>=1.30
+
+# Token budgeting against the corpus-wide 500-token text cap. Optional: without it the
+# builder falls back to a chars/4 approximation.
+tiktoken>=0.7

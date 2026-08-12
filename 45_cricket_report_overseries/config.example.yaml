@@ -19,20 +19,25 @@
 data:
   # Cricsheet bulk per-delivery CSV archive (ODC-BY 1.0). Each match => one
   # {match_id}.csv (one row per delivery) + one {match_id}_info.csv (metadata).
-  # Parsed with the stdlib (zipfile/csv). The IPL male archive is a good demo slice;
-  # swap for tests_male_csv2.zip / odis_male_csv2.zip / t20s_male_csv2.zip etc. for
-  # the full ~22k-match universe.
-  cricsheet_zip_url: "https://cricsheet.org/downloads/ipl_male_csv2.zip"
+  # Parsed with the stdlib (zipfile/csv). all_csv2.zip is the full universe:
+  # 22,537 matches / 49,893 innings / 47,906 innings >= 12 overs (counted 2026-08-11,
+  # not estimated). ipl_male_csv2.zip is the old demo slice.
+  cricsheet_zip_url: "https://cricsheet.org/downloads/all_csv2.zip"
 
   # Cricsheet match_id == ESPNcricinfo match ID (the join key). Human-facing URL,
   # stored on every record as `report_url` (browser-redirects to the full report slug).
   espn_report_url_template: "https://www.espncricinfo.com/ci/engine/match/{match_id}.html"
 
   # Report FETCH endpoint. www.espncricinfo.com and hs-consumer-api 403 bots; the ESPN
-  # *parent* host site.api.espn.com does not, and resolves purely by {match_id} (the
-  # {league} segment is just a required carrier — any valid cricket league id works for
-  # any match, across formats). Report prose = JSON `article.story`.
-  espn_summary_url: "https://site.api.espn.com/apis/site/v2/sports/cricket/{league}/summary?event={match_id}"
+  # *parent* host does not, and resolves purely by {match_id} (the {league} segment is
+  # just a required carrier — any valid cricket league id works for any match, across
+  # formats). Report prose = JSON `article.story`.
+  #
+  # 2026-08-11: site.api.espn.com now 403s (Akamai) for every UA including browser ones
+  # — a host move, not a bot wall. site.web.api.espn.com serves the identical payload and
+  # accepts our identifying research UA, so no spoofing is needed. Verified same day:
+  # site.api → 403 (447 B), site.web.api → 200 (483 KB, article.story present).
+  espn_summary_url: "https://site.web.api.espn.com/apis/site/v2/sports/cricket/{league}/summary?event={match_id}"
   espn_carrier_league: "1410320"   # IPL 2024 series id; carrier only, not per-match
   request_delay_s: 0.4             # be polite: ~2-3 req/s, cached per match_id
 
@@ -45,14 +50,53 @@ data:
   user_agent: "CPT-dataset-research faisal@usc.edu"
   timeout_s: 90
 
+# Record shape: HYBRID, decided on measurement 2026-08-11 (see README "Record shape").
+#   two-innings formats (T20/IT20/ODI/ODM) -> one record per INNINGS, its text being the
+#     passage of the report that narrates that innings (LLM attribution, indices only).
+#   four-innings formats (TEST/MDM)        -> one record per MATCH, whole-match series.
+# Attribution is inverted against a permutation control on Tests, so it is not used there.
+shape:
+  two_innings_mode: "per_innings"   # per_innings | per_match  (per_match disables the LLM)
+  multi_innings_mode: "per_match"
+  min_attributed_sentences: 2       # an innings with fewer of its own sentences is not
+                                    # narrated -> no record, rather than a padded one
+
+  # per_over | per_delivery — applies to PER-INNINGS records only. A T20 innings is exactly
+  # 20 per-over steps, below the 32-step window floor used elsewhere in the corpus, but
+  # ~125 deliveries. Measured over the full build, records surviving floor 32:
+  #     per_over 6,885 / 20,678      per_delivery 20,675 / 20,678
+  # `1play` is already in validate.py's FREQ_RE, so this needs no schema change, and the
+  # text is untouched — the last cumulative_runs value is the same innings total either
+  # way, so the alignment tier and its permutation control carry over.
+  # TEST/MDM per-match records always stay per-over: they already run ~360 steps, and
+  # per-delivery would make a whole Test ~2,700 points at 5.3x the datapoints.
+  series_granularity: "per_over"
+
+llm:
+  base_url: "https://enigmalab.dev/llm/qwen36/v1"
+  model: "Qwen/Qwen3.6-35B-A3B"
+  api_key_env: "VLLM_KEY"   # key is read from the environment, never committed
+  workers: 16
+  max_tokens: 2048
+  retries: 3
+
 text:
-  # No templated ts_intro: <ts></ts> is appended directly to the real ESPNcricinfo report,
+  # No templated ts_intro: <ts></ts> is appended directly to the real ESPNcricinfo prose,
   # nothing is generated.
-  min_report_chars: 400   # drop innings whose match report is missing or too short
+  min_report_chars: 400   # drop matches whose report is missing or too short
+  # 500-token corpus cap. `describes` records may be truncated at a sentence boundary
+  # (REVIEW_STATUS 2026-08-11: "truncate at a sentence boundary. Stays text_quality: real;
+  # no tag, no sign-off"). Over-budget records drop the model's LOWEST-RANKED sentences,
+  # never a tail cut mid-word. null disables. Records that recite their series' values are
+  # never cut in a way that orphans them — the reciting lede is the first sentence.
+  max_tokens: 500
 
 output:
   output_path: output/cricket_report_overseries_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
-  max_records: 50         # demo cap. null = full build (all innings in the archive)
+  max_records: 50         # demo cap. null = full build.
+                          # ⚠️ a cap takes matches in match_id order = OLDEST first, and
+                          # ESPN coverage is strongly era-skewed (ODI pre-2005 ~0%,
+                          # TEST 2020+ ~100%), so a capped run is NOT a random sample.
   indent: null
