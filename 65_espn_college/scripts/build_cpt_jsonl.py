@@ -10,19 +10,31 @@ package's, unchanged in substance: `plays` for basketball, `drives.previous[].pl
 score taken at every play (not per period — period level gives 3-4 points for football), and a
 game is dropped if the play-by-play final disagrees with the official final.
 
-Three things are NOT inherited from `51`, each measured on 2026-08-12:
+Four things are NOT inherited from `51`, each measured:
 
   1. **`&groups=50` is mandatory for college basketball.** Without it the scoreboard returns 21
-     games for 2024-02-10; with it, 155 — a 7x undercount at HTTP 200 with no error. Same class as
-     the `&limit=1000` truncation `51` documents, and the reason scoreboard params are per league.
-  2. **College basketball rejects date RANGES** (404 on every monthly range tried) while single
-     dates work, so there is no range-query census shortcut here: discovery is a day walk.
-  3. **A source allowlist is on by default.** 26 of 40 sampled 2023-25 men's recaps are
-     "Data Skrive" — automated content, median 1,653 chars — which `SCHEMA.md` §7 disqualifies as
-     boilerplate/template text and which would otherwise need `text_quality: generated` plus
-     sign-off. Historical seasons are almost entirely AP (39 of 40 sampled across 2016-19), so the
-     allowlist keeps the real journalism and drops the machine copy. It filters on
-     `article.source`; it does not guess from the prose.
+     games for 2024-02-10; with it, 155 — a 7x undercount at HTTP 200 with no error. Women's is
+     worse: 7 vs 116, a 16x undercount.
+  2. **`&limit=1000` must NOT be sent.** It is the fix for `51`'s monthly range queries, but on a
+     single-date college-football query it TRUNCATES: 2024-10-26 returns 52 completed games bare
+     and 25 with the limit. It was hardcoded in the shared scoreboard_url, so every CFB discovery
+     call this package originally made lost half the slate.
+  3. **College basketball rejects date RANGES** (404 on every monthly range tried) while single
+     dates work, so discovery is a day walk. Use `census.py --mode walk` once and then feed its
+     cached event ids back in via `discovery.census_seasons`; the walk is the expensive half.
+  4. **A source allowlist is on by default.** "Data Skrive" is automated content, which
+     `SCHEMA.md` §7 disqualifies as boilerplate/template text and which would otherwise need
+     `text_quality: generated` plus sign-off. It filters on `article.source`; it does not guess
+     from the prose.
+
+**Cumulative scores are monotonised, and the count is recorded.** ESPN populates `awayScore` /
+`homeScore` on every play, but not always correctly: administrative plays (timeouts, steals,
+rebounds) can carry a stale pre-scoring-play score, and some carry a value from an unrelated point
+in the game (event 401706896 reports a=57 h=86 in a 68/92 neighbourhood). Raw, that produced a
+DECREASING cumulative score on 9 of the first 50 records. A cumulative score cannot decrease, so
+the channel carries a running max and `meta.score_fix_plays` records how many plays needed it. The
+official-final check still runs afterwards and is the real guard: a spuriously HIGH value would
+propagate to the last point and fail it, dropping the game.
 
 Records are built through `schema/emit.py`, so they are born strict-clean.
 
@@ -34,6 +46,8 @@ tagged `proprietary-review`. Do not scale or publish until redistribution is cle
 Usage:
     python scripts/build_cpt_jsonl.py --dry-run
     python scripts/build_cpt_jsonl.py --set output.max_records=50
+    python scripts/build_cpt_jsonl.py --set data.discovery.census_seasons=[2013,2014] \
+                                      --set output.max_records=null
 """
 from __future__ import annotations
 
@@ -43,9 +57,6 @@ import datetime as dt
 import json
 import re
 import sys
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any, Optional
 
@@ -53,8 +64,11 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 PKG = HERE.parent
+sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(PKG.parent / "schema"))
-from emit import emit_record                                              # noqa: E402
+from espnfetch import (Fetcher, completed_events, flatten_plays,            # noqa: E402
+                       scoreboard_rel)
+from emit import emit_record                                               # noqa: E402
 
 
 # --- config ----------------------------------------------------------------------------------
@@ -79,46 +93,6 @@ def load_config(path: Path, sets) -> dict:
     return cfg
 
 
-# --- fetch -----------------------------------------------------------------------------------
-
-_last = [0.0]
-
-
-def http_json(url: str, ua: str, timeout: int, delay: float, tries: int = 4):
-    """Paced GET returning parsed JSON, or None. A 404 is a real answer; 429/5xx are retried."""
-    for attempt in range(tries):
-        wait = delay - (time.time() - _last[0])
-        if wait > 0:
-            time.sleep(wait)
-        _last[0] = time.time()
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": ua,
-                                                       "Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                return json.loads(r.read())
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return None
-            time.sleep(delay * (attempt + 2))
-        except Exception:
-            time.sleep(delay * (attempt + 2))
-    return None
-
-
-def cached_json(url: str, fp: Path, ua: str, timeout: int, delay: float):
-    """Cache only real payloads. A failed fetch must not be cached as an empty answer."""
-    if fp.exists():
-        try:
-            return json.loads(fp.read_text())
-        except Exception:
-            pass
-    data = http_json(url, ua, timeout, delay)
-    if data is not None:
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        fp.write_text(json.dumps(data))
-    return data
-
-
 # --- discovery -------------------------------------------------------------------------------
 
 def _as_date(v) -> dt.date:
@@ -141,33 +115,57 @@ def date_range(start, end, step_days: int = 1):
     return out
 
 
-def discover_events(lg: dict, d: dict, cache: Path) -> list[str]:
-    """Finished event ids for one league, by walking the scoreboard day by day.
-
-    Day-walk rather than range queries because college basketball 404s on ranges. `params` is
-    per league so `&groups=50` reaches basketball (mandatory: 7x undercount without it) without
-    being sent where it does not belong.
-    """
-    sport, league = lg["sport"], lg["league"]
-    ids: list[str] = []
-    dates = date_range(d["discovery"]["start_date"], d["discovery"]["end_date"],
-                       int(d["discovery"].get("step_days", 1)))
-    for date in dates:
-        url = d["scoreboard_url"].format(sport=sport, league=league, date=date)
-        url += lg.get("params", "")
-        fp = cache / "scoreboard" / sport / league / f"{date}.json"
-        data = cached_json(url, fp, d["user_agent"], int(d["timeout_s"]),
-                           float(d.get("request_delay_s", 0.4)))
-        if not data:
-            continue
-        for ev in data.get("events") or []:
-            st = ((ev.get("status") or {}).get("type") or {})
-            if st.get("name") == "STATUS_FINAL" or st.get("completed"):
-                ids.append(ev["id"])
+def _sorted_ids(ids) -> list[str]:
+    # Length-then-lexical so 9-digit modern ids sort after 6-digit historical ones, i.e. roughly
+    # chronologically. A capped run therefore takes OLDEST first — deliberate, because recap
+    # coverage is era-skewed and the old seasons are the AP-heavy ones.
     return sorted(set(ids), key=lambda s: (len(s), s))
 
 
-# --- summary parsing (logic inherited from 51_espn_us_majors) ---------------------------------
+def discover_from_census(lg: dict, seasons, cache: Path) -> tuple[list[str], list[int]]:
+    """Event ids from cached `census.py --mode walk` cells. No requests at all.
+
+    Only whole season cells exist on disk (the census refuses to write a season with unanswered
+    days), so this cannot silently inherit a throttled undercount.
+    """
+    ids, missing = [], []
+    for season in seasons:
+        fp = cache / "census" / "seasons" / f"{lg['league']}_{season}.json"
+        if not fp.exists():
+            missing.append(season)
+            continue
+        cell = json.loads(fp.read_text())
+        for day in sorted(cell["event_ids"]):
+            ids.extend(cell["event_ids"][day])
+    return _sorted_ids(ids), missing
+
+
+def discover_events(lg: dict, d: dict, f: Fetcher) -> list[str]:
+    """Finished event ids for one league, by walking the scoreboard day by day.
+
+    Day-walk rather than range queries because college basketball 404s on ranges. `params` is
+    per league so `&groups=50` reaches basketball (mandatory: 7-16x undercount without it) without
+    being sent where it does not belong, and so no `&limit=` reaches football (which truncates).
+    """
+    ids: list[str] = []
+    dates = date_range(d["discovery"]["start_date"], d["discovery"]["end_date"],
+                       int(d["discovery"].get("step_days", 1)))
+    unanswered = 0
+    for date in dates:
+        url = d["scoreboard_url"].format(sport=lg["sport"], league=lg["league"], date=date)
+        url += lg.get("params", "")
+        data, ok = f.cached(url, scoreboard_rel(lg, date))
+        if not ok:
+            unanswered += 1
+            continue
+        ids.extend(e["id"] for e in completed_events(data))
+    if unanswered:
+        print(f"  ⚠️  {lg['label']}: {unanswered} of {len(dates)} days never answered — "
+              f"discovery is an undercount, rerun to fill", flush=True)
+    return _sorted_ids(ids)
+
+
+# --- summary parsing --------------------------------------------------------------------------
 
 def strip_html(s: str) -> str:
     s = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", s or "")
@@ -180,37 +178,51 @@ def strip_html(s: str) -> str:
     return re.sub(r"\n\s*\n\s*(\n\s*)+", "\n\n", s).strip()
 
 
-def flatten_plays(summary: dict) -> list[dict]:
-    """Basketball exposes a flat `plays` list; football nests plays under `drives.previous[]`."""
-    plays = summary.get("plays") or []
-    if plays:
-        return plays
-    out = []
-    for drv in ((summary.get("drives") or {}).get("previous")) or []:
-        out.extend(drv.get("plays") or [])
-    return out
-
-
 def play_scores(plays: list[dict]):
-    """Running (away, home) score at EVERY play, in order, plus play and period counts.
+    """Running (away, home) score at EVERY play, monotonised, plus counts and period boundaries.
 
-    Every play carries a point, not only scoring plays: the flat shape of a possession that
-    ends without points is part of what the recap describes.
+    Every play carries a point, not only scoring plays: the flat shape of a possession that ends
+    without points is part of what the recap describes.
+
+    `awayScore`/`homeScore` are taken as the score AFTER the play, but the feed is not reliable
+    about it (see the module docstring), so each channel carries a running max. `fixes` counts the
+    plays whose raw value was below the carried score — the audit trail for that correction, and a
+    number worth watching: a game with many is a game whose feed should be distrusted.
+
+    `period_end_idx` is the index of the last play of each period, which is what lets the halftime
+    score be recovered from the series afterwards (verify_alignment.py uses it as a second,
+    independent anchor).
     """
-    away, home, periods = [], [], set()
+    away, home, period_end_idx = [], [], []
     a = h = 0
+    fixes = 0
+    periods = set()
+    last_period = None
     for p in plays:
+        raw_a, raw_h = a, h
         try:
-            a = int(p.get("awayScore", a))
-            h = int(p.get("homeScore", h))
+            raw_a = int(p.get("awayScore", a))
         except (TypeError, ValueError):
             pass
+        try:
+            raw_h = int(p.get("homeScore", h))
+        except (TypeError, ValueError):
+            pass
+        if raw_a < a or raw_h < h:
+            fixes += 1
+        a, h = max(a, raw_a), max(h, raw_h)
+
         per = ((p.get("period") or {}).get("number"))
         if per is not None:
             periods.add(per)
+            if last_period is not None and per != last_period and away:
+                period_end_idx.append(len(away) - 1)
+            last_period = per
         away.append(a)
         home.append(h)
-    return away, home, len(plays), len(periods)
+    if away:
+        period_end_idx.append(len(away) - 1)
+    return away, home, len(plays), len(periods), fixes, period_end_idx
 
 
 def official_scores(summary: dict):
@@ -252,19 +264,27 @@ def game_date(summary: dict) -> Optional[str]:
     return None
 
 
+def season_of(summary: dict) -> Optional[int]:
+    y = ((summary.get("header") or {}).get("season") or {}).get("year")
+    try:
+        return int(y)
+    except (TypeError, ValueError):
+        return None
+
+
 # --- record ----------------------------------------------------------------------------------
 
-def build_record(event_id: str, lg: dict, cfg: dict, cache: Path):
+def build_record(event_id: str, lg: dict, cfg: dict, f: Fetcher):
     """-> (record | None, skip_reason). skip_reason is '' on success."""
     d, t = cfg["data"], cfg["text"]
     sport, league, label = lg["sport"], lg["league"], lg["label"]
 
     url = d["summary_url"].format(sport=sport, league=league, event_id=event_id)
-    fp = cache / "espn" / sport / league / f"{event_id}.json"
-    summary = cached_json(url, fp, d["user_agent"], int(d["timeout_s"]),
-                          float(d.get("request_delay_s", 0.4)))
+    summary, ok = f.cached(url, f"espn/{sport}/{league}/{event_id}.json")
+    if not ok:
+        return None, "fetch_failed"          # unknown, NOT an empty answer — see espnfetch
     if not summary:
-        return None, "fetch_failed"
+        return None, "no_summary"
 
     art = summary.get("article") or {}
     src = (art.get("source") or "").strip()
@@ -284,14 +304,21 @@ def build_record(event_id: str, lg: dict, cfg: dict, cache: Path):
         return None, f"source_not_allowed:{src or '(empty)'}"
 
     plays = flatten_plays(summary)
-    away, home, n_plays, n_periods = play_scores(plays)
+    away, home, n_plays, n_periods, fixes, period_end_idx = play_scores(plays)
     if n_periods < int(d.get("min_periods", 2)) or n_plays < int(d.get("min_plays", 20)):
         return None, "short_game"
+
+    # A feed that needed the monotonic correction on a large share of its plays is not a feed to
+    # trust for the shape of the game, which is the entire content of the `describes` claim.
+    max_frac = d.get("max_score_fix_frac")
+    if max_frac is not None and n_plays and fixes / n_plays > float(max_frac):
+        return None, "unreliable_scores"
 
     off_away, off_home = official_scores(summary)
     if (off_away is not None and away and away[-1] != off_away) or \
        (off_home is not None and home and home[-1] != off_home):
-        # The play-by-play series must land on the official final, or the pairing is wrong.
+        # The play-by-play series must land on the official final, or the pairing is wrong. This
+        # also catches a monotonised channel that was dragged too high by a bogus play value.
         return None, "score_mismatch"
 
     away_name, home_name = team_names(summary)
@@ -321,11 +348,18 @@ def build_record(event_id: str, lg: dict, cfg: dict, cache: Path):
             "sport": sport,
             "espn_league_slug": league,
             "event_id": event_id,
+            "season": season_of(summary),
             "away_team": away_name,
             "home_team": home_name,
             "game_date": gdate,
             "n_plays": n_plays,
             "n_periods": n_periods,
+            # Last index of each period: lets a consumer slice the series by half/quarter, and is
+            # what makes the halftime score recoverable as an independent alignment anchor.
+            "period_end_idx": period_end_idx,
+            # Plays whose raw score field was below the carried cumulative score and were corrected
+            # upward. 0 for a clean feed. See play_scores().
+            "score_fix_plays": fixes,
             "final_away_score": away[-1] if away else None,
             "final_home_score": home[-1] if home else None,
             "report_headline": art.get("headline"),
@@ -349,33 +383,46 @@ def main() -> int:
     ap.add_argument("--config", default=str(PKG / "config.example.yaml"))
     ap.add_argument("--set", action="append", default=[])
     ap.add_argument("--dry-run", action="store_true", help="discover + report, write nothing")
+    ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
     cfg = load_config(Path(args.config), args.set)
     d, o = cfg["data"], cfg["output"]
     cache = PKG / d.get("cache_dir", ".cache")
+    f = Fetcher(cache, d["user_agent"], int(d.get("timeout_s", 60)),
+                float(d.get("request_delay_s", 0.45)), verbose=args.verbose)
     cap = o.get("max_records")
 
     # Per-league cap as well as a global one: leagues are walked in order, so a single global cap
     # fills entirely from the first league and the committed demo would show only football --
     # leaving the basketball path (and its mandatory &groups=50) unexercised.
     lcap = o.get("max_records_per_league")
+    seasons = d["discovery"].get("census_seasons")
     recs, skips = [], collections.Counter()
     per_league = {}
     for lg in d["leagues"]:
-        ids = discover_events(lg, d, cache)
+        if seasons:
+            ids, missing = discover_from_census(lg, seasons, cache)
+            if missing:
+                print(f"  ⚠️  {lg['label']}: no census cell for {missing} — "
+                      f"run census.py --mode walk for those seasons", flush=True)
+        else:
+            ids = discover_events(lg, d, f)
         kept = 0
         print(f"[{lg['label']}] discovered {len(ids)} finished games", flush=True)
-        for eid in ids:
+        for n, eid in enumerate(ids):
             if lcap and kept >= int(lcap):
                 break
-            rec, why = build_record(eid, lg, cfg, cache)
+            rec, why = build_record(eid, lg, cfg, f)
             if rec is None:
                 skips[why.split(":")[0]] += 1
-                skips[why] += 1 if ":" in why else 0
+                if ":" in why:
+                    skips[why] += 1
                 continue
             recs.append(rec)
             kept += 1
+            if args.verbose and kept % 250 == 0:
+                print(f"    [{lg['label']}] {kept} kept / {n + 1} walked", flush=True)
             if cap and len(recs) >= int(cap):
                 break
         per_league[lg["label"]] = {"discovered": len(ids), "records": kept}
@@ -384,20 +431,26 @@ def main() -> int:
             break
 
     srcs = collections.Counter(r["meta"]["report_source"] for r in recs)
+    by_season = collections.Counter(r["meta"]["season"] for r in recs)
     plays = sorted(r["meta"]["n_plays"] for r in recs)
     chars = sorted(r["meta"]["report_chars"] for r in recs)
+    fixed = [r["meta"]["score_fix_plays"] for r in recs]
     stats = {
         "records": len(recs),
         "per_league": per_league,
         "skips": dict(skips),
         "report_sources": dict(srcs),
+        "records_by_season": {str(k): v for k, v in sorted(by_season.items(), key=lambda x: str(x[0]))},
         "n_plays_median": plays[len(plays) // 2] if plays else None,
         "n_plays_min": plays[0] if plays else None,
         "report_chars_median": chars[len(chars) // 2] if chars else None,
+        "records_needing_score_fix": sum(1 for x in fixed if x),
+        "score_fix_plays_max": max(fixed) if fixed else 0,
         "alignment": "describes",
         "license": "proprietary-review",
+        "fetch_stats": f.stats,
     }
-    print(json.dumps(stats, indent=2)[:2500])
+    print(json.dumps(stats, indent=2)[:3000])
     if args.dry_run:
         print("(dry run -- nothing written)")
         return 0

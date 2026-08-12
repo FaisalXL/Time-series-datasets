@@ -25,7 +25,9 @@ data:
   # 2026-08-12: site.api.espn.com returns 403 (Akamai) for every UA including browser ones.
   # site.web.api.espn.com serves the identical payload and accepts our identifying research UA,
   # so no spoofing. This is the host 51 was moved to on the same day.
-  scoreboard_url: "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}&limit=1000"
+  # NOTE: no `&limit=` here. That param belongs to the monthly RANGE queries 51_espn_us_majors
+  # uses, and on a single-date college-football query it TRUNCATES: see the leagues block below.
+  scoreboard_url: "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}"
   summary_url: "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={event_id}"
 
   user_agent: "CPT-dataset-research flnu@usc.edu"
@@ -38,12 +40,34 @@ data:
   min_periods: 2
   min_plays: 20
 
+  # Cumulative score channels are monotonised (running max) because ESPN's per-play score fields
+  # are not reliable: administrative plays can carry a stale pre-score value, and some carry a
+  # value from an unrelated point in the game (event 401706896 reports a=57 h=86 inside a 68/92
+  # neighbourhood). Raw, that made the "cumulative" score DECREASE on 9 of the first 50 records.
+  # `meta.score_fix_plays` records how many plays were corrected per game. This drops a game whose
+  # feed needed correcting on more than this FRACTION of its plays -- not a cosmetic threshold: the
+  # shape of the scoring path is the whole content of the `describes` claim. null disables.
+  max_score_fix_frac: 0.02
+
   # ---- leagues ----------------------------------------------------------------------------
-  # `params` is PER LEAGUE and is not cosmetic. Measured 2026-08-12: without `&groups=50` the
-  # college-basketball scoreboard returns 21 games for 2024-02-10; with it, 155 — a 7x undercount
-  # that still returns HTTP 200. Same class as the `&limit=1000` truncation documented in 51.
-  # `groups=50` is Division I. Football needs no group filter (verified: default, groups=80 and
-  # groups=81 all return the same completed-game count).
+  # `params` is PER LEAGUE and is not cosmetic. Full matrix, re-measured 2026-08-12 with retries
+  # (completed games returned, HTTP 200 in every cell — none of these announce the undercount):
+  #
+  #   CFB  2024-10-26 : bare 52 | groups=80 52 | limit=100/200/500 52 | **limit=1000 -> 25**
+  #   MCB  2024-02-10 : bare 21 | groups=50 155 | groups=50&limit=1000 155
+  #   WCB  2024-02-10 : bare  7 | groups=50 116
+  #
+  # Two separate traps, in opposite directions:
+  #   * `&limit=1000` — the fix for 51's monthly RANGE queries — HALVES a single-date CFB result.
+  #     It was hardcoded into the shared scoreboard_url here, so every CFB discovery call this
+  #     package made was truncated; that is where the "exactly 25 games on an October Saturday"
+  #     came from. No limit param at all is correct for a day walk. limit<=500 is also harmless,
+  #     but there is no reason to send it.
+  #   * `&groups=50` (Division I) is MANDATORY for basketball: 7x undercount for men, 16x for
+  #     women without it.
+  # Football needs no group filter: bare == groups=80 (FBS). `groups=81` returns a DIFFERENT 60
+  # games (FCS) — a separate tier that bare does NOT include, so FCS is an expansion option, not a
+  # gap in these numbers.
   leagues:
     - {sport: "football",   league: "college-football",          label: "CFB", params: ""}
     - {sport: "basketball", league: "mens-college-basketball",   label: "MCB", params: "&groups=50"}
@@ -54,16 +78,29 @@ data:
   # monthly date range tried, while single dates work. That is the opposite of 51, whose census
   # uses monthly ranges — so budget one request per day per league.
   #
-  # Measured universe (2024 calendar year, this host): CFB 960 finished games. College basketball
-  # averaged 64 (men) / 55 (women) D-I completed games per day over 11 sampled days.
-  # ⚠️ The CFB count is NOT yet trustworthy: an October Saturday returns exactly 25 completed
-  # games with or without a groups filter, which is low for FBS and suspiciously round. Census it
-  # properly before quoting a ceiling.
+  # ---- what era is even usable ------------------------------------------------------------
+  # `census.py --mode era` over 2006-2025 (20 seasons x 3 leagues x 6 sampled days, 666 requests,
+  # zero throttles) found a SHARP boundary: the 2012 season is the first with wire recaps, in all
+  # three leagues simultaneously. 2006-2011 serve full play-by-play (150-350 plays/game) and no
+  # prose at all. So play-by-play does NOT bound this package — recaps do, and the usable window
+  # is 2012-2025 (14 seasons).
+  #
+  # Games per day in the dense middle of a season, mean over the 14 usable seasons:
+  #   CFB 8.5/day   MCB 50.3/day   WCB 47.7/day
+  # The basketball universe is an order of magnitude larger than football's: D-I is ~360 teams per
+  # sex playing ~30 games each. See output/census_walk.json for the exact per-season counts.
   discovery:
     # A window where all three leagues are in season, so a demo build touches every code path.
     start_date: "2024-12-01"
     end_date: "2024-12-14"
     step_days: 1
+
+    # Preferred at scale: read event ids straight out of the cached `census.py --mode walk` cells
+    # instead of re-walking the scoreboard (the walk is the expensive half -- ~490 requests per
+    # season per league -- and it is already paid for). A list of season start-years, e.g.
+    # [2012, 2013]; null falls back to the start_date/end_date walk above. Only whole season cells
+    # exist on disk, so this cannot inherit a throttled undercount.
+    census_seasons: null
 
 text:
   min_report_chars: 400
