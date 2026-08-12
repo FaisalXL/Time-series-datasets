@@ -1,7 +1,9 @@
 # ESPN College Sports Recaps + Score-Progression Series → CPT
 
-> **Status: demo built 2026-08-12 — 50 records across 3 leagues, `validate.py --strict` clean
-> (50/50 and 5/5 samples, 0 errors / 0 warnings).**
+> **Status 2026-08-12: full harvest in progress.** Football is complete — **CFB 11,059 records
+> from 13,206 games** and FCS building — and Division I basketball, which is 87% of the universe,
+> is harvesting now. `validate.py --strict` clean on every shard checked (861/861, 1194/1194, 0
+> warnings).
 > **Licence-gated: every record is `proprietary-review` (AP wire copy). Not cleared for
 > distribution — this is the same rightsholder ask as `51_espn_us_majors`.**
 
@@ -11,118 +13,189 @@ point per play). The recap *describes* the shape of the game the series quantifi
 `alignment: describes`.
 
 Sibling of `51_espn_us_majors` (NBA/NFL/NHL). Same endpoints, same play-extraction logic, same
-licence question, different universe: **FBS football + Division I men's and women's basketball**.
+licence question, different and much larger universe: **FBS + FCS football and Division I men's
+and women's basketball**.
 
 | | |
 |---|---|
-| **Demo records** | **50** (CFB 10 · MCB 20 · WCB 20), all `article.source == "AP"` |
+| **Universe** | **185,453 finished games**, 2012–2025, censused day by day (not extrapolated) |
+| **Records** | CFB **11,059** complete · FCS + basketball in flight |
 | **Domain / region** | sports / `US` |
 | **License** | ⚠️ `proprietary-review` — AP wire copy via ESPN's API. **Same rightsholder as `51`** |
 | **Alignment** | `describes` · `text_quality: real` (verbatim recap; nothing generated, nothing templated) |
-| **Series** | 2 channels (away/home cumulative score), `freq: 1play`, demo median **326 plays** |
-| **Text** | verbatim recap prose, demo median 1,824 chars |
+| **Series** | 2 channels (away/home cumulative score), `freq: 1play`; football median 185 plays, basketball median ~326 |
 | **Built via** | `schema/emit.py` — records are born strict-clean (unlike `51`, whose committed samples are pretty-printed JSON and return 0/2868 under `--strict`) |
 
 ---
 
-## Why this is worth having despite the licence gate
+## The licence gate is the only manual step
 
-**It costs almost nothing and it rides on a licence ask that is already being made.** `51`'s
-recaps are AP; so are these. Scoping the request to **AP** covers `51` (33,960 measured records)
-*and* this package, from one rightsholder. Conversely, if AP declines, both are zero — so
-**do not spend harvest time here before the AP answer**.
+**Nothing here needs a key, an account, or authentication.** ESPN's endpoints are public. The only
+access requirement is the host: `site.api.espn.com` returns 403 (Akamai) for every user agent,
+while `site.web.api.espn.com` serves the identical payload and accepts our identifying research UA
+— no spoofing.
 
-`45_cricket_report_overseries` is a **separate and materially easier** ask (ESPNcricinfo in-house
-staff journalism, single rightsholder). Do not bundle the two requests.
+What *does* need a human is **AP redistribution clearance (Charon)**. Every record's prose is
+Associated Press wire copy, recorded per record in `meta.report_source`. Scoping the ask to **AP**
+covers `51_espn_us_majors` (33,960 measured) *and* this package from one rightsholder. If AP
+declines, both are zero.
 
----
+Building ahead of that answer follows corpus precedent rather than departing from it:
+`45_cricket_report_overseries` (20,678) and `05_fnspid` (120,522) are both **built, strict-clean,
+and deliberately held out of every corpus total**. This package is in the same state.
 
-## Measured 2026-08-12 — every number below was probed live, none is scouted
-
-The tier's scouting note carried "ESPN college ~15k" with no package behind it. What is actually
-there:
-
-| league | in-season volume | recap ≥400 chars | rightsholder (of covered) | series depth |
-|---|--:|--:|---|--:|
-| **CFB** (FBS football) | 960 finished games in calendar 2024 | **82.5%** | **AP 33/33** | 155–207 plays |
-| **MCB** (D-I men's basketball) | **~64 D-I games/day** (11 sampled days, range 10–155) | **92.5%** | see the split below | median **321** plays |
-| **WCB** (D-I women's basketball) | ~55 D-I games/day | **17.5%** | AP only | median 336 plays |
-
-CFB recaps are long (5,359–9,579 chars). Basketball recaps are short (median ~1,650) but real.
-
-### ⚠️ The men's basketball source split is the whole story
-
-| sample | Data Skrive | AP | no recap |
-|---|--:|--:|--:|
-| 2023-25 (40 games) | **26** | 11 | 3 |
-| 2016-19 (40 games) | 0 | **39** | 1 |
-
-**"Data Skrive" is automated content** — median 1,653 chars, template-shaped. `SCHEMA.md` §7
-disqualifies boilerplate/template text, and shipping it would otherwise require
-`text_quality: generated` plus sign-off (the gate `05_fnspid` is stuck behind, and the
-semi-synthetic text Xinyue rejected).
-
-So `text.source_allowlist` is **on by default** and filters on the publisher's own
-`article.source` field — never inferred from the prose. Because the machine copy is a **post-2021
-phenomenon**, this costs little on historical seasons and a lot on recent ones. That is the honest
-shape of the opportunity: the AP-sourced men's basketball archive is large, and the recent
-seasons are mostly not usable.
-
-The demo run makes the filter visible in its own skip counts: **56 `no_report` · 20
-`source_not_allowed:Data Skrive` · 2 `short_game`** for 50 kept.
-
-### Scale — deliberately not quoted as a ceiling
-
-At ~64 men's D-I games/day over a ~160-day season this is **order 10k games per season**, and
-`51`'s harvest window is 12 seasons. Multiply that out and college basketball is larger than
-everything else in the sports tier combined. **This README does not quote that product as a
-ceiling**, because:
-
-- the per-day figure is a mean over 11 sampled days with a 10–155 range, not a census;
-- the AP share moves with era and needs measuring per season, not once;
-- **the CFB count of 960 is itself not yet trustworthy** — an October Saturday returns exactly 25
-  completed games with or without `&groups=80/81`, which is low for FBS and suspiciously round.
-
-This file's tier has been wrong by 14× (cricket, down) and 17% (`51`, up) on exactly this kind of
-arithmetic. **Census it the way `51` was censused before anyone puts a number in a plan.**
+`45` is a **separate and materially easier** ask (ESPNcricinfo in-house staff journalism). Do not
+bundle the two requests.
 
 ---
 
-## ⚠️ Two discovery traps, both found the hard way
+## The measured universe
 
-1. **`&groups=50` is mandatory for college basketball.** Without it, 2024-02-10 returns **21**
-   completed games; with it, **155** — a **7× undercount that still returns HTTP 200**, no error.
-   This is the same failure class as the `&limit=1000` truncation documented in `51`. `groups=50`
-   is Division I. Football needs no group filter (verified: default, `groups=80` and `groups=81`
-   all return the same count), which is why `params` is per league in the config.
-2. **College basketball rejects date *ranges*.** Every monthly range returned 404 while single
-   dates work, so there is **no range-query census shortcut here** — the opposite of `51`, whose
-   census uses monthly ranges. Discovery is one request per day per league.
+`census.py --mode walk` walks every day of every season and writes one cell per (league, season),
+**refusing to write a season with any unanswered day** — a partial write is indistinguishable
+downstream from a real low count.
 
-Also inherited from `51`: **`site.api.espn.com` returns 403 (Akamai) for every user agent** since
-2026-08-12. `site.web.api.espn.com` serves the identical payload and accepts our identifying
-research UA — no spoofing.
+| league | seasons | finished games | per season | tier |
+|---|--:|--:|--:|---|
+| **CFB** | 14 | 13,261 | 947 | FBS football |
+| **FCS** | 14 | 11,889 | 849 | FCS football |
+| **MCB** | 14 | **82,763** | 5,911 | D-I men's basketball |
+| **WCB** | 14 | **77,540** | 5,538 | D-I women's basketball |
+| | | **185,453** | | |
+
+**The window is 2012–2025 because of recaps, not plays.** `census.py --mode era` over 2006–2025
+found a sharp boundary: the 2012 season is the first with wire recaps, in all three sports at
+once. 2006–2011 serve full play-by-play (150–350 plays/game) and **no prose whatsoever**, so they
+are worth zero records here.
+
+### Yield, measured per season rather than assumed
+
+| league | records / games | yield | note |
+|---|--:|--:|---|
+| CFB | 11,059 / 13,206 | **83.7%** | 93–97% for 2012–2019; 44% in 2020, 62% in 2021 |
+| FCS | in flight | **~55–64%** | lower than CFB because the well-covered games are the FBS matchups |
+| MCB · WCB | in flight | — | 87% of the universe; not estimated here on purpose |
+
+**There is essentially no automated content in football.** CFB's rejections are `no_report` (1,445)
+— coverage gaps — against just **91** `source_not_allowed` across 13,206 games. The
+"26 of 40 games are Data Skrive" finding that motivated the source allowlist is a **men's
+basketball, post-2021** phenomenon and does not generalise to the other tiers. The allowlist stays
+on and stays audited per record, but it is not what shapes football's yield.
+
+⚠️ **This file states yields it has measured and leaves the rest blank.** Multiplying a per-unit
+rate into a federation total is exactly how this tier has been wrong before — 14× down on cricket,
+17% up on `51`, and 15× down on `61`.
 
 ---
 
-## Not included, and why — both measured, not assumed
+## Alignment: `describes`, and the §7 test is run rather than asserted
 
-The same probe covered the other two un-built claims in the sports tier. Neither is a package,
-and neither should be:
+SCHEMA.md §7 qualifies `describes` **"if the description is specific to *this* series (not
+boilerplate)"**. That is a testable condition, and these recaps make it easy to test: they state
+the final score, which is literally the last value of both channels.
 
-- **ESPN MLB (~17.2k claimed) → ~900 real.** Measured recap coverage **2.5%** (1 of 40): the
-  summary payload has **no `article` key at all** on 39 of 40 games sampled. Its series half is
-  the richest of any league checked (413 plays, 69 win-probability points) — the text is what is
-  missing, which is backwards from what the claim assumed. If those ~900 records are wanted, MLB
-  is a **US major** and belongs as a fourth league in `51_espn_us_majors`, not here; `51`'s
-  builder already handles the flat `plays` shape MLB uses.
-- **ESPN soccer (~8k claimed) → 0, on two independent grounds.** (a) **There is no numeric
-  series**: soccer summaries carry `commentary` (113–147 entries, which is *text*) and
-  `keyEvents` (20–27, of which goals are 2–6). A running scoreline is 2–6 points — far under any
-  window floor, and `51`'s own config already rejected period-level granularity for being 3–4
-  points. (b) **The rightsholders are different**: Reuters 40/40 for both EPL and UCL, Field
-  Level Media 35/40 for MLS. That is two or three *new* licence asks, so it makes the AP request
-  harder rather than wider.
+So `verify_alignment.py` checks two anchors against a **permutation control** — the same prose
+paired with a *different* game's series values, same league, same era, same house style — because a
+match rate without a measured coincidence floor means nothing (the lesson from `61`). Scores are
+small integers and recaps are full of them, so the floor is not zero by assumption.
+
+| tier | final score in own prose | control | lift | halftime anchor | control |
+|---|--:|--:|--:|--:|--:|
+| CFB | 0.9853 | 0.0058 | **169×** | 0.227 | 0.054 |
+| FCS | 0.9860 | 0.0038 | **261×** | 0.159 | 0.041 |
+| MCB (demo) | 1.000 | 0.000 | — | 0.650 | 0.000 |
+| WCB (demo) | 1.000 | 0.025 | 40× | 0.350 | 0.000 |
+
+Across **all 12,699 records harvested so far, 0.98724 state their own final score** — a census, not
+a sample, because the anchor is just a regex. The halftime score is a genuinely independent second
+anchor, recoverable from the series only because `meta.period_end_idx` records where each period
+ends.
+
+**The tag stays `describes`, deliberately.** Only the terminal value is quoted, not the 160–330
+point path, so `recites` would overclaim under §7. The anchor is *verification of the pairing*, not
+grounds for promoting the tier.
+
+### Shared recaps are resolved, not just counted
+
+Text distinctness is **99.992%**, and the one collision is worth knowing about: ESPN serves the
+*same* recap for events 400548101 (Eastern Michigan at Florida, 2014, 0–65) and 401752668 (LIU at
+Florida, 2025, 0–55). Different teams, dates and scores — so at most one of those records has prose
+describing its own series, and the other is a mispairing that **every id-level check passes
+cleanly**. `aggregate.py` resolves such a group to the record whose own final score appears in the
+text and writes the loser to `output/exclusions.json` with its reason; a group where nobody
+verifies, or several do, is excluded whole rather than guessed at. (`45` carried 2.24× text
+duplication with every id distinct — which is why distinctness is checked on a text hash
+independently of `series_id`.)
+
+---
+
+## Series health: the cumulative score was not cumulative
+
+ESPN populates `awayScore`/`homeScore` on every play but is **not reliable about it**.
+Administrative plays carry a stale pre-scoring value — event 401677077 has a timeout immediately
+after a touchdown reporting the pre-TD score — and some carry a value from an unrelated point in
+the game entirely: event 401706896 reports `a=57 h=86` inside a `68/92` neighbourhood. Raw, that
+produced a **decreasing "cumulative" score on 9 of the first 50 records**. Plays are correctly
+ordered and unique (verified against `sequenceNumber`), so this is a field-level defect, not a
+parsing bug.
+
+A cumulative score cannot decrease, so each channel carries a **running max**, and
+`meta.score_fix_plays` records how many plays needed it. **12,699/12,699 records are healthy.**
+
+Guards, each set from a measured distribution rather than a round number:
+
+- **`max_score_fix_frac: 0.25`** — the fix-fraction is p50 0.005, p90 0.040, p99 0.155, then a thin
+  tail to 0.95. That tail is real: a game reporting 95% of plays below the carried score has a
+  mostly-garbage score field, and monotonising it yields a staircase that reaches the final early
+  and sits there, so the *path* is wrong even where the endpoint matches. 0.25 sits above p99 and
+  costs 0.63%.
+- **`max_plays_by_sport`** — football is p99.9 = 267 plays, and one payload in 5,241 carries
+  **1,493**, of which 1,346 are stamped period 3 (event 400756912). Caps: football 500,
+  basketball 1,200 against a measured legitimate max of 782 from multi-overtime games.
+- **The official-final check** remains the principled guard and dropped 156 CFB games: a wrong
+  score value that survives monotonisation lands on the last point and fails there.
+
+Two things that are **not** defects, both of which were initially flagged as such:
+
+- **A flat channel is a shutout.** 156 records were reported as broken series; every one was a real
+  45–0 or 49–0 game whose away channel legitimately never moves. The check now fires only when
+  *neither* side ever scored.
+- **Non-monotone `sequenceNumber` is a numbering convention, not corruption.** It looked like a
+  clean integrity signal, but 2,002 of 5,141 cached football payloads (39%) are non-monotone,
+  concentrated in pre-2010 ids. Rejected as a guard.
+
+---
+
+## ⚠️ Four discovery traps, all found by measurement, all silent at HTTP 200
+
+Full matrix, completed games returned for one date per league:
+
+| league | correct params | the trap |
+|---|---|---|
+| **CFB** | **no `limit` at all** → 52 | `&limit=1000` → **25**. A 52% undercount. |
+| **FCS** | `&groups=81` → 60 | bare returns the FBS slate; FCS is invisible without it |
+| **MCB** | `&groups=50` → 155 | bare → 21. A **7×** undercount. |
+| **WCB** | `&groups=50` → 116 | bare → 7. A **16×** undercount. |
+
+1. **`&limit=1000` must NOT be sent.** It is the correct fix for the monthly *range* queries `51`
+   uses, and it **truncates** a single-date college-football query. It was hardcoded into the
+   shared `scoreboard_url` here, so every CFB discovery call this package originally made lost half
+   the slate — the source of the "exactly 25 games on an October Saturday" that read as suspicious.
+   Params are per league for exactly this reason.
+2. **`&groups=81` is a separate tier, not a filter.** `bare` and `&groups=80` return the *identical*
+   52 event ids, so the default slate is FBS. `groups=81` returns ~849 games/season of which ~23%
+   overlap, and they carry the same journalism (13 of 14 sampled have AP recaps, median ~2,300
+   chars). `exclude_overlap_with` is **required**, not optional: `series_id` is
+   `espn_<league_slug>_<event_id>` and does not encode the tier, so a shared game harvested under
+   both labels is two records claiming to be the same series.
+3. **College basketball rejects date *ranges*** (404 on every monthly range tried) while single
+   dates work, so there is no range-query shortcut — the opposite of `51`. Discovery is one request
+   per day per league, which is why the census is cached and reused via `discovery.census_seasons`.
+4. **The FCS 2020 season was played in spring 2021.** Under a standard Aug 15 → Jan 20 football
+   window the walk returned **52 games over 18 active days** against ~890 in neighbouring seasons.
+   That is the dangerous kind of wrong number — 52 reads as a plausible COVID collapse. Most FCS
+   conferences did not play in autumn 2020 at all. `SEASON_WINDOW_OVERRIDES` extends football 2020
+   to June 30 2021, recovering **311 FCS games (6×)** and 628 CFB games.
 
 ---
 
@@ -138,7 +211,8 @@ and neither should be:
   "alignment": "describes", "license": "proprietary-review",
   "text_source": "third_party", "text_quality": "real",
   "domain": "sports", "region": "US",
-  "meta": {"league": "MCB", "report_source": "AP", "n_plays": 326, ...}
+  "meta": {"league": "MCB", "report_source": "AP", "n_plays": 326,
+           "period_end_idx": [162, 325], "score_fix_plays": 0, "espn_season_year": 2025, ...}
 }
 ```
 
@@ -146,10 +220,15 @@ Every play carries a point, not only scoring plays — the flat stretch of a pos
 without points is part of what the recap describes. Per `51`'s finding, period-level granularity
 gives only 3–4 points for football and was rejected.
 
-**A game is dropped, never patched, when:** it has no recap ≥400 chars · its source is outside
-the allowlist · it has <20 plays or <2 periods · **or the play-by-play final disagrees with the
-official final** (that last guard is `51`'s, and it catches cases where the series would not land
-on the score the prose states).
+`meta.espn_season_year` is ESPN's own field and **does not match this package's season labels**:
+ESPN labels a basketball season by its *ending* year (a 2024-12 game is season 2025) while
+`census.py` labels seasons by start year. Kept under the source's name so the two conventions are
+not conflated.
+
+**A game is dropped, never patched, when:** it has no recap ≥400 chars · its source is outside the
+allowlist · it has <20 plays or <2 periods · its play count is implausible for the sport · more
+than 25% of its plays needed the monotonic correction · **or the play-by-play final disagrees with
+the official final**.
 
 ---
 
@@ -157,20 +236,52 @@ on the score the prose states).
 
 ```bash
 pip install -r requirements.txt
-python scripts/build_cpt_jsonl.py --dry-run
-python scripts/build_cpt_jsonl.py                    # capped demo: 60 total / 20 per league
+
+# 1. what era is usable at all (cheap: ~660 requests for 20 seasons x 3 leagues)
+python scripts/census.py --mode era --seasons 2006:2025
+
+# 2. the real census -- one cell per (league, season), resumable, refuses partial writes
+python scripts/census.py --mode walk --seasons 2012:2025 --workers 6
+
+# 3. full harvest, one shard per (league, season), resumable
+python scripts/harvest.py --seasons 2012:2025 --workers 8 --delay 0.15
+
+# 4. aggregate: counts, series_id uniqueness, health on every record, the §7 control
+python scripts/aggregate.py
+python ../schema/validate.py --strict output/shards/CFB_2012.jsonl
+
+# capped demo for review (60 total / 20 per league, all four tiers exercised)
+python scripts/build_cpt_jsonl.py
 ```
 
-`output.max_records_per_league` exists so a capped demo covers all three leagues: leagues are
-walked in order, so a global-only cap fills entirely from football and never exercises the
-basketball path or its mandatory `&groups=50`.
+**Measured throughput.** Concurrency is a global rate limit — all workers share one `Fetcher` whose
+gap is held under a lock — so the aggregate rate is 1/gap regardless of worker count; workers only
+hide per-request latency, which is itself worth ~2× (a serial walk achieves ~1 req/s against a
+0.45s gap). Two processes at 8 workers and `gap=0.15` sustain **13.6 req/s with zero throttles**.
+Three processes reached ~10 req/s and drew throttles, so ESPN's tolerance is real but finite; the
+AIMD backoff widens the gap on 502s, which is what ESPN returns instead of 429. Cache footprint is
+~68 GB for the full universe (football 507 KB/game, basketball ~325 KB).
+
+## Not included, and why — both measured, not assumed
+
+- **ESPN MLB (~17.2k claimed) → ~900 real.** Recap coverage **2.5%** (1 of 40): the summary payload
+  has **no `article` key at all** on 39 of 40 games. Its series half is the richest of any league
+  checked (413 plays, 69 win-probability points) — the text is what is missing, backwards from the
+  claim. MLB is a *US major* and belongs as a fourth league in `51_espn_us_majors`, not here.
+- **ESPN soccer (~8k claimed) → 0, on two independent grounds.** (a) **No numeric series**: soccer
+  summaries carry `commentary` (text) and `keyEvents` (20–27, of which goals are 2–6), so a running
+  scoreline is 2–6 points. (b) **Different rightsholders**: Reuters 40/40 for EPL and UCL, Field
+  Level Media 35/40 for MLS — two or three *new* licence asks, making the AP request harder rather
+  than wider.
 
 ## Open items
 
-- **Census before quoting scale** — see above. The day-walk cost is real (one request per day per
-  league) and there is no range shortcut for basketball.
-- **AP licence** is the only thing between this and a build. Same ask as `51`.
-- **Per-season AP share** should be measured across the full window, not just the two era samples
-  taken here; the Data Skrive cutover date is the number that sets the usable ceiling.
-- **Women's D-I is thin but real** (17.5% coverage, AP-only) and is kept in the league list so its
-  yield is measured rather than assumed away.
+- **AP licence** is the only thing between this and a shippable package. Same ask as `51`.
+- **SFT-overlap check (SCHEMA §8 item 5) has not been run.** Required before banking.
+- **Basketball yield is unmeasured** and is 87% of the universe. It will come from the harvest's own
+  per-shard source counts, not from a sample.
+- **The CFB/FCS 2020 shards need rebuilding** under the corrected spring-2021 window; the cells are
+  already re-walked.
+- **D-II/D-III basketball and lower football divisions are untested.** `groups=81` proved that a
+  group id can hide a whole populated tier, so "no other tiers exist" should be measured, not
+  assumed.
