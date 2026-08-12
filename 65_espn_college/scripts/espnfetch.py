@@ -171,6 +171,29 @@ def scoreboard_rel(lg: dict, date: str) -> str:
     return f"census/scoreboard/{lg['league']}/{params_tag(lg.get('params', ''))}/{date}.json"
 
 
+def census_cell_rel(lg: dict, season: int) -> str:
+    """Cache path for one (league, season) census cell, keyed on the league LABEL.
+
+    The label, not the ESPN league slug, because two config entries can legitimately share a slug:
+    FBS and FCS football are both `college-football`, separated only by `&groups=81`. Keyed on the
+    slug, the FCS cell would silently overwrite the FBS one and the harvest would then build FBS
+    shards from an FCS game list.
+    """
+    return f"census/seasons/{lg['label']}_{season}.json"
+
+
+def find_census_cell(cache: Path, lg: dict, season: int) -> Optional[Path]:
+    """The cell for this (league, season), preferring the label-keyed name and falling back to the
+    slug-keyed name that cells written before the FCS tier existed still use. Read-side only —
+    writes always use the label."""
+    for rel in (census_cell_rel(lg, season),
+                f"census/seasons/{lg['league']}_{season}.json"):
+        fp = Path(cache) / rel
+        if fp.exists():
+            return fp
+    return None
+
+
 def completed_events(scoreboard: dict) -> list[dict]:
     """Events whose status says the game finished. ESPN sets `completed` on the status type; the
     name check catches payload shapes where only the name is populated."""

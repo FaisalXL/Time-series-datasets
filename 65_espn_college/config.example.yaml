@@ -76,8 +76,19 @@ data:
   # Football needs no group filter: bare == groups=80 (FBS). `groups=81` returns a DIFFERENT 60
   # games (FCS) — a separate tier that bare does NOT include, so FCS is an expansion option, not a
   # gap in these numbers.
+  # FCS is a real fourth tier, not a duplicate of CFB. Measured on 2024-10-26: `bare` and
+  # `groups=80` return the IDENTICAL 52 event ids (so the default slate is FBS), while `groups=81`
+  # returns 60 games of which only 5 overlap -- 55 games the package was not seeing at all. And
+  # they carry the same journalism: 13 of 14 sampled FCS games have an AP recap, median ~2,300
+  # chars (shorter than FBS's 5,000-9,000 but far above the 400-char floor).
+  #
+  # `exclude_overlap_with` is required, not optional. Those 5 shared games would otherwise be built
+  # twice with an IDENTICAL series_id (espn_college-football_<event_id> does not encode the tier),
+  # which is a duplicate record, not a duplicate row to be resolved later.
   leagues:
     - {sport: "football",   league: "college-football",          label: "CFB", params: ""}
+    - {sport: "football",   league: "college-football",          label: "FCS", params: "&groups=81",
+       exclude_overlap_with: "CFB"}
     - {sport: "basketball", league: "mens-college-basketball",   label: "MCB", params: "&groups=50"}
     - {sport: "basketball", league: "womens-college-basketball", label: "WCB", params: "&groups=50"}
 

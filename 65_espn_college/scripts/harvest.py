@@ -44,7 +44,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PKG = HERE.parent
 sys.path.insert(0, str(HERE))
-from espnfetch import Fetcher                                            # noqa: E402
+from espnfetch import Fetcher, find_census_cell                          # noqa: E402
 from build_cpt_jsonl import build_record, load_config                    # noqa: E402
 from census import parse_seasons                                         # noqa: E402
 
@@ -55,12 +55,38 @@ def census_ids(lg: dict, season: int, cache: Path):
     ok is False when the cell does not exist. Only whole cells are ever written, so a cell that
     exists cannot be a throttled undercount.
     """
-    fp = cache / "census" / "seasons" / f"{lg['league']}_{season}.json"
-    if not fp.exists():
+    fp = find_census_cell(cache, lg, season)
+    if fp is None:
         return [], False
     cell = json.loads(fp.read_text())
     ids = [eid for day in sorted(cell["event_ids"]) for eid in cell["event_ids"][day]]
     return ids, True
+
+
+def drop_overlap(lg: dict, season: int, ids: list[str], cfg: dict, cache: Path):
+    """Remove event ids that belong to another tier of the same ESPN league. -> (ids, dropped).
+
+    FBS and FCS football are both `college-football`, separated only by `&groups=81`, and their
+    slates overlap (5 of 60 on the day this was measured). Because series_id is
+    `espn_<league_slug>_<event_id>`, it does not encode the tier — so a shared game harvested under
+    both labels is not a duplicate row to reconcile downstream, it is two records with the SAME
+    series_id. Declared per league via `exclude_overlap_with`.
+    """
+    other_label = lg.get("exclude_overlap_with")
+    if not other_label:
+        return ids, 0
+    other = next((x for x in cfg["data"]["leagues"] if x["label"] == other_label), None)
+    if other is None:
+        return ids, 0
+    other_ids, ok = census_ids(other, season, cache)
+    if not ok:
+        # No cell for the other tier: refuse to guess. Harvesting anyway would risk the duplicate
+        # series_id this function exists to prevent.
+        print(f"    ⚠️  {lg['label']} {season}: cannot de-overlap against {other_label} "
+              f"(no census cell) -- skipping this shard", flush=True)
+        return [], -1
+    keep = [i for i in ids if i not in set(other_ids)]
+    return keep, len(ids) - len(keep)
 
 
 def prefetch(ids, lg, cfg, f: Fetcher, workers: int, label: str):
@@ -99,7 +125,7 @@ def harvest_cell(lg, season, ids, cfg, f, shard_dir: Path, workers: int):
             continue
         recs.append(rec)
 
-    shard = shard_dir / f"{lg['league']}_{season}.jsonl"
+    shard = shard_dir / f"{lg['label']}_{season}.jsonl"
     tmp = shard.with_suffix(".jsonl.part")
     with tmp.open("w") as fh:
         for r in recs:
@@ -125,7 +151,7 @@ def harvest_cell(lg, season, ids, cfg, f, shard_dir: Path, workers: int):
     }
     # The report is written LAST and is the completion marker: a killed run leaves no report, so
     # the cell is redone rather than silently treated as finished.
-    (shard_dir / f"{lg['league']}_{season}.report.json").write_text(json.dumps(stats, indent=1))
+    (shard_dir / f"{lg['label']}_{season}.report.json").write_text(json.dumps(stats, indent=1))
     return stats
 
 
@@ -164,9 +190,18 @@ def main() -> int:
             if not ok:
                 missing.append(f"{lg['label']} {season}")
                 continue
-            if (shard_dir / f"{lg['league']}_{season}.report.json").exists():
+            # Either naming counts as done: shards written before the FCS tier existed are
+            # keyed on the ESPN slug, which FBS and FCS share.
+            if any((shard_dir / f"{key}_{season}.report.json").exists()
+                   for key in (lg["label"], lg["league"])):
                 done.append((lg["label"], season, len(ids)))
                 continue
+            ids, dropped = drop_overlap(lg, season, ids, cfg, cache)
+            if dropped < 0:
+                continue                     # could not de-overlap: shard deliberately skipped
+            if dropped:
+                print(f"    {lg['label']} {season}: dropped {dropped} games also in "
+                      f"{lg['exclude_overlap_with']}", flush=True)
             todo.append((lg, season, ids))
     planned = sum(len(x[2]) for x in todo)
     print(f"plan: {len(todo)} shards to build ({planned:,} games), {len(done)} already done, "

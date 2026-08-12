@@ -44,7 +44,7 @@ import yaml
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from espnfetch import (Fetcher, completed_events, flatten_plays,      # noqa: E402
-                       scoreboard_rel)
+                       scoreboard_rel, census_cell_rel, find_census_cell)
 
 PKG = HERE.parent
 
@@ -159,7 +159,7 @@ def mode_walk(cfg, f: Fetcher, seasons):
         label = lg["label"]
         totals[label] = {}
         for season in seasons:
-            fp = outdir / f"{lg['league']}_{season}.json"
+            fp = f.cache / census_cell_rel(lg, season)
             if fp.exists():
                 cell = json.loads(fp.read_text())
                 totals[label][season] = cell["completed_games"]
@@ -208,8 +208,8 @@ def mode_sources(cfg, f: Fetcher, seasons, k: int):
         label = lg["label"]
         report[label] = {}
         for season in seasons:
-            fp = seasondir / f"{lg['league']}_{season}.json"
-            if not fp.exists():
+            fp = find_census_cell(f.cache, lg, season)
+            if fp is None:
                 print(f"  {label} {season}: no census cell yet (run --mode walk first)", flush=True)
                 continue
             cell = json.loads(fp.read_text())

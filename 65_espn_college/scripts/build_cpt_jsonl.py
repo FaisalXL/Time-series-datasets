@@ -67,7 +67,7 @@ PKG = HERE.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(PKG.parent / "schema"))
 from espnfetch import (Fetcher, completed_events, flatten_plays,            # noqa: E402
-                       scoreboard_rel)
+                       scoreboard_rel, find_census_cell)
 from emit import emit_record                                               # noqa: E402
 
 
@@ -130,8 +130,8 @@ def discover_from_census(lg: dict, seasons, cache: Path) -> tuple[list[str], lis
     """
     ids, missing = [], []
     for season in seasons:
-        fp = cache / "census" / "seasons" / f"{lg['league']}_{season}.json"
-        if not fp.exists():
+        fp = find_census_cell(cache, lg, season)
+        if fp is None:
             missing.append(season)
             continue
         cell = json.loads(fp.read_text())
