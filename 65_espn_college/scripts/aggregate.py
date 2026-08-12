@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -60,6 +61,17 @@ def main() -> int:
 
     seen_ids: set[str] = set()
     dupes: list[str] = []
+    # Text distinctness matters independently of series_id uniqueness: 45_cricket_report_overseries
+    # carried 2.24x text duplication in its old record shape while every id was distinct, because
+    # the same report was paired with several windows. Hashes, not the texts themselves -- 150k
+    # recaps is about a gigabyte.
+    # hash -> [(series_id, states_own_final, shard)] so a shared text can be RESOLVED rather than
+    # just counted: when two games carry the same recap, at most one of them can be the game that
+    # recap describes, and the final-score anchor says which.
+    text_groups: collections.defaultdict = collections.defaultdict(list)
+    seen_text: set[str] = set()
+    dup_text = 0
+    anchor_hits = anchor_total = 0
     n = 0
     by_league = collections.Counter()
     by_league_season = collections.Counter()
@@ -90,6 +102,22 @@ def main() -> int:
                     dupes.append(sid)
                 else:
                     seen_ids.add(sid)
+                # The final-score anchor is computed for EVERY record, not just the control
+                # sample: it is a plain regex over the text, and having it per record is what makes
+                # duplicate-text resolution possible and turns the headline alignment rate into a
+                # census rather than an estimate. The permutation CONTROL still needs the sample,
+                # because it pairs records against each other.
+                psets = pairs_in(r["text"])
+                fin_i, half_i = anchors(r)
+                states_own = bool(fin_i and fin_i in psets)
+                anchor_total += 1
+                anchor_hits += int(states_own)
+                th = hashlib.blake2b(r["text"].encode(), digest_size=16).hexdigest()
+                text_groups[th].append((sid, states_own, sp.name))
+                if th in seen_text:
+                    dup_text += 1
+                else:
+                    seen_text.add(th)
                 by_league[m["league"]] += 1
                 by_league_season[f"{m['league']}_{sp.stem.split('_')[-1]}"] += 1
                 srcs[m["report_source"]] += 1
@@ -104,8 +132,7 @@ def main() -> int:
                 if bad and len(unhealthy_examples) < 10:
                     unhealthy_examples.append({"event_id": m["event_id"], "problems": bad})
                 if i % stride == 0 and len(sample[m["league"]]) < args.sample_per_league:
-                    fin, half = anchors(r)
-                    sample[m["league"]].append((pairs_in(r["text"]), fin, half))
+                    sample[m["league"]].append((psets, fin_i, half_i))
         print(f"  {sp.name}: {shard_n:,} records", flush=True)
 
     plays.sort(); chars.sort(); fixfrac.sort()
@@ -161,6 +188,10 @@ def main() -> int:
         "records": n,
         "series_id_unique": len(seen_ids) == n,
         "duplicate_series_ids": len(dupes),
+        "distinct_texts": len(seen_text),
+        "duplicate_texts": dup_text,
+        "distinct_text_share": round(len(seen_text) / n, 5) if n else None,
+        "final_anchor_all_records": round(anchor_hits / anchor_total, 5) if anchor_total else None,
         "duplicate_examples": dupes[:5],
         "by_league": dict(by_league),
         "by_league_season": dict(sorted(by_league_season.items())),
@@ -179,6 +210,28 @@ def main() -> int:
                            "max": round(fixfrac[-1], 4) if fixfrac else None},
         "alignment": align,
     }
+    # --- resolve shared recaps -----------------------------------------------------------------
+    excl, unresolved = [], []
+    for th, rows in text_groups.items():
+        if len(rows) < 2:
+            continue
+        verified = [x for x in rows if x[1]]
+        if len(verified) == 1:
+            keep = verified[0][0]
+            excl += [{"series_id": sid, "reason": "shared recap text; final-score anchor "
+                      "attributes this recap to another game", "kept_instead": keep}
+                     for sid, _, _ in rows if sid != keep]
+        else:
+            # Nobody verifies, or several do: the anchor cannot say which game the recap belongs
+            # to, so exclude the whole group rather than guess.
+            excl += [{"series_id": sid, "reason": "shared recap text, unresolvable by anchor"}
+                     for sid, _, _ in rows]
+            unresolved.append([sid for sid, _, _ in rows])
+    summary["shared_text_exclusions"] = len(excl)
+    summary["shared_text_unresolvable_groups"] = len(unresolved)
+    if excl:
+        Path(args.out).with_name("exclusions.json").write_text(json.dumps(excl, indent=1))
+        print(f"\n{len(excl)} record(s) excluded for a shared recap -> exclusions.json")
     Path(args.out).write_text(json.dumps(summary, indent=1))
     print("\n" + json.dumps({k: v for k, v in summary.items()
                              if k not in ("by_league_season", "health_examples")}, indent=1))
