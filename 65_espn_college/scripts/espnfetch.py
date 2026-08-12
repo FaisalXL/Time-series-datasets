@@ -20,6 +20,7 @@ of the endpoint changes.
 from __future__ import annotations
 
 import json
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -50,22 +51,40 @@ class Fetcher:
         self.tries = int(tries)
         self.verbose = verbose
         self._last = 0.0
+        # One lock guards the pace and the counters, so a thread pool sharing this instance is a
+        # GLOBAL rate limit rather than N independent ones. Note what this does and does not buy:
+        # the aggregate rate is 1/gap no matter how many workers there are -- workers only hide
+        # per-request latency (~0.5s here), which alone is the difference between the ~1 req/s a
+        # serial walk actually achieves at gap=0.45 and the 2.2 req/s that gap implies. Going
+        # faster than that means lowering `gap`, not adding workers.
+        self._lock = threading.RLock()
         self.stats = {"http": 0, "cache": 0, "retries": 0, "throttled": 0, "failed": 0,
                       "not_found": 0}
 
     # -- pacing -------------------------------------------------------------------------------
     def _wait(self) -> None:
-        w = self.gap - (time.time() - self._last)
-        if w > 0:
-            time.sleep(w)
-        self._last = time.time()
+        # The sleep is INSIDE the lock on purpose: it serialises scheduling (one request may start
+        # per `gap`) while the request itself runs outside, so concurrency still yields throughput.
+        with self._lock:
+            now = time.time()
+            w = self.gap - (now - self._last)
+            if w > 0:
+                time.sleep(w)
+                now = time.time()
+            self._last = now
+
+    def _bump(self, key: str, n: int = 1) -> None:
+        with self._lock:
+            self.stats[key] += n
 
     def _throttled(self) -> None:
-        self.gap = min(self.gap * 1.6, self.max_gap)
-        self.stats["throttled"] += 1
+        with self._lock:
+            self.gap = min(self.gap * 1.6, self.max_gap)
+            self.stats["throttled"] += 1
 
     def _ok(self) -> None:
-        self.gap = max(self.base, self.gap * 0.90)
+        with self._lock:
+            self.gap = max(self.base, self.gap * 0.90)
 
     # -- fetch --------------------------------------------------------------------------------
     def get(self, url: str) -> Optional[Any]:
@@ -89,28 +108,28 @@ class Fetcher:
                     url, headers={"User-Agent": self.ua, "Accept": "application/json"})
                 with urllib.request.urlopen(req, timeout=self.timeout) as r:
                     payload = json.loads(r.read())
-                self.stats["http"] += 1
+                self._bump("http")
                 self._ok()
                 return payload, True
             except urllib.error.HTTPError as e:
                 if e.code == 404:
-                    self.stats["not_found"] += 1
+                    self._bump("not_found")
                     return None, True          # a real answer: nothing here
                 if e.code in RETRY_CODES:
                     self._throttled()
                 else:
                     # 400/403 and friends: the URL is wrong, not the moment. Do not burn retries.
-                    self.stats["failed"] += 1
+                    self._bump("failed")
                     if self.verbose:
                         print(f"    ! HTTP {e.code} {url}", flush=True)
                     return None, False
             except Exception:
                 self._throttled()
-            self.stats["retries"] += 1
+            self._bump("retries")
             time.sleep(min(self.base * (2 ** attempt), 30.0))
             if self.verbose:
                 print(f"    . retry {attempt + 1}/{self.tries} gap={self.gap:.2f}s", flush=True)
-        self.stats["failed"] += 1
+        self._bump("failed")
         if self.verbose:
             print(f"    ! gave up {url}", flush=True)
         return None, False
@@ -120,7 +139,7 @@ class Fetcher:
         fp = self.cache / rel
         if fp.exists():
             try:
-                self.stats["cache"] += 1
+                self._bump("cache")
                 return json.loads(fp.read_text()), True
             except Exception:
                 pass                            # truncated cache file: refetch

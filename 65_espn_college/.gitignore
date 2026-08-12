@@ -14,3 +14,7 @@ output/espn_college_cpt.jsonl
 
 # census run logs (the JSON reports next to them are the artifact worth keeping)
 output/*.out
+
+# Full-scale harvest shards: real AP wire prose at scale. NEVER commit these.
+output/shards/
+output/harvest_report.json
