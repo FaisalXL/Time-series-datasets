@@ -57,9 +57,19 @@ SEASON_WINDOWS = {
     "basketball": ((11, 1), (4, 15)),
 }
 
+# COVID moved a whole season out of its window. Most FCS conferences did not play in autumn 2020 —
+# they played the 2020 season in SPRING 2021 (February to May). Under the standard Aug 15 -> Jan 20
+# football window the walk found 52 FCS games over 18 active days for 2020, against ~890 in every
+# neighbouring season, and that 52 would have looked like a real COVID collapse rather than a
+# window that ends four months before most of the season kicks off. FBS mostly did play in autumn
+# (573 games), but it is on the same calendar so it gets the same extension.
+SEASON_WINDOW_OVERRIDES = {
+    ("football", 2020): ((8, 15), (6, 30)),
+}
+
 
 def season_days(sport: str, season: int) -> list[str]:
-    (m0, d0), (m1, d1) = SEASON_WINDOWS[sport]
+    (m0, d0), (m1, d1) = SEASON_WINDOW_OVERRIDES.get((sport, season), SEASON_WINDOWS[sport])
     start = dt.date(season, m0, d0)
     end = dt.date(season + 1, m1, d1)
     out, cur = [], start
