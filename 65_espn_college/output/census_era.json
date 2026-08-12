@@ -1,0 +1,656 @@
+{
+ "mode": "era",
+ "seasons": [
+  2006,
+  2007,
+  2008,
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025
+ ],
+ "report": {
+  "CFB": {
+   "2006": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 64,
+    "games_per_day": 10.7,
+    "plays_median": 165,
+    "sources": {
+     "(no story)": 4
+    }
+   },
+   "2007": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 62,
+    "games_per_day": 10.3,
+    "plays_median": 222,
+    "sources": {
+     "(no story)": 2
+    }
+   },
+   "2008": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 20,
+    "games_per_day": 3.3,
+    "plays_median": 155,
+    "sources": {
+     "(no story)": 5
+    }
+   },
+   "2009": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 68,
+    "games_per_day": 11.3,
+    "plays_median": 177,
+    "sources": {
+     "(no story)": 5
+    }
+   },
+   "2010": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 74,
+    "games_per_day": 12.3,
+    "plays_median": 163,
+    "sources": {
+     "(no story)": 3
+    }
+   },
+   "2011": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 4,
+    "games_per_day": 0.7,
+    "plays_median": 225,
+    "sources": {
+     "(no story)": 2
+    }
+   },
+   "2012": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 64,
+    "games_per_day": 10.7,
+    "plays_median": 212,
+    "sources": {
+     "Associated Press": 2
+    }
+   },
+   "2013": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 85,
+    "games_per_day": 14.2,
+    "plays_median": 197,
+    "sources": {
+     "Associated Press": 3
+    }
+   },
+   "2014": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 23,
+    "games_per_day": 3.8,
+    "plays_median": 164,
+    "sources": {
+     "(no story)": 1,
+     "Associated Press": 4
+    }
+   },
+   "2015": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 57,
+    "games_per_day": 9.5,
+    "plays_median": 172,
+    "sources": {
+     "Associated Press": 4,
+     "ESPN.com news services": 1
+    }
+   },
+   "2016": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 2,
+    "games_per_day": 0.3,
+    "plays_median": 166,
+    "sources": {
+     "Associated Press": 1
+    }
+   },
+   "2017": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 70,
+    "games_per_day": 11.7,
+    "plays_median": 181,
+    "sources": {
+     "Associated Press": 4
+    }
+   },
+   "2018": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 59,
+    "games_per_day": 9.8,
+    "plays_median": 187,
+    "sources": {
+     "Associated Press": 3
+    }
+   },
+   "2019": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 78,
+    "games_per_day": 13.0,
+    "plays_median": 183,
+    "sources": {
+     "Associated Press": 3
+    }
+   },
+   "2020": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 45,
+    "games_per_day": 7.5,
+    "plays_median": 178,
+    "sources": {
+     "Associated Press": 2,
+     "(no story)": 2,
+     "AP": 1
+    }
+   },
+   "2021": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 67,
+    "games_per_day": 11.2,
+    "plays_median": 177,
+    "sources": {
+     "AP": 2
+    }
+   },
+   "2022": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 4,
+    "games_per_day": 0.7,
+    "plays_median": 191,
+    "sources": {
+     "AP": 2
+    }
+   },
+   "2023": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 70,
+    "games_per_day": 11.7,
+    "plays_median": 175,
+    "sources": {
+     "(no story)": 1,
+     "AP": 3
+    }
+   },
+   "2024": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 80,
+    "games_per_day": 13.3,
+    "plays_median": 160,
+    "sources": {
+     "AP": 3
+    }
+   },
+   "2025": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 13,
+    "games_per_day": 2.2,
+    "plays_median": 162,
+    "sources": {
+     "AP": 4
+    }
+   }
+  },
+  "MCB": {
+   "2006": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 247,
+    "games_per_day": 41.2,
+    "plays_median": 330,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2007": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 213,
+    "games_per_day": 35.5,
+    "plays_median": 338,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2008": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 388,
+    "games_per_day": 64.7,
+    "plays_median": 313,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2009": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 274,
+    "games_per_day": 45.7,
+    "plays_median": 333,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2010": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 159,
+    "games_per_day": 26.5,
+    "plays_median": 328,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2011": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 235,
+    "games_per_day": 39.2,
+    "plays_median": 0,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2012": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 333,
+    "games_per_day": 55.5,
+    "plays_median": 295,
+    "sources": {
+     "Associated Press": 6
+    }
+   },
+   "2013": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 256,
+    "games_per_day": 42.7,
+    "plays_median": 326,
+    "sources": {
+     "Associated Press": 6
+    }
+   },
+   "2014": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 361,
+    "games_per_day": 60.2,
+    "plays_median": 332,
+    "sources": {
+     "Associated Press": 6
+    }
+   },
+   "2015": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 145,
+    "games_per_day": 24.2,
+    "plays_median": 353,
+    "sources": {
+     "Associated Press": 6
+    }
+   },
+   "2016": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 409,
+    "games_per_day": 68.2,
+    "plays_median": 341,
+    "sources": {
+     "Associated Press": 6
+    }
+   },
+   "2017": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 197,
+    "games_per_day": 32.8,
+    "plays_median": 326,
+    "sources": {
+     "Associated Press": 6
+    }
+   },
+   "2018": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 334,
+    "games_per_day": 55.7,
+    "plays_median": 336,
+    "sources": {
+     "Associated Press": 6
+    }
+   },
+   "2019": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 341,
+    "games_per_day": 56.8,
+    "plays_median": 329,
+    "sources": {
+     "Associated Press": 6
+    }
+   },
+   "2020": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 297,
+    "games_per_day": 49.5,
+    "plays_median": 341,
+    "sources": {
+     "AP": 6
+    }
+   },
+   "2021": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 178,
+    "games_per_day": 29.7,
+    "plays_median": 352,
+    "sources": {
+     "AP": 6
+    }
+   },
+   "2022": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 378,
+    "games_per_day": 63.0,
+    "plays_median": 307,
+    "sources": {
+     "AP": 4,
+     "(no story)": 2
+    }
+   },
+   "2023": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 340,
+    "games_per_day": 56.7,
+    "plays_median": 309,
+    "sources": {
+     "AP": 6
+    }
+   },
+   "2024": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 286,
+    "games_per_day": 47.7,
+    "plays_median": 363,
+    "sources": {
+     "AP": 6
+    }
+   },
+   "2025": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 368,
+    "games_per_day": 61.3,
+    "plays_median": 481,
+    "sources": {
+     "AP": 6
+    }
+   }
+  },
+  "WCB": {
+   "2006": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 256,
+    "games_per_day": 42.7,
+    "plays_median": 0,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2007": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 173,
+    "games_per_day": 28.8,
+    "plays_median": 285,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2008": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 364,
+    "games_per_day": 60.7,
+    "plays_median": 322,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2009": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 242,
+    "games_per_day": 40.3,
+    "plays_median": 314,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2010": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 189,
+    "games_per_day": 31.5,
+    "plays_median": 344,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2011": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 228,
+    "games_per_day": 38.0,
+    "plays_median": 332,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2012": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 329,
+    "games_per_day": 54.8,
+    "plays_median": 343,
+    "sources": {
+     "Associated Press": 5,
+     "(no story)": 1
+    }
+   },
+   "2013": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 209,
+    "games_per_day": 34.8,
+    "plays_median": 383,
+    "sources": {
+     "Associated Press": 6
+    }
+   },
+   "2014": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 354,
+    "games_per_day": 59.0,
+    "plays_median": 372,
+    "sources": {
+     "Associated Press": 6
+    }
+   },
+   "2015": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 189,
+    "games_per_day": 31.5,
+    "plays_median": 308,
+    "sources": {
+     "(no story)": 1,
+     "Associated Press": 5
+    }
+   },
+   "2016": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 319,
+    "games_per_day": 53.2,
+    "plays_median": 339,
+    "sources": {
+     "Associated Press": 5,
+     "(no story)": 1
+    }
+   },
+   "2017": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 257,
+    "games_per_day": 42.8,
+    "plays_median": 312,
+    "sources": {
+     "Associated Press": 3,
+     "(no story)": 3
+    }
+   },
+   "2018": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 303,
+    "games_per_day": 50.5,
+    "plays_median": 336,
+    "sources": {
+     "(no story)": 1,
+     "Associated Press": 5
+    }
+   },
+   "2019": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 313,
+    "games_per_day": 52.2,
+    "plays_median": 335,
+    "sources": {
+     "Associated Press": 6
+    }
+   },
+   "2020": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 281,
+    "games_per_day": 46.8,
+    "plays_median": 328,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2021": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 167,
+    "games_per_day": 27.8,
+    "plays_median": 341,
+    "sources": {
+     "(no story)": 6
+    }
+   },
+   "2022": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 367,
+    "games_per_day": 61.2,
+    "plays_median": 327,
+    "sources": {
+     "(no story)": 3,
+     "AP": 3
+    }
+   },
+   "2023": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 337,
+    "games_per_day": 56.2,
+    "plays_median": 325,
+    "sources": {
+     "(no story)": 2,
+     "AP": 4
+    }
+   },
+   "2024": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 250,
+    "games_per_day": 41.7,
+    "plays_median": 351,
+    "sources": {
+     "AP": 3,
+     "(no story)": 3
+    }
+   },
+   "2025": {
+    "days_sampled": 6,
+    "days_unknown": 0,
+    "completed_games": 329,
+    "games_per_day": 54.8,
+    "plays_median": 445,
+    "sources": {
+     "AP": 5,
+     "(no story)": 1
+    }
+   }
+  }
+ },
+ "fetch_stats": {
+  "http": 666,
+  "cache": 1,
+  "retries": 0,
+  "throttled": 0,
+  "failed": 0,
+  "not_found": 0
+ }
+}
