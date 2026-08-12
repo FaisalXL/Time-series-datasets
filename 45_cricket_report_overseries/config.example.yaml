@@ -61,16 +61,24 @@ shape:
   min_attributed_sentences: 2       # an innings with fewer of its own sentences is not
                                     # narrated -> no record, rather than a padded one
 
-  # per_over | per_delivery — applies to PER-INNINGS records only. A T20 innings is exactly
-  # 20 per-over steps, below the 32-step window floor used elsewhere in the corpus, but
-  # ~125 deliveries. Measured over the full build, records surviving floor 32:
-  #     per_over 6,885 / 20,678      per_delivery 20,675 / 20,678
-  # `1play` is already in validate.py's FREQ_RE, so this needs no schema change, and the
-  # text is untouched — the last cumulative_runs value is the same innings total either
-  # way, so the alignment tier and its permutation control carry over.
-  # TEST/MDM per-match records always stay per-over: they already run ~360 steps, and
-  # per-delivery would make a whole Test ~2,700 points at 5.3x the datapoints.
-  series_granularity: "per_over"
+  # per_delivery | per_over — applies to BOTH record shapes.
+  #
+  # per_delivery is the SOURCE'S OWN granularity: Cricsheet ships one CSV row per ball
+  # (`ball` = 0.1, 0.2, ...). The first version of this builder aggregated 6:1 into overs
+  # via `over = int(float(ball))` — a transform of our own invention, not something the
+  # archive did. We keep the data as it came in.
+  #
+  # It also removes a dependency this package should never have had: aggregating to overs
+  # put a T20 innings at exactly 20 steps, under the 32-step window floor used elsewhere,
+  # so the package swung 3x on that open decision (6,885 vs 20,678 records surviving
+  # floor 32). At delivery granularity the question does not arise.
+  #
+  # `1play` is already in validate.py's FREQ_RE — no schema change. The text is untouched
+  # either way, and the last cumulative_runs value is the same innings total, so the
+  # alignment tier and its permutation control are identical between the two.
+  #
+  # per_over is still derivable from the raw archive whenever anyone wants it.
+  series_granularity: "per_delivery"
 
 llm:
   base_url: "https://enigmalab.dev/llm/qwen36/v1"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build CPT world-knowledge JSONL from cricket match narration + per-over series.
+"""Build CPT world-knowledge JSONL from cricket match narration + ball-by-ball series.
 
 RECORD SHAPE IS HYBRID, and the split is measured, not stylistic (see README):
 
@@ -8,10 +8,17 @@ RECORD SHAPE IS HYBRID, and the split is measured, not stylistic (see README):
     that returns sentence INDICES only (verbatim assembly => text_quality "real") and
     never sees the series. Contract: prompts/attribute_v1.md.
 
-  four-innings formats (TEST/MDM) -> one record per MATCH: the whole-match per-over
-    series (all innings concatenated, with an innings_index channel) paired with the
-    whole-match recap. Attribution is INVERTED against a permutation control on Tests
-    (7% right innings vs 20% wrong), so it is not used there.
+  four-innings formats (TEST/MDM) -> one record per MATCH: the whole-match series (all
+    innings concatenated, with an innings_index channel) paired with the whole-match
+    recap. Attribution is INVERTED against a permutation control on Tests (7% right
+    innings vs 20% wrong), so it is not used there.
+
+SERIES GRANULARITY IS THE SOURCE'S OWN. Cricsheet ships one CSV row per DELIVERY; the
+first version of this builder aggregated 6:1 into overs (`over = int(float(ball))`), which
+is a transform we were imposing on the data rather than something the data did. Records now
+carry the delivery-level series (`1play`). Per-over remains available via
+`shape.series_granularity: per_over` and is derivable from the raw archive at any time, but
+it is no longer what gets built.
 
 Series: Cricsheet bulk per-delivery CSV (ODC-BY 1.0). Text: ESPNcricinfo report prose.
 Cricsheet match_id == ESPNcricinfo match id -> the join key is exact.
@@ -20,10 +27,11 @@ Cricsheet match_id == ESPNcricinfo match id -> the join key is exact.
    tagged `proprietary-review`, which SCHEMA.md §6 defines as excluded from any release
    until cleared. Building is permitted; releasing is not. See NOTION_PAGE.md.
 
-⚠️ WINDOW FLOOR: a T20 innings is exactly 20 per-over steps, below the 32-step floor used
-   elsewhere in the corpus. Per-innings records for T20/IT20 are shippable only if that
-   floor relaxes to <=16 (the open decision that also gates #58). run_report.json states
-   the count below every candidate floor so the exposure is visible, not buried.
+NOTE on the window floor: aggregating to overs put a T20 innings at exactly 20 steps,
+   below the 32-step floor used elsewhere in the corpus, which made this package swing 3x
+   on a decision it had no business depending on (6,885 vs 20,678 records). At delivery
+   granularity a T20 innings is ~125 steps and the question does not arise.
+   run_report.json still reports the count at every candidate floor.
 
   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=5
   python scripts/attribute.py                              # LLM pass (cached, resumable)
@@ -213,8 +221,27 @@ def channels_for_innings(t: dict, granularity: str = "per_over") -> List[dict]:
     ]
 
 
-def channels_for_match(table: List[dict]) -> List[dict]:
-    """Whole-match series: innings concatenated, cumulative/run-rate reset per innings."""
+def channels_for_match(table: List[dict], granularity: str = "per_delivery") -> List[dict]:
+    """Whole-match series: innings concatenated, cumulative/run-rate reset per innings.
+
+    Same granularity rule as the per-innings shape — a delivery is the unit Cricsheet
+    actually ships, and per-over is a 6:1 aggregation we would be imposing on it.
+    """
+    if granularity == "per_delivery":
+        runs, wkts, cum, rr, idx = [], [], [], [], []
+        for k, t in enumerate(table, start=1):
+            runs += t["runs_per_ball"]
+            wkts += t["wickets_per_ball"]
+            cum += t["cumulative_runs_ball"]
+            rr += t["run_rate_ball"]
+            idx += [k] * t["balls"]
+        return [
+            {"values": runs, "unit": "runs_per_ball", "freq": "1play"},
+            {"values": wkts, "unit": "wickets_per_ball", "freq": "1play"},
+            {"values": cum, "unit": "cumulative_runs_in_innings", "freq": "1play"},
+            {"values": rr, "unit": "run_rate_in_innings", "freq": "1play"},
+            {"values": idx, "unit": "innings_index", "freq": "1play"},
+        ]
     runs, wkts, cum, rr, idx = [], [], [], [], []
     for k, t in enumerate(table, start=1):
         runs += t["runs_per_over"]
@@ -325,6 +352,8 @@ def build_match(mid: str, dcsv: bytes, icsv: bytes, cfg: Dict[str, Any],
             stat[f"emit_{align}"] += 1
     else:
         total_overs = sum(tb["overs"] for tb in table)
+        # gate on overs regardless of granularity: min_overs is a cricket threshold
+        # ("drop rain-ruined matches"), not a series-length floor
         if total_overs < int(d["min_overs"]):
             stat["short_match"] += 1
             return []
@@ -337,12 +366,13 @@ def build_match(mid: str, dcsv: bytes, icsv: bytes, cfg: Dict[str, Any],
         meta.update({
             "record_shape": "per_match", "innings_count": len(table),
             "overs_total": total_overs,
+            "series_granularity": gran,
             "innings_totals": [{"innings": int(tb["innings"]), "batting_team": tb["batting_team"],
                                 "runs": tb["total_runs"], "wickets": tb["wickets"],
                                 "overs": tb["overs"]} for tb in table],
         })
         out.append(emit_record(
-            text=f"{body}\n\n<ts></ts>", timeseries=channels_for_match(table),
+            text=f"{body}\n\n<ts></ts>", timeseries=channels_for_match(table, gran),
             alignment=align, license="proprietary-review", text_source="third_party",
             source=url, dataset="cricket_report_overseries",
             series_id=f"cricket_report_overseries:{mid}:match",

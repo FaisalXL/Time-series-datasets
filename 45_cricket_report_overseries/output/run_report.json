@@ -5,7 +5,7 @@
     "two_innings_mode": "per_innings",
     "multi_innings_mode": "per_match",
     "min_attributed_sentences": 2,
-    "series_granularity": "per_over"
+    "series_granularity": "per_delivery"
   },
   "stats": {
     "matches_scanned": 66,
@@ -66,9 +66,9 @@
   "window_floor_exposure": {
     "12": 50,
     "16": 50,
-    "20": 40,
-    "24": 16,
-    "32": 15
+    "20": 50,
+    "24": 50,
+    "32": 50
   },
   "text_tokens": {
     "median": 365,
@@ -97,7 +97,7 @@
       "two_innings_mode": "per_innings",
       "multi_innings_mode": "per_match",
       "min_attributed_sentences": 2,
-      "series_granularity": "per_over"
+      "series_granularity": "per_delivery"
     },
     "llm": {
       "base_url": "https://enigmalab.dev/llm/qwen36/v1",
