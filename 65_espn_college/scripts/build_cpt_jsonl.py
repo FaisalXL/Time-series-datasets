@@ -308,6 +308,13 @@ def build_record(event_id: str, lg: dict, cfg: dict, f: Fetcher):
     if n_periods < int(d.get("min_periods", 2)) or n_plays < int(d.get("min_plays", 20)):
         return None, "short_game"
 
+    # Outlier guard on a corrupt play list. See the config: football p99.9 is 267 plays and one
+    # payload in 5,241 carries 1,493, with 1,346 of them stamped period 3. Such a game still passes
+    # the official-final check, so nothing else catches it.
+    play_cap = (d.get("max_plays_by_sport") or {}).get(sport)
+    if play_cap and n_plays > int(play_cap):
+        return None, "implausible_play_count"
+
     # A feed that needed the monotonic correction on a large share of its plays is not a feed to
     # trust for the shape of the game, which is the entire content of the `describes` claim.
     max_frac = d.get("max_score_fix_frac")

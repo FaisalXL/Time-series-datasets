@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import concurrent.futures as cf
 import datetime as dt
 import json
 import sys
@@ -146,11 +147,17 @@ def mode_era(cfg, f: Fetcher, seasons, probe_days: int):
 
 # --- mode: walk -------------------------------------------------------------------------------
 
-def mode_walk(cfg, f: Fetcher, seasons):
+def mode_walk(cfg, f: Fetcher, seasons, workers: int = 1):
     """Full day walk. One cache file per (league, season), written only when the season is whole.
 
     Refusing the partial write is the point: a season with 30 unanswered days must not land as a
     number, because nothing downstream can tell a throttled zero from a real one.
+
+    With `workers > 1` each season's days are fetched through a thread pool first and then read
+    back out of the cache serially, so the counting stays deterministic while the waiting overlaps.
+    Worth doing here: scoreboard payloads for a 155-game basketball Saturday are large, and latency
+    rather than the configured gap was setting the pace (~1 req/s against a 0.45s gap). The pool
+    shares one Fetcher, so the rate limit stays global.
     """
     outdir = f.cache / "census" / "seasons"
     outdir.mkdir(parents=True, exist_ok=True)
@@ -166,6 +173,11 @@ def mode_walk(cfg, f: Fetcher, seasons):
                 print(f"  {label} {season}: {cell['completed_games']:5d} (cached)", flush=True)
                 continue
             days = season_days(lg["sport"], season)
+            if workers > 1:
+                # Warm the cache first; the counting pass below then reads it back deterministically.
+                with cf.ThreadPoolExecutor(max_workers=workers) as ex:
+                    list(ex.map(lambda dd: f.cached(scoreboard_url(cfg, lg, dd),
+                                                    scoreboard_rel(lg, dd)), days))
             by_day, unknown = {}, []
             for date in days:
                 sb, ok = f.cached(scoreboard_url(cfg, lg, date),
@@ -261,6 +273,8 @@ def main() -> int:
     ap.add_argument("--seasons", default="2013:2025", help="e.g. 2013:2025 or 2019,2023")
     ap.add_argument("-k", type=int, default=40, help="games sampled per season (sources mode)")
     ap.add_argument("--probe-days", type=int, default=6, help="days sampled per season (era mode)")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="concurrent day fetches (walk mode); the rate limit stays global")
     ap.add_argument("--out", default=None, help="write the report here (JSON)")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
@@ -276,7 +290,7 @@ def main() -> int:
     if args.mode == "era":
         rep = mode_era(cfg, f, seasons, args.probe_days)
     elif args.mode == "walk":
-        rep = mode_walk(cfg, f, seasons)
+        rep = mode_walk(cfg, f, seasons, args.workers)
     else:
         rep = mode_sources(cfg, f, seasons, args.k)
 

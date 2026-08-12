@@ -75,12 +75,16 @@ def series_health(rec: dict) -> list[str]:
             continue
         if any(vals[i + 1] < vals[i] for i in range(len(vals) - 1)):
             bad.append(f"{unit}: cumulative score decreases")
-        if len(set(vals)) == 1:
-            # A flat channel passes min_plays but carries no information: the play feed had no
-            # score fields at all, and the "series" is a constant.
-            bad.append(f"{unit}: flat ({vals[0]} for all {len(vals)} plays)")
     meta = rec.get("meta") or {}
     away, home = ts[0]["values"], ts[1]["values"]
+
+    # A flat channel is NOT a defect on its own -- it is a shutout. Every flat case in the first
+    # CFB harvest was (away flat at 0, official final away 0): real 45-0 and 49-0 games, 156 of
+    # them, which this check originally reported as broken series. The endpoint is already
+    # validated against the official final, so the only genuinely suspect case is a game where
+    # NEITHER side ever scored, i.e. the feed carried no score fields at all.
+    if away and home and len(set(away)) == 1 and len(set(home)) == 1 and away[-1] == home[-1] == 0:
+        bad.append(f"no scoring recorded in either channel across {len(away)} plays")
     if away and meta.get("final_away_score") is not None and away[-1] != meta["final_away_score"]:
         bad.append("away channel does not end on the recorded final")
     if home and meta.get("final_home_score") is not None and home[-1] != meta["final_home_score"]:

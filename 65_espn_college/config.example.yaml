@@ -55,7 +55,28 @@ data:
   # is principled: a wrong score value that survives monotonisation lands on the last point and
   # fails there. Turn this on only once the harvest's score_fix_plays distribution actually shows
   # a broken-feed tail worth cutting -- the run report carries the distribution for that decision.
-  max_score_fix_frac: null
+  #
+  # 2026-08-12, set from that distribution over the first 4,453 harvested CFB records: p50 0.005,
+  # p90 0.040, p99 0.155, then a thin tail running 0.32 -> 0.95. The tail is real -- a game where
+  # 95% of plays report a score below the carried one has a mostly-garbage score field, and
+  # monotonising it yields a staircase that reaches the final early and sits there, so the PATH is
+  # wrong even though the endpoint still matches. 0.25 sits above p99 and below that tail, and
+  # costs 0.63% of records. It is a measured cut, not a round number.
+  max_score_fix_frac: 0.25
+
+  # Outlier guard on total plays, per sport, from the same measurement:
+  #   football   n=5,241  p50 184  p99 241  p99.9 267  then ONE payload at 1,493
+  #   basketball n=  329  p50 327  p99 ~500 p99.9 ~600 max 782 (legitimate multi-overtime)
+  # Event 400756912 (Miami-FAU 2015) is the 1,493: its period 3 alone holds 1,346 plays against
+  # 51/60/36 for the other three, all with unique ids. The play list is corrupt, and it still
+  # passes the official-final check, so this is the guard that catches it.
+  #
+  # Note what was tried and REJECTED as a guard: requiring the play list to be ordered by
+  # sequenceNumber. 2,002 of 5,141 cached football payloads (39%) are non-monotone, concentrated in
+  # pre-2010 ids -- that is a sequence-numbering convention difference, not a 39% corruption rate.
+  max_plays_by_sport:
+    football: 500
+    basketball: 1200
 
   # ---- leagues ----------------------------------------------------------------------------
   # `params` is PER LEAGUE and is not cosmetic. Full matrix, re-measured 2026-08-12 with retries
