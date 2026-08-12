@@ -1,0 +1,260 @@
+[
+ {
+  "uri_path": "businessindustryandtrade/retailindustry/datasets/retailsales",
+  "dataset_id": "drsi",
+  "subtopic": "businessindustryandtrade/retailindustry",
+  "title": "Retail Sales Index time series"
+ },
+ {
+  "uri_path": "economy/inflationandpriceindices/datasets/serviceproducerpriceindices",
+  "dataset_id": "sppi",
+  "subtopic": "economy/inflationandpriceindices",
+  "title": "Services producer price inflation time series"
+ },
+ {
+  "uri_path": "economy/inflationandpriceindices/datasets/consumerpriceindices",
+  "dataset_id": "mm23",
+  "subtopic": "economy/inflationandpriceindices",
+  "title": "Consumer price inflation time series"
+ },
+ {
+  "uri_path": "economy/inflationandpriceindices/datasets/producerpriceindexstatisticalbulletindataset",
+  "dataset_id": "ppi",
+  "subtopic": "economy/inflationandpriceindices",
+  "title": "Producer price inflation time series"
+ },
+ {
+  "uri_path": "employmentandlabourmarket/peoplenotinwork/unemployment/datasets/claimantcountandvacanciesdataset",
+  "dataset_id": "unem",
+  "subtopic": "employmentandlabourmarket/peoplenotinwork/unemployment",
+  "title": "Claimant count and vacancies time series"
+ },
+ {
+  "uri_path": "employmentandlabourmarket/peopleinwork/employmentandemployeetypes/datasets/labourmarketstatistics",
+  "dataset_id": "lms",
+  "subtopic": "employmentandlabourmarket/peopleinwork/employmentandemployeetypes",
+  "title": "Labour market statistics time series"
+ },
+ {
+  "uri_path": "employmentandlabourmarket/peopleinwork/earningsandworkinghours/datasets/averageweeklyearnings",
+  "dataset_id": "emp",
+  "subtopic": "employmentandlabourmarket/peopleinwork/earningsandworkinghours",
+  "title": "Average weekly earnings time series"
+ },
+ {
+  "uri_path": "economy/governmentpublicsectorandtaxes/publicsectorfinance/datasets/publicsectorfinances",
+  "dataset_id": "pusf",
+  "subtopic": "economy/governmentpublicsectorandtaxes/publicsectorfinance",
+  "title": "Public sector finances time series"
+ },
+ {
+  "uri_path": "businessindustryandtrade/internationaltrade/datasets/uktradeingoodsbyclassificationofproductbyactivity",
+  "dataset_id": "mq10",
+  "subtopic": "businessindustryandtrade/internationaltrade",
+  "title": "UK trade in goods by classification of product by activity time series"
+ },
+ {
+  "uri_path": "economy/nationalaccounts/balanceofpayments/datasets/tradeingoodsmretsallbopeu2013timeseriesspreadsheet",
+  "dataset_id": "mret",
+  "subtopic": "economy/nationalaccounts/balanceofpayments",
+  "title": "UK trade time series"
+ },
+ {
+  "uri_path": "economy/economicoutputandproductivity/output/datasets/indexofservices",
+  "dataset_id": "ios1",
+  "subtopic": "economy/economicoutputandproductivity/output",
+  "title": "Index of Services time series "
+ },
+ {
+  "uri_path": "economy/economicoutputandproductivity/output/datasets/indexofproduction",
+  "dataset_id": "diop",
+  "subtopic": "economy/economicoutputandproductivity/output",
+  "title": "Index of Production time series"
+ },
+ {
+  "uri_path": "economy/grossdomesticproductgdp/datasets/gdpmonthlyestimateuktimeseriesdataset",
+  "dataset_id": "mgdp",
+  "subtopic": "economy/grossdomesticproductgdp",
+  "title": "Monthly gross domestic product: time series"
+ },
+ {
+  "uri_path": "economy/grossdomesticproductgdp/datasets/businessinvestment",
+  "dataset_id": "cxnv",
+  "subtopic": "economy/grossdomesticproductgdp",
+  "title": "Business investment time series "
+ },
+ {
+  "uri_path": "economy/nationalaccounts/satelliteaccounts/datasets/consumertrends",
+  "dataset_id": "ct",
+  "subtopic": "economy/nationalaccounts/satelliteaccounts",
+  "title": "Consumer trends time series "
+ },
+ {
+  "uri_path": "economy/nationalaccounts/balanceofpayments/datasets/balanceofpayments",
+  "dataset_id": "pnbp",
+  "subtopic": "economy/nationalaccounts/balanceofpayments",
+  "title": "Balance of payments time series "
+ },
+ {
+  "uri_path": "economy/grossdomesticproductgdp/datasets/unitedkingdomeconomicaccounts",
+  "dataset_id": "ukea",
+  "subtopic": "economy/grossdomesticproductgdp",
+  "title": "UK Economic Accounts time series"
+ },
+ {
+  "uri_path": "economy/grossdomesticproductgdp/datasets/quarterlynationalaccounts",
+  "dataset_id": "qna",
+  "subtopic": "economy/grossdomesticproductgdp",
+  "title": "GDP quarterly national accounts time series"
+ },
+ {
+  "uri_path": "economy/governmentpublicsectorandtaxes/publicsectorfinance/datasets/maastrichtsupplementarytablestimeseries",
+  "dataset_id": "edp",
+  "subtopic": "economy/governmentpublicsectorandtaxes/publicsectorfinance",
+  "title": "Government finance statistics time series"
+ },
+ {
+  "uri_path": "employmentandlabourmarket/peopleinwork/publicsectorpersonnel/datasets/publicsectoremploymenttimeseriesdataset",
+  "dataset_id": "pse",
+  "subtopic": "employmentandlabourmarket/peopleinwork/publicsectorpersonnel",
+  "title": "Public sector employment time series"
+ },
+ {
+  "uri_path": "economy/nationalaccounts/uksectoraccounts/datasets/nationalbalancesheet",
+  "dataset_id": "nbs",
+  "subtopic": "economy/nationalaccounts/uksectoraccounts",
+  "title": "The UK national balance sheet time series"
+ },
+ {
+  "uri_path": "businessindustryandtrade/changestobusiness/mergersandacquisitions/datasets/mergersandacquisitionsuk",
+  "dataset_id": "am",
+  "subtopic": "businessindustryandtrade/changestobusiness/mergersandacquisitions",
+  "title": "Mergers and acquisitions (M&A) involving UK companies time series"
+ },
+ {
+  "uri_path": "employmentandlabourmarket/peopleinwork/labourproductivity/datasets/unitlabourcostandunitwagecosttimeseries",
+  "dataset_id": "ucst",
+  "subtopic": "employmentandlabourmarket/peopleinwork/labourproductivity",
+  "title": "Unit labour cost and unit wage cost time series"
+ },
+ {
+  "uri_path": "employmentandlabourmarket/peopleinwork/labourproductivity/datasets/labourproductivity",
+  "dataset_id": "prdy",
+  "subtopic": "employmentandlabourmarket/peopleinwork/labourproductivity",
+  "title": "Labour productivity time series"
+ },
+ {
+  "uri_path": "economy/grossdomesticproductgdp/datasets/secondestimateofgdp",
+  "dataset_id": "pn2",
+  "subtopic": "economy/grossdomesticproductgdp",
+  "title": "GDP first quarterly estimate time series "
+ },
+ {
+  "uri_path": "economy/investmentspensionsandtrusts/datasets/shareownership",
+  "dataset_id": "srs",
+  "subtopic": "economy/investmentspensionsandtrusts",
+  "title": "Share ownership time series\n"
+ },
+ {
+  "uri_path": "economy/nationalaccounts/uksectoraccounts/datasets/profitabilityofukcompanies",
+  "dataset_id": "prof",
+  "subtopic": "economy/nationalaccounts/uksectoraccounts",
+  "title": "Profitability of UK companies time series"
+ },
+ {
+  "uri_path": "peoplepopulationandcommunity/populationandmigration/populationestimates/datasets/populationestimatestimeseriesdataset",
+  "dataset_id": "pop",
+  "subtopic": "peoplepopulationandcommunity/populationandmigration/populationestimates",
+  "title": "Population estimates time series dataset"
+ },
+ {
+  "uri_path": "economy/nationalaccounts/uksectoraccounts/datasets/capitalstock",
+  "dataset_id": "capstk",
+  "subtopic": "economy/nationalaccounts/uksectoraccounts",
+  "title": "Capital stocks and fixed capital consumption time series"
+ },
+ {
+  "uri_path": "economy/grossdomesticproductgdp/datasets/bluebook",
+  "dataset_id": "bb",
+  "subtopic": "economy/grossdomesticproductgdp",
+  "title": "UK National Accounts, The Blue Book time series "
+ },
+ {
+  "uri_path": "economy/nationalaccounts/balanceofpayments/datasets/pinkbook",
+  "dataset_id": "pb",
+  "subtopic": "economy/nationalaccounts/balanceofpayments",
+  "title": "UK Balance of Payments \u2013 The Pink Book time series"
+ },
+ {
+  "uri_path": "economy/grossvalueaddedgva/datasets/grossvalueaddedindustryweightstimeseriesdataset",
+  "dataset_id": "wgdp",
+  "subtopic": "economy/grossvalueaddedgva",
+  "title": "Gross Value Added industry weights time series dataset"
+ },
+ {
+  "uri_path": "employmentandlabourmarket/peopleinwork/labourproductivity/datasets/regionalproductivitytimeseries",
+  "dataset_id": "rprd",
+  "subtopic": "employmentandlabourmarket/peopleinwork/labourproductivity",
+  "title": "Regional productivity time series"
+ },
+ {
+  "uri_path": "economy/inflationandpriceindices/datasets/producerpriceindex",
+  "dataset_id": "mm22",
+  "subtopic": "economy/inflationandpriceindices",
+  "title": "Producer price inflation time series (MM22)"
+ },
+ {
+  "uri_path": "economy/governmentpublicsectorandtaxes/publicspending/datasets/maastrictsupplementarytabe",
+  "dataset_id": "edp3",
+  "subtopic": "economy/governmentpublicsectorandtaxes/publicspending",
+  "title": "Maastricht  Supplementary Tables (EDP3) time series dataset"
+ },
+ {
+  "uri_path": "economy/governmentpublicsectorandtaxes/publicspending/datasets/maastrichtsupplementarytablesedp2timeseries",
+  "dataset_id": "edp2",
+  "subtopic": "economy/governmentpublicsectorandtaxes/publicspending",
+  "title": "Maastricht supplementary tables (EDP2) time series"
+ },
+ {
+  "uri_path": "peoplepopulationandcommunity/leisureandtourism/datasets/internationalpassengersurveytimeseriesspreadsheet",
+  "dataset_id": "ott",
+  "subtopic": "peoplepopulationandcommunity/leisureandtourism",
+  "title": "Overseas travel and tourism time series"
+ },
+ {
+  "uri_path": "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure/datasets/businessenterpriseresearchanddevelopmenttimeseriesspreadsheet",
+  "dataset_id": "berd",
+  "subtopic": "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure",
+  "title": "Business enterprise research and development time series"
+ },
+ {
+  "uri_path": "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure/datasets/governmentexpenditureonresearchanddevelopment",
+  "dataset_id": "gerd",
+  "subtopic": "economy/governmentpublicsectorandtaxes/researchanddevelopmentexpenditure",
+  "title": "Gross domestic expenditure on research and development time series "
+ },
+ {
+  "uri_path": "economy/inflationandpriceindices/datasets/aerospaceandelectronicscostindices",
+  "dataset_id": "mm19",
+  "subtopic": "economy/inflationandpriceindices",
+  "title": "Aerospace and electronic cost indices time series (MM19)"
+ },
+ {
+  "uri_path": "economy/investmentspensionsandtrusts/datasets/investmentbyinsurancecompaniespensionfundsandtrusts",
+  "dataset_id": "mq5",
+  "subtopic": "economy/investmentspensionsandtrusts",
+  "title": "Investment by Insurance Companies, Pension Funds and Trusts time series dataset"
+ },
+ {
+  "uri_path": "economy/grossdomesticproductgdp/datasets/preliminaryestimateofgdp",
+  "dataset_id": "pgdp",
+  "subtopic": "economy/grossdomesticproductgdp",
+  "title": "Preliminary estimate of GDP time series"
+ },
+ {
+  "uri_path": "businessindustryandtrade/manufacturingandproductionindustry/datasets/turnoverandordersintheproductionandservicesindustriesdataset",
+  "dataset_id": "topsi",
+  "subtopic": "businessindustryandtrade/manufacturingandproductionindustry",
+  "title": "Turnover in UK production and Great Britain services industries (TOPSI) time series dataset"
+ }
+]
