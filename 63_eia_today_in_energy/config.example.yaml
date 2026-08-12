@@ -1,0 +1,184 @@
+# EIA "Today in Energy" articles + EIA bulk petroleum series -> CPT world-knowledge JSONL
+#
+# One record = ONE "Today in Energy" article: its own VERBATIM body prose paired with the
+# trailing multi-channel window of the EIA series the article is actually about. The prose
+# RECITES its figures ("...setting a new annual production record of 13.6 million b/d"), so
+# alignment is decided by EVIDENCE, per article, never assumed.
+#
+# LICENSE: U.S. government public domain. Verbatim from eia.gov/todayinenergy/about.php:
+#   "Unless a copyright is indicated, information in Today in Energy is in the public domain
+#    and may be copied and distributed with attribution but without permission."
+# -> schema tag `public-domain-us-gov`. There is NO licence gate on this package.
+#
+# NO API KEY. The EIA Open Data API v2 needs a free key, but the BULK files do not, and they
+# carry the same series. This package uses the bulk route only -- the same keyless trick
+# already used by EIA Petroleum Weekly #11.
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --dry-run
+#   python scripts/build_cpt_jsonl.py                                  # demo
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build
+
+data:
+  # ---- article side ---------------------------------------------------------------------
+  # The archive index is per-YEAR and fully enumerable: archive.php?my=YYYY lists every
+  # article for that year as detail.php?id=NNNNN links.
+  #
+  # MEASURED 2026-08-11, by summing all 16 year pages and de-duplicating ids: 3,567 articles.
+  # Per year: 2011=219 2012=244 2013=238 2014=241 2015=231 2016=236 2017=238 2018=249
+  #           2019=246 2020=240 2021=246 2022=245 2023=199 2024=221 2025=172 2026=102(YTD)
+  # Publication rate is DECLINING (~170/yr recently), so treat 3,567 as a near-final total,
+  # not a run rate. Do NOT estimate this from the article id: ids increment ~18-20 per
+  # article because the id space is shared with the rest of eia.gov.
+  archive_url: "https://www.eia.gov/todayinenergy/archive.php?my={year}"
+  article_url: "https://www.eia.gov/todayinenergy/detail.php?id={article_id}"
+  first_year: 2011          # series began 2026-02-09; 2011 is the first full archive year
+  last_year: 2026
+
+  # The article body lives in <div class="tie-article">. Scraping <p> from the WHOLE page
+  # instead returns eia.gov's mega-menu ("Exploration and reserves, storage, imports and
+  # exports...") as if it were article prose -- confirmed, this is the single easiest way to
+  # silently poison this package. Always cut to the container first.
+  body_container: '<div class="tie-article"'
+
+  # ---- series side (keyless bulk) -------------------------------------------------------
+  # Each bulk zip holds one JSON object per line: {series_id, name, units, f, start, end,
+  # data:[[period, value], ...]}. Parsed with the stdlib (zipfile/json).
+  bulk_urls:
+    PET: "https://www.eia.gov/opendata/bulk/PET.zip"   # 52 MB, petroleum & other liquids
+  cache_dir: ".cache"
+  user_agent: "CPT-dataset-research faisal@usc.edu"
+  timeout_s: 120
+  retries: 4
+  min_interval_s: 0.5       # eia.gov is tolerant; stay polite anyway
+
+  # ---- channel bundles ------------------------------------------------------------------
+  # A bundle = one topic + the channels an article on that topic is likely to recite.
+  # An article is assigned to the bundle with the highest keyword score; a bundle only wins
+  # if it also produces at least `min_evidence` verified figure matches (see `evidence`).
+  #
+  # EVERY series_id below was verified to exist in the live bulk file (name, freq, units,
+  # start, end all read back) -- none are guessed.
+  #
+  # `scale` converts a channel value to ABSOLUTE units so prose like "13.6 million b/d" can be
+  # compared against a stored value of 13586 (thousand b/d). scale = 1000 here. For a percent
+  # or a price channel, scale = 1.
+  #
+  # Per-channel `keywords` are the PROXIMITY anchor: a matching figure only counts as evidence
+  # for a channel if it sits near one of that channel's own keywords. Bundle keywords pick the
+  # topic; channel keywords stop a figure being credited to the wrong series inside it.
+  # (ONS #61 needed exactly this after RBNZ #60 shipped a cross-channel false match.)
+  bundles:
+    - name: crude_production
+      freq: "1y"
+      keywords: ["crude oil production", "production record", "field production", "crude oil output"]
+      channels:
+        - {series_id: "PET.MCRFPUS2.A", unit: "us_crude_oil_production_thousand_bd",       scale: 1000,
+           keywords: ["crude oil production", "crude oil output", "produced"]}
+        - {series_id: "PET.MTTFPUS2.A", unit: "us_total_petroleum_production_thousand_bd", scale: 1000,
+           keywords: ["petroleum production", "liquid fuels production", "total production"]}
+
+    - name: crude_prices
+      freq: "1M"
+      keywords: ["spot price", "wti", "brent", "crude oil price", "oil prices"]
+      channels:
+        - {series_id: "PET.RWTC.M",  unit: "wti_cushing_spot_usd_per_barrel", scale: 1,
+           keywords: ["wti", "west texas intermediate", "cushing"]}
+        - {series_id: "PET.RBRTE.M", unit: "brent_spot_usd_per_barrel",       scale: 1,
+           keywords: ["brent"]}
+
+    - name: gasoline_retail
+      freq: "1w"
+      keywords: ["retail gasoline", "gasoline price", "pump price", "motor gasoline"]
+      channels:
+        - {series_id: "PET.EMM_EPM0_PTE_NUS_DPG.W", unit: "us_retail_gasoline_all_grades_usd_per_gal",
+           scale: 1, keywords: ["gasoline price", "retail gasoline", "per gallon", "pump"]}
+
+    - name: petroleum_stocks
+      freq: "1w"
+      keywords: ["inventories", "ending stocks", "stockpile", "strategic petroleum reserve"]
+      channels:
+        - {series_id: "PET.WCRSTUS1.W", unit: "us_crude_stocks_thousand_barrels",          scale: 1000,
+           keywords: ["crude oil inventories", "crude oil stocks", "crude inventories"]}
+        - {series_id: "PET.WCESTUS1.W", unit: "us_crude_stocks_excl_spr_thousand_barrels", scale: 1000,
+           keywords: ["commercial crude", "excluding the strategic petroleum reserve", "excluding spr"]}
+        - {series_id: "PET.WGTSTUS1.W", unit: "us_total_gasoline_stocks_thousand_barrels", scale: 1000,
+           keywords: ["gasoline inventories", "gasoline stocks"]}
+        - {series_id: "PET.WDISTUS1.W", unit: "us_distillate_stocks_thousand_barrels",     scale: 1000,
+           keywords: ["distillate inventories", "distillate stocks", "distillate fuel oil"]}
+
+    - name: crude_trade
+      freq: "1M"
+      keywords: ["crude oil exports", "crude oil imports", "petroleum exports", "petroleum imports"]
+      channels:
+        - {series_id: "PET.MCREXUS2.M", unit: "us_crude_exports_thousand_bd", scale: 1000,
+           keywords: ["crude oil exports", "exported crude", "exports of crude"]}
+        - {series_id: "PET.MCRIMUS2.M", unit: "us_crude_imports_thousand_bd", scale: 1000,
+           keywords: ["crude oil imports", "imported crude", "imports of crude"]}
+
+    - name: refining
+      freq: "1w"
+      keywords: ["refinery utilization", "refinery runs", "refining capacity", "refiner"]
+      channels:
+        - {series_id: "PET.WPULEUS3.W", unit: "us_refinery_utilization_pct", scale: 1,
+           keywords: ["utilization", "operable capacity", "refinery"]}
+
+series:
+  window: 36            # steps kept per channel; >32 per the 2026-08-03 meeting floor
+  min_points: 32        # a channel with fewer real points than this drops the record
+
+text:
+  max_chars: 2000       # ~500 tokens at ~4 chars/token (2026-08-03 cap)
+  min_chars: 300
+  # Figure captions are glued to the first paragraph by the page markup. They are source text
+  # but they are not prose, and they name the data product rather than state a finding.
+  strip_prefixes:
+    - "Data source:"
+    - "Data sources:"
+    - "Source:"
+  drop_paragraphs_starting:
+    - "Tags:"
+    - "Principal contributor"
+    - "Principal contributors"
+  # Same verbatim rule as every other package: text is 100% source. If a body exceeds
+  # max_chars, keep the CONTIGUOUS leading paragraph run that fits. No rewriting, no
+  # abstractive summarization -- `llm_summarized` does not exist in the schema vocab
+  # (validate.py allows only {"real","generated"}), so there is nothing to opt into yet.
+  abstractive_summary: false
+
+evidence:
+  # A figure in the prose counts as evidence for a channel when its ABSOLUTE magnitude
+  # matches one of that channel's windowed values within `tolerance`. Scale words are
+  # honoured, so "13.6 million b/d" -> 13,600,000 matches a stored 13586 (x1000) at 0.1%.
+  tolerance: 0.01
+
+  # ---- the two guards that stop coincidental matches -------------------------------------
+  # Measured on the first demo build WITHOUT these: 12/12 records passed validate --strict
+  # while containing obvious false pairings -- a hydropower article wired to `crude_trade`,
+  # an energy-history article wired to `refining`. Schema validation cannot see a wrong
+  # pairing; only these guards can.
+  #
+  # match_window: only the last N points of each channel are eligible targets. Allowing all
+  # 36 points x 4 channels gives ~150 targets, and at 1% tolerance a coincidental hit is
+  # nearly free.
+  match_window: 8
+  # proximity_chars: the figure must sit within this many characters of one of the CHANNEL's
+  # own keywords, so a right-magnitude number in an unrelated sentence does not count.
+  proximity_chars: 120
+  # The article TITLE must hit the bundle too -- body-only matching is what let the
+  # hydropower article through on a passing mention of "exports".
+  require_title_keyword: true
+  min_bundle_score: 1
+
+  min_evidence: 1       # 0 verified figures -> the article is NOT emitted as `recites`
+  # With >=1 match -> "recites". With 0 matches but a bundle keyword hit -> "describes",
+  # and only if `allow_describes` is true. Default false: this package is high-yield enough
+  # that we would rather drop a weak record than pad the count.
+  allow_describes: false
+
+output:
+  path: output/eia_today_in_energy_cpt.jsonl
+  run_report: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 12       # demo cap. null = full build (~3,567 articles before evidence gating)

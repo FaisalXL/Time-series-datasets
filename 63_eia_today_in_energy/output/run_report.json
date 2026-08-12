@@ -1,0 +1,258 @@
+{
+  "stats": {
+    "articles_seen": 231,
+    "no_body": 0,
+    "no_date": 0,
+    "no_bundle": 191,
+    "short_series": 0,
+    "no_evidence": 28,
+    "too_short": 0,
+    "emitted": 12
+  },
+  "n_bundles": 6,
+  "config_snapshot": {
+    "data": {
+      "archive_url": "https://www.eia.gov/todayinenergy/archive.php?my={year}",
+      "article_url": "https://www.eia.gov/todayinenergy/detail.php?id={article_id}",
+      "first_year": 2011,
+      "last_year": 2026,
+      "body_container": "<div class=\"tie-article\"",
+      "bulk_urls": {
+        "PET": "https://www.eia.gov/opendata/bulk/PET.zip"
+      },
+      "cache_dir": ".cache",
+      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "timeout_s": 120,
+      "retries": 4,
+      "min_interval_s": 0.5,
+      "bundles": [
+        {
+          "name": "crude_production",
+          "freq": "1y",
+          "keywords": [
+            "crude oil production",
+            "production record",
+            "field production",
+            "crude oil output"
+          ],
+          "channels": [
+            {
+              "series_id": "PET.MCRFPUS2.A",
+              "unit": "us_crude_oil_production_thousand_bd",
+              "scale": 1000,
+              "keywords": [
+                "crude oil production",
+                "crude oil output",
+                "produced"
+              ]
+            },
+            {
+              "series_id": "PET.MTTFPUS2.A",
+              "unit": "us_total_petroleum_production_thousand_bd",
+              "scale": 1000,
+              "keywords": [
+                "petroleum production",
+                "liquid fuels production",
+                "total production"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "crude_prices",
+          "freq": "1M",
+          "keywords": [
+            "spot price",
+            "wti",
+            "brent",
+            "crude oil price",
+            "oil prices"
+          ],
+          "channels": [
+            {
+              "series_id": "PET.RWTC.M",
+              "unit": "wti_cushing_spot_usd_per_barrel",
+              "scale": 1,
+              "keywords": [
+                "wti",
+                "west texas intermediate",
+                "cushing"
+              ]
+            },
+            {
+              "series_id": "PET.RBRTE.M",
+              "unit": "brent_spot_usd_per_barrel",
+              "scale": 1,
+              "keywords": [
+                "brent"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "gasoline_retail",
+          "freq": "1w",
+          "keywords": [
+            "retail gasoline",
+            "gasoline price",
+            "pump price",
+            "motor gasoline"
+          ],
+          "channels": [
+            {
+              "series_id": "PET.EMM_EPM0_PTE_NUS_DPG.W",
+              "unit": "us_retail_gasoline_all_grades_usd_per_gal",
+              "scale": 1,
+              "keywords": [
+                "gasoline price",
+                "retail gasoline",
+                "per gallon",
+                "pump"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "petroleum_stocks",
+          "freq": "1w",
+          "keywords": [
+            "inventories",
+            "ending stocks",
+            "stockpile",
+            "strategic petroleum reserve"
+          ],
+          "channels": [
+            {
+              "series_id": "PET.WCRSTUS1.W",
+              "unit": "us_crude_stocks_thousand_barrels",
+              "scale": 1000,
+              "keywords": [
+                "crude oil inventories",
+                "crude oil stocks",
+                "crude inventories"
+              ]
+            },
+            {
+              "series_id": "PET.WCESTUS1.W",
+              "unit": "us_crude_stocks_excl_spr_thousand_barrels",
+              "scale": 1000,
+              "keywords": [
+                "commercial crude",
+                "excluding the strategic petroleum reserve",
+                "excluding spr"
+              ]
+            },
+            {
+              "series_id": "PET.WGTSTUS1.W",
+              "unit": "us_total_gasoline_stocks_thousand_barrels",
+              "scale": 1000,
+              "keywords": [
+                "gasoline inventories",
+                "gasoline stocks"
+              ]
+            },
+            {
+              "series_id": "PET.WDISTUS1.W",
+              "unit": "us_distillate_stocks_thousand_barrels",
+              "scale": 1000,
+              "keywords": [
+                "distillate inventories",
+                "distillate stocks",
+                "distillate fuel oil"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "crude_trade",
+          "freq": "1M",
+          "keywords": [
+            "crude oil exports",
+            "crude oil imports",
+            "petroleum exports",
+            "petroleum imports"
+          ],
+          "channels": [
+            {
+              "series_id": "PET.MCREXUS2.M",
+              "unit": "us_crude_exports_thousand_bd",
+              "scale": 1000,
+              "keywords": [
+                "crude oil exports",
+                "exported crude",
+                "exports of crude"
+              ]
+            },
+            {
+              "series_id": "PET.MCRIMUS2.M",
+              "unit": "us_crude_imports_thousand_bd",
+              "scale": 1000,
+              "keywords": [
+                "crude oil imports",
+                "imported crude",
+                "imports of crude"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "refining",
+          "freq": "1w",
+          "keywords": [
+            "refinery utilization",
+            "refinery runs",
+            "refining capacity",
+            "refiner"
+          ],
+          "channels": [
+            {
+              "series_id": "PET.WPULEUS3.W",
+              "unit": "us_refinery_utilization_pct",
+              "scale": 1,
+              "keywords": [
+                "utilization",
+                "operable capacity",
+                "refinery"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "series": {
+      "window": 36,
+      "min_points": 32
+    },
+    "text": {
+      "max_chars": 2000,
+      "min_chars": 300,
+      "strip_prefixes": [
+        "Data source:",
+        "Data sources:",
+        "Source:"
+      ],
+      "drop_paragraphs_starting": [
+        "Tags:",
+        "Principal contributor",
+        "Principal contributors"
+      ],
+      "abstractive_summary": false
+    },
+    "evidence": {
+      "tolerance": 0.01,
+      "match_window": 8,
+      "proximity_chars": 120,
+      "require_title_keyword": true,
+      "min_bundle_score": 1,
+      "min_evidence": 1,
+      "allow_describes": false
+    },
+    "output": {
+      "path": "output/eia_today_in_energy_cpt.jsonl",
+      "run_report": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 12
+    }
+  },
+  "dry_run": false
+}
