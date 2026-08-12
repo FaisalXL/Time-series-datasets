@@ -39,6 +39,20 @@ data:
     - {sport: "basketball", league: "nba", label: "NBA"}
     - {sport: "football", league: "nfl", label: "NFL"}
     - {sport: "hockey", league: "nhl", label: "NHL"}
+    # MLB is deliberately NOT here, on a measurement rather than an oversight. Probed
+    # 2026-08-12: 2,982 finished games in calendar 2024, but recap coverage is **2.5%** (1 of 40
+    # sampled) -- the summary payload has no `article` key at all on 39 of 40 games. Its series
+    # half is the richest of any league checked (413 plays, 69 win-probability points), so the
+    # gap is the TEXT, which is backwards from the "~17.2k" scouting claim. Realistic yield is
+    # ~900 records for a ~36k-game harvest. `_flatten_plays` already handles MLB's flat `plays`
+    # shape, so adding it is one line here if those ~900 are wanted -- but it is not free, and
+    # it perturbs an in-flight harvest.
+    #
+    # ESPN soccer is not addable at all: no `plays`, no `winprobability`, and a scoreline off
+    # `keyEvents` is 2-6 points -- under min_plays below, and under the window floor. Its
+    # rightsholders are also Reuters (EPL/UCL) and Field Level Media (MLS), i.e. NEW licence
+    # asks rather than this package's AP one. College football and D-I basketball ARE viable and
+    # live in 65_espn_college; see that README for all three measurements.
 
   scoreboard_url: "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}"
   summary_url: "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={event_id}"
