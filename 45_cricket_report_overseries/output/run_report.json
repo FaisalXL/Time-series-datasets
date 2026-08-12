@@ -1,27 +1,85 @@
 {
-  "cricsheet_zip_url": "https://cricsheet.org/downloads/ipl_male_csv2.zip",
-  "report_source": "site.api.espn.com",
-  "min_overs": 12,
-  "channels": [
-    "runs_per_over",
-    "wickets_per_over",
-    "cumulative_runs",
-    "run_rate"
-  ],
+  "cricsheet_zip_url": "https://cricsheet.org/downloads/all_csv2.zip",
+  "report_source": "site.web.api.espn.com (site.api.espn.com 403s Akamai since 2026-08)",
+  "record_shape": {
+    "two_innings_mode": "per_innings",
+    "multi_innings_mode": "per_match",
+    "min_attributed_sentences": 2,
+    "series_granularity": "per_over"
+  },
   "stats": {
-    "matches_scanned": 28,
-    "innings_seen": 56,
-    "emitted": 50,
-    "short_innings": 1,
-    "no_report": 4,
-    "invalid": 0,
-    "no_info": 0
+    "matches_scanned": 66,
+    "no_report": 38,
+    "truncated_sentences": 32,
+    "records_truncated": 2,
+    "emit_describes": 17,
+    "budget_dropped_sentences": 105,
+    "emit_recites": 34,
+    "innings_not_narrated": 2
+  },
+  "records": 50,
+  "by_format": {
+    "TEST": 2,
+    "ODI": 8,
+    "T20": 31,
+    "MDM": 1,
+    "ODM": 8
+  },
+  "by_shape": {
+    "per_match": 3,
+    "per_innings": 47
+  },
+  "alignment": {
+    "recites": 34,
+    "describes": 17
+  },
+  "permutation_control": {
+    "TEST": {
+      "n": 2,
+      "n_control": 2,
+      "true": 0.0,
+      "control": 0.0,
+      "lift_pp": 0.0
+    },
+    "ODI": {
+      "n": 8,
+      "n_control": 8,
+      "true": 0.625,
+      "control": 0.0,
+      "lift_pp": 62.5
+    },
+    "T20": {
+      "n": 31,
+      "n_control": 31,
+      "true": 0.6129,
+      "control": 0.0,
+      "lift_pp": 61.3
+    },
+    "ODM": {
+      "n": 8,
+      "n_control": 8,
+      "true": 1.0,
+      "control": 0.0,
+      "lift_pp": 100.0
+    }
+  },
+  "window_floor_exposure": {
+    "12": 50,
+    "16": 50,
+    "20": 40,
+    "24": 16,
+    "32": 15
+  },
+  "text_tokens": {
+    "median": 365,
+    "p90": 495,
+    "over_500": 0
   },
   "config_snapshot": {
     "data": {
-      "cricsheet_zip_url": "https://cricsheet.org/downloads/ipl_male_csv2.zip",
+      "cricsheet_zip_url": "https://cricsheet.org/downloads/all_csv2.zip",
       "espn_report_url_template": "https://www.espncricinfo.com/ci/engine/match/{match_id}.html",
-      "espn_summary_url": "https://site.api.espn.com/apis/site/v2/sports/cricket/{league}/summary?event={match_id}",
+      "espn_summary_url": "https://site.web.api.espn.com/apis/site/v2/sports/cricket/{league}/summary?event={match_id}",
       "espn_carrier_league": "1410320",
       "request_delay_s": 0.4,
       "channels": [
@@ -35,8 +93,23 @@
       "user_agent": "CPT-dataset-research faisal@usc.edu",
       "timeout_s": 90
     },
+    "shape": {
+      "two_innings_mode": "per_innings",
+      "multi_innings_mode": "per_match",
+      "min_attributed_sentences": 2,
+      "series_granularity": "per_over"
+    },
+    "llm": {
+      "base_url": "https://enigmalab.dev/llm/qwen36/v1",
+      "model": "Qwen/Qwen3.6-35B-A3B",
+      "api_key_env": "VLLM_KEY",
+      "workers": 16,
+      "max_tokens": 2048,
+      "retries": 3
+    },
     "text": {
-      "min_report_chars": 400
+      "min_report_chars": 400,
+      "max_tokens": 500
     },
     "output": {
       "output_path": "output/cricket_report_overseries_cpt.jsonl",
