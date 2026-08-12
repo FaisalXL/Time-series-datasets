@@ -44,10 +44,18 @@ data:
   # are not reliable: administrative plays can carry a stale pre-score value, and some carry a
   # value from an unrelated point in the game (event 401706896 reports a=57 h=86 inside a 68/92
   # neighbourhood). Raw, that made the "cumulative" score DECREASE on 9 of the first 50 records.
-  # `meta.score_fix_plays` records how many plays were corrected per game. This drops a game whose
-  # feed needed correcting on more than this FRACTION of its plays -- not a cosmetic threshold: the
-  # shape of the scoring path is the whole content of the `describes` claim. null disables.
-  max_score_fix_frac: 0.02
+  # `meta.score_fix_plays` records how many plays were corrected per game.
+  #
+  # This knob would drop a game whose feed needed correcting on more than this FRACTION of its
+  # plays, and it is DELIBERATELY OFF. Set to 0.02 it dropped a real record (event 401729745: 4
+  # stale plays out of 180 = 2.2%) for a defect that monotonising already fixes correctly, and it
+  # penalises football structurally -- ~180 plays with frequent timeouts vs basketball's ~330, so
+  # the same handful of stale administrative plays is a 2x larger fraction. An unmeasured filter
+  # like this is what capped #55 at 50 records. The real guard is the official-final check, which
+  # is principled: a wrong score value that survives monotonisation lands on the last point and
+  # fails there. Turn this on only once the harvest's score_fix_plays distribution actually shows
+  # a broken-feed tail worth cutting -- the run report carries the distribution for that decision.
+  max_score_fix_frac: null
 
   # ---- leagues ----------------------------------------------------------------------------
   # `params` is PER LEAGUE and is not cosmetic. Full matrix, re-measured 2026-08-12 with retries

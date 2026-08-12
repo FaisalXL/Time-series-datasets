@@ -25,15 +25,35 @@
   "report_sources": {
    "AP": 50
   },
+  "records_by_season": {
+   "2024": 10,
+   "2025": 40
+  },
   "n_plays_median": 326,
   "n_plays_min": 138,
   "report_chars_median": 1824,
+  "records_needing_score_fix": 9,
+  "score_fix_plays_max": 27,
+  "score_fix_frac_pctiles": {
+   "50": 0.0,
+   "90": 0.0061,
+   "99": 0.15,
+   "100": 0.15
+  },
   "alignment": "describes",
-  "license": "proprietary-review"
+  "license": "proprietary-review",
+  "fetch_stats": {
+   "http": 0,
+   "cache": 170,
+   "retries": 0,
+   "throttled": 0,
+   "failed": 0,
+   "not_found": 0
+  }
  },
  "config_snapshot": {
   "data": {
-   "scoreboard_url": "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}&limit=1000",
+   "scoreboard_url": "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}",
    "summary_url": "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={event_id}",
    "user_agent": "CPT-dataset-research flnu@usc.edu",
    "timeout_s": 60,
@@ -41,6 +61,7 @@
    "cache_dir": ".cache",
    "min_periods": 2,
    "min_plays": 20,
+   "max_score_fix_frac": null,
    "leagues": [
     {
      "sport": "football",
@@ -64,7 +85,8 @@
    "discovery": {
     "start_date": "2024-12-01",
     "end_date": "2024-12-14",
-    "step_days": 1
+    "step_days": 1,
+    "census_seasons": null
    }
   },
   "text": {

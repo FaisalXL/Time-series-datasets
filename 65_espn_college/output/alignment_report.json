@@ -1,0 +1,37 @@
+{
+ "records": 50,
+ "unhealthy": 0,
+ "health_problems": {},
+ "alignment": {
+  "CFB": {
+   "records": 10,
+   "final_pair_real": 1.0,
+   "final_pair_control": 0.0,
+   "final_pair_lift": null,
+   "final_pair_z": 3162.3,
+   "halftime_anchor_available": 10,
+   "halftime_pair_real": 0.3,
+   "halftime_pair_control": 0.056
+  },
+  "MCB": {
+   "records": 20,
+   "final_pair_real": 1.0,
+   "final_pair_control": 0.0,
+   "final_pair_lift": null,
+   "final_pair_z": 4472.1,
+   "halftime_anchor_available": 20,
+   "halftime_pair_real": 0.65,
+   "halftime_pair_control": 0.0
+  },
+  "WCB": {
+   "records": 20,
+   "final_pair_real": 1.0,
+   "final_pair_control": 0.025,
+   "final_pair_lift": 40.0,
+   "final_pair_z": 27.9,
+   "halftime_anchor_available": 20,
+   "halftime_pair_real": 0.35,
+   "halftime_pair_control": 0.0
+  }
+ }
+}

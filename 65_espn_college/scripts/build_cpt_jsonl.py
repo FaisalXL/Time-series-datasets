@@ -348,7 +348,11 @@ def build_record(event_id: str, lg: dict, cfg: dict, f: Fetcher):
             "sport": sport,
             "espn_league_slug": league,
             "event_id": event_id,
-            "season": season_of(summary),
+            # ESPN's OWN season field, not this package's census label, and the two differ:
+            # ESPN labels a basketball season by its ENDING year (a 2024-12 game is season 2025)
+            # while census.py labels seasons by start year (that game is in season 2024). Football
+            # agrees in both. Kept under the source's name so nothing silently reinterprets it.
+            "espn_season_year": season_of(summary),
             "away_team": away_name,
             "home_team": home_name,
             "game_date": gdate,
@@ -431,7 +435,7 @@ def main() -> int:
             break
 
     srcs = collections.Counter(r["meta"]["report_source"] for r in recs)
-    by_season = collections.Counter(r["meta"]["season"] for r in recs)
+    by_season = collections.Counter(r["meta"]["espn_season_year"] for r in recs)
     plays = sorted(r["meta"]["n_plays"] for r in recs)
     chars = sorted(r["meta"]["report_chars"] for r in recs)
     fixed = [r["meta"]["score_fix_plays"] for r in recs]
@@ -446,6 +450,12 @@ def main() -> int:
         "report_chars_median": chars[len(chars) // 2] if chars else None,
         "records_needing_score_fix": sum(1 for x in fixed if x),
         "score_fix_plays_max": max(fixed) if fixed else 0,
+        # The distribution `max_score_fix_frac` should be set from, rather than guessed at. If
+        # there is no heavy tail here, there is no broken-feed population to filter out and the
+        # official-final check is doing the whole job on its own.
+        "score_fix_frac_pctiles": (lambda xs: {p: round(xs[min(len(xs) - 1, int(len(xs) * p / 100))], 4)
+                                               for p in (50, 90, 99, 100)} if xs else {})(
+            sorted(r["meta"]["score_fix_plays"] / max(1, r["meta"]["n_plays"]) for r in recs)),
         "alignment": "describes",
         "license": "proprietary-review",
         "fetch_stats": f.stats,
