@@ -1,0 +1,13 @@
+.cache/
+__pycache__/
+*.pyc
+scratch_*
+
+# NOTE: output/ + samples/ hold real Associated Press wire-service recap prose (served via
+# ESPN's API; article.source is recorded on every record). They ARE committed here as a capped
+# DEMO for the lead to inspect -- internal review, NOT distribution. Do NOT scale or publish
+# until redistribution is cleared with Charon. Same rightsholder as 51_espn_us_majors, so scope
+# the ask to AP and it covers both; a different chain from 45_cricket_report_overseries, which
+# is ESPNcricinfo's own staff journalism. Keep output.max_records small; never commit a full
+# build.
+output/espn_college_cpt.jsonl

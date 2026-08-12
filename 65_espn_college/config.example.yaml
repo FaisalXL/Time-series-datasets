@@ -1,0 +1,97 @@
+# ESPN college sports (FBS football + D-I men's/women's basketball) Game Recaps
+# + Score-Progression Series -> CPT
+#
+# One record = one FINISHED GAME: the real wire-service recap (served via ESPN's API) paired
+# with the game's PLAY-BY-PLAY running score (away/home cumulative, one point per play). The
+# recap describes the shape of the game the series quantifies -> alignment = "describes".
+# text_quality is always "real"; games with no usable recap are dropped (no synthetic fallback).
+#
+# Sibling of 51_espn_us_majors (NBA/NFL/NHL). Same endpoints, same play-extraction logic, same
+# rightsholder question. Built through schema/emit.py so records are born strict-clean.
+#
+# ⚠️ LICENSE: recap prose is Associated Press wire copy served via ESPN's API — the SAME
+#    rightsholder as 51, and a different (likely stricter) chain than
+#    45_cricket_report_overseries, which is ESPNcricinfo's own staff journalism. Every record is
+#    tagged `proprietary-review`. The committed output/ + samples/ are a capped demo for the lead
+#    to inspect (internal review, NOT distribution). Do not scale or publish until redistribution
+#    is cleared with Charon. Scope the ask to AP and it covers 51 + this package together.
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --dry-run --set data.discovery.end_date=2024-11-10
+#   python scripts/build_cpt_jsonl.py --set output.max_records=50
+
+data:
+  # 2026-08-12: site.api.espn.com returns 403 (Akamai) for every UA including browser ones.
+  # site.web.api.espn.com serves the identical payload and accepts our identifying research UA,
+  # so no spoofing. This is the host 51 was moved to on the same day.
+  scoreboard_url: "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}&limit=1000"
+  summary_url: "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={event_id}"
+
+  user_agent: "CPT-dataset-research flnu@usc.edu"
+  timeout_s: 60
+  request_delay_s: 0.45          # ~2.2 req/s, the rate the cricket harvest sustained
+  cache_dir: ".cache"
+
+  # A game needs this much play-by-play or the series is too short to describe.
+  # 2 rather than 51's 3 because basketball is halves at this level, not quarters.
+  min_periods: 2
+  min_plays: 20
+
+  # ---- leagues ----------------------------------------------------------------------------
+  # `params` is PER LEAGUE and is not cosmetic. Measured 2026-08-12: without `&groups=50` the
+  # college-basketball scoreboard returns 21 games for 2024-02-10; with it, 155 — a 7x undercount
+  # that still returns HTTP 200. Same class as the `&limit=1000` truncation documented in 51.
+  # `groups=50` is Division I. Football needs no group filter (verified: default, groups=80 and
+  # groups=81 all return the same completed-game count).
+  leagues:
+    - {sport: "football",   league: "college-football",          label: "CFB", params: ""}
+    - {sport: "basketball", league: "mens-college-basketball",   label: "MCB", params: "&groups=50"}
+    - {sport: "basketball", league: "womens-college-basketball", label: "WCB", params: "&groups=50"}
+
+  # ---- discovery --------------------------------------------------------------------------
+  # Day-by-day walk. There is no range-query shortcut here: college basketball 404s on every
+  # monthly date range tried, while single dates work. That is the opposite of 51, whose census
+  # uses monthly ranges — so budget one request per day per league.
+  #
+  # Measured universe (2024 calendar year, this host): CFB 960 finished games. College basketball
+  # averaged 64 (men) / 55 (women) D-I completed games per day over 11 sampled days.
+  # ⚠️ The CFB count is NOT yet trustworthy: an October Saturday returns exactly 25 completed
+  # games with or without a groups filter, which is low for FBS and suspiciously round. Census it
+  # properly before quoting a ceiling.
+  discovery:
+    # A window where all three leagues are in season, so a demo build touches every code path.
+    start_date: "2024-12-01"
+    end_date: "2024-12-14"
+    step_days: 1
+
+text:
+  min_report_chars: 400
+
+  # ---- the automated-content filter -- ON by default, and load-bearing -------------------
+  # Measured 2026-08-12 on 40-game random samples:
+  #   men's basketball 2023-25 : Data Skrive 26 / AP 11 / no recap 3   (median story 1,653 chars)
+  #   men's basketball 2016-19 : Associated Press 39 / no recap 1
+  #   college football 2024    : AP 33 / no recap 7                    (stories 5,359-9,579 chars)
+  #
+  # "Data Skrive" is automated content. SCHEMA.md §7 disqualifies template/boilerplate text, and
+  # shipping it would otherwise require `text_quality: generated` plus sign-off — the same gate
+  # 05_fnspid is stuck behind, and the semi-synthetic text Xinyue rejected. So it is filtered on
+  # the publisher's own `article.source` field, never inferred from the prose. Because the machine
+  # copy is a post-2021 phenomenon, this costs little on historical seasons and a lot on recent
+  # ones — which is the honest shape of the opportunity.
+  #
+  # Set to null to disable the filter and keep every source (records still record their source in
+  # meta.report_source, so the split stays auditable).
+  source_allowlist: ["AP", "Associated Press"]
+
+output:
+  path: output/espn_college_cpt.jsonl
+  run_report: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  # Demo caps. Keep these small: the committed artifacts are for internal review, not
+  # distribution. The per-league cap exists so the demo covers all three leagues -- leagues are
+  # walked in order, so a global-only cap fills from football and never exercises the basketball
+  # path or its mandatory &groups=50.
+  max_records: 60
+  max_records_per_league: 20
