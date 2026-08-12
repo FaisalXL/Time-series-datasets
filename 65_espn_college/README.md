@@ -74,13 +74,37 @@ are worth zero records here.
 |---|--:|--:|---|
 | CFB | 11,059 / 13,206 | **83.7%** | 93–97% for 2012–2019; 44% in 2020, 62% in 2021 |
 | FCS | in flight | **~55–64%** | lower than CFB because the well-covered games are the FBS matchups |
-| MCB · WCB | in flight | — | 87% of the universe; not estimated here on purpose |
+| MCB | in flight | 2012 = **41.8%** | 2012 is the WORST season in the window, not a typical one — see below |
+| WCB | in flight | 2012–13 = **9.5% / 12.6%** | genuine coverage sparsity: 29 of 40 sampled games have no `article` key at all |
+
+**A 40-game sample is not an instrument for this.** At a 13.8% true rate it carries a standard
+deviation of 2.35 games — roughly ±6 percentage points — which is why a 40-game probe once read
+women's coverage as 25% when the censused answer is 9.5%. Confirmed by 200-draw Monte Carlo against
+the full population. The original "~15k" scale claim for this source rested on 40-game samples.
 
 **There is essentially no automated content in football.** CFB's rejections are `no_report` (1,445)
 — coverage gaps — against just **91** `source_not_allowed` across 13,206 games. The
 "26 of 40 games are Data Skrive" finding that motivated the source allowlist is a **men's
 basketball, post-2021** phenomenon and does not generalise to the other tiers. The allowlist stays
 on and stays audited per record, but it is not what shapes football's yield.
+
+### Two different constraints bind in different eras
+
+For men's basketball 2012, **1,897 of 5,825 games (32.6%) carry a usable ≥400-char AP recap and
+have ZERO plays in the payload** — the text exists and the series does not, so they cannot become
+records here. Nothing recovers them: the only other numeric structure available is period
+linescores, which is 2 points for a game of halves, far under any window floor and already rejected
+in `51` for football at 3–4 points.
+
+That constraint is era-specific and it inverts. 30-game samples per season (±8 points, so
+directional only) put zero-play games at 12/30 in 2012, 4/30 in 2016, 3/30 in 2019 and **0/30 in
+2022 and 2025**, while recap coverage moves the other way — 22/30 in 2012 rising to 29/30 in 2016,
+then falling to 18/30 in 2022. Usable-on-both-counts runs 47% (2012), 87% (2016), 87% (2019), 60%
+(2022), 80% (2025).
+
+**So the first MCB shard is the floor, not the average**, and the two halves of a record fail for
+opposite reasons at opposite ends of the window. Per-season truth comes from the harvest's own skip
+counts, which separate `no_report` from `short_game` precisely so this stays visible.
 
 ⚠️ **This file states yields it has measured and leaves the rest blank.** Multiplying a per-unit
 rate into a federation total is exactly how this tier has been wrong before — 14× down on cricket,
