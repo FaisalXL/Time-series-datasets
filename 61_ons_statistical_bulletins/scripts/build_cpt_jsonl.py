@@ -1,596 +1,593 @@
 #!/usr/bin/env python3
-"""Build CPT world-knowledge records from UK ONS statistical bulletins.
+"""Build CPT world-knowledge records from UK ONS statistical bulletins, at full scale.
 
-One record = ONE ANALYTICAL SECTION of one ONS bulletin edition: that section's own VERBATIM
-prose paired with the trailing multi-channel window of the exact indicator series the bulletin
-family reports.
+One record = ONE CONTIGUOUS RUN OF PARAGRAPHS from one analytical section of one bulletin
+edition: that run's own VERBATIM prose paired with the trailing multi-channel window of the
+indicator series the bulletin family reports.
 
-WHY SECTION-LEVEL, NOT ONE RECORD PER BULLETIN: a single ONS bulletin runs ~44,000 chars
-(~11,000 tokens), 22x the 500-token cap. One record per bulletin discards ~95% of real
-first-party prose. Each H2 section is a self-contained analytical passage about its own
-sub-series, so section-level records multiply scale WITHOUT duplicating prose.
+Three design decisions carry the scale and the quality:
 
-TEXT STAYS 100% VERBATIM. Long sections are cut to the cap by choosing a CONTIGUOUS run of
-whole paragraphs in source order -- never by rewriting. Abstractive LLM summarization is
-implemented as a guarded hook but disabled: `schema/validate.py` has no `llm_summarized`
-text_quality value yet (see README).
+1. SPLIT, DON'T CUT. A bulletin runs ~44,000 chars (~11,000 tokens), 22x the 500-token cap.
+   The demo kept only the densest run per section and discarded ~70% of real first-party prose.
+   A cap should split the source, not truncate it: the discarded remainder is exactly as real
+   and as quotable as the part kept, and truncating a `recites` record orphans the numbers that
+   fall after the cut. Sections are chunked into consecutive whole-paragraph runs and every
+   chunk carrying figures becomes its own record. Text stays 100% VERBATIM.
 
-Two failure modes this corpus has been bitten by before, both handled up front:
-  * Cross-channel false match (killed openFDA/NHTSA/CFPB, caught pre-ship on RBNZ #60):
-    a figure is credited to a channel ONLY if that channel's keyword appears near it.
-  * URL-slug vs reference-month drift (FHFA #59's URL month = index month + 2): the ONS slug
-    is verified to BE the reference month against the bulletin's own prose, not assumed.
+2. CHANNELS ARE DISCOVERED, NOT DECLARED. `discover_channels.py` derives each family's channel
+   set from the prose's own figures and proves it against a month-shifted control. The demo's
+   hand-wired CDIDs shipped the wrong variant for retailsales (j4mc read 28.3% where the
+   bulletin quoted 29.4%) and could never have covered the 495 families ONS publishes.
+
+3. THE PERIOD COMES FROM THE DOCUMENT. Edition slugs come in 14 shapes and a slug is not a
+   date. Each edition's reference period is read from its own h1 and cross-checked against the
+   slug; disagreements are recorded in meta, not silently trusted.
+
+Workers write JSONL shards to disk and return only counts. Returning records through process
+IPC would move gigabytes of record dicts for a full build; shards also mean a crashed worker
+costs one family, not the run.
 
 Usage:
-    python scripts/build_cpt_jsonl.py --config config.example.yaml
+    python scripts/build_cpt_jsonl.py --dry-run
+    python scripts/build_cpt_jsonl.py --set output.max_records_per_family=20   # smoke
+    python scripts/build_cpt_jsonl.py                                          # full build
 """
 from __future__ import annotations
 
 import argparse
+import bisect
+import collections
 import difflib
-import html as htmllib
+import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 import time
-import urllib.error
-import urllib.request
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import yaml
 
 HERE = Path(__file__).resolve().parent
-PKG_ROOT = HERE.parent
-sys.path.insert(0, str(PKG_ROOT.parent / "schema"))
-from emit import emit_record  # noqa: E402
+PKG = HERE.parent
+sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(PKG.parent / "schema"))
+import onslib as L                                                        # noqa: E402
+from emit import emit_record                                             # noqa: E402
+from onsfetch import fetch, stats                                        # noqa: E402
 
-MONTHS = ["", "january", "february", "march", "april", "may", "june", "july", "august",
-          "september", "october", "november", "december"]
-MONTH_ABBR = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
-              "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
+LICENSE_TAG = "cc-by-4.0"
+TRUE_LICENSE = ("Open Government Licence v3.0 (OGL v3) -- ONS states OGL v3 is interoperable "
+                "with CC BY 4.0; attribution required. Tagged cc-by-4.0 as closest schema fit.")
+ATTRIBUTION = ("Source: Office for National Statistics licensed under the Open Government "
+               "Licence v.3.0")
+VINTAGE_CAVEAT = ("Series are the CURRENT ONS vintage; the bulletin quotes its contemporaneous "
+                  "vintage. ONS revises, so an older claim can drift from live data -- the "
+                  "measured effect on evidence yield is in README 'Vintage'.")
 
-_last_fetch = [0.0]
-_stats: dict = {}
-
-
-def bump(k: str, n: int = 1) -> None:
-    _stats[k] = _stats.get(k, 0) + n
-
-
-# --- fetch -----------------------------------------------------------------------------------
-
-def fetch(url: str, cache: Path, cfg: dict) -> bytes:
-    """Cached GET. ONS returns 429 on back-to-back requests, so live calls are paced."""
-    if cache.exists():
-        return cache.read_bytes()
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    d = cfg["data"]
-    gap = float(d.get("min_interval_s", 3.0))
-    hdrs = {"User-Agent": d.get("user_agent", "CPT-research"), "Accept": "*/*"}
-    last = None
-    for attempt in range(int(d.get("retries", 4))):
-        wait = gap - (time.time() - _last_fetch[0])
-        if wait > 0:
-            time.sleep(wait)
-        _last_fetch[0] = time.time()
-        try:
-            req = urllib.request.Request(url, headers=hdrs)
-            with urllib.request.urlopen(req, timeout=float(d.get("timeout_s", 120))) as r:
-                body = r.read()
-            cache.write_bytes(body)
-            return body
-        except urllib.error.HTTPError as e:
-            last = e
-            # 429 = rate limited: back off hard and retry. 404 is a real answer: stop.
-            if e.code == 429:
-                time.sleep(gap * (attempt + 2))
-                continue
-            raise
-        except Exception as e:  # transient network
-            last = e
-            time.sleep(gap * (attempt + 1))
-    raise RuntimeError(f"fetch failed after retries: {url} ({last})")
+SUPERLATIVE_RE = re.compile(
+    r"(?i)\b(highest|lowest|record high|record low|strongest|weakest|largest|smallest)\b"
+    r"[^.]{0,80}?\b(on record|since records began|ever)\b")
+SCOPE_QUALIFIER = re.compile(
+    r"(?i)\b(national statistic|comparable series|consistent series|on a comparable basis|"
+    r"records began in \d{4})\b")
+BOUNDED_SUP_RE = re.compile(
+    rf"(?i)\b(highest|lowest)\b[^.;]{{0,60}}?\bsince\s+({L.MONTH_ALT})\s+(\d{{4}})"
+    r"(?:[^.;]{0,30}?\bwhen it was\s+(-?\d+\.\d+)\s*%)?")
 
 
-# --- series ----------------------------------------------------------------------------------
+# ============================ evidence =======================================================
 
-def load_series(fam: dict, chan: dict, cfg: dict, cache: Path) -> tuple[dict, str, str]:
-    """Return ({'YYYY-MM': float}, title, unit_from_ons) for one CDID."""
-    url = cfg["data"]["series_url"].format(theme=fam["theme"], subtopic=fam["subtopic"],
-                                           cdid=chan["cdid"], dataset=fam["dataset"])
-    raw = fetch(url, cache / "series" / f"{fam['dataset']}_{chan['cdid']}.json", cfg)
-    d = json.loads(raw.decode("utf-8", "replace"))
-    out: dict = {}
-    for pt in d.get("months") or []:
-        # ONS month labels look like "2026 JUN"
-        m = re.match(r"^\s*(\d{4})\s+([A-Z]{3})", str(pt.get("date", "")).upper())
-        if not m:
-            continue
-        mm = MONTH_ABBR.get(m.group(2))
-        if not mm:
-            continue
-        try:
-            out[f"{m.group(1)}-{mm:02d}"] = float(pt["value"])
-        except (TypeError, ValueError):
-            continue
-    desc = d.get("description") or {}
-    return out, (desc.get("title") or ""), (desc.get("unit") or "")
-
-
-def window(series: dict, ref: str, n: int) -> tuple[list, list]:
-    """Trailing n monthly points ENDING at ref ('YYYY-MM'). Explicit gaps, no imputation."""
-    y, m = int(ref[:4]), int(ref[5:7])
-    keys = []
-    for _ in range(n):
-        keys.append(f"{y:04d}-{m:02d}")
-        m -= 1
-        if m == 0:
-            y, m = y - 1, 12
-    keys.reverse()
-    if keys[-1] not in series:
-        return [], []
-    return [series.get(k) for k in keys], keys
-
-
-# --- bulletin HTML ---------------------------------------------------------------------------
-
-def strip_tags(frag: str) -> str:
-    frag = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", frag)
-    frag = re.sub(r"(?is)<br\s*/?>", "\n", frag)
-    frag = re.sub(r"(?is)</(p|li|h[1-6]|div|tr)>", "\n\n", frag)
-    frag = re.sub(r"(?s)<[^>]+>", " ", frag)
-    frag = htmllib.unescape(frag)
-    frag = re.sub(r"[ \t ]+", " ", frag)
-    frag = re.sub(r"\n\s*\n\s*(\n\s*)+", "\n\n", frag)
-    return frag.strip()
-
-
-def parse_sections(page: bytes) -> list[dict]:
-    """Split an ONS bulletin into its H2 sections.
-
-    Structure (verified live): <div id="{anchor}" class="section__content--markdown">
-                                 <section><header><h2><span>N.</span> Title</h2></header> ...
-    """
-    doc = page.decode("utf-8", "replace")
-    out = []
-    parts = re.split(r'<div id="([a-z0-9\-]+)"\s+class="section__content--markdown">', doc)
-    # parts = [pre, anchor1, body1, anchor2, body2, ...]
-    for i in range(1, len(parts) - 1, 2):
-        anchor, body = parts[i], parts[i + 1]
-        h2 = re.search(r"(?is)<h2[^>]*>(.*?)</h2>", body)
-        title = strip_tags(h2.group(1)) if h2 else anchor
-        title = re.sub(r"^\d+\.\s*", "", title).strip()
-        body_wo_head = re.sub(r"(?is)<header>.*?</header>", " ", body, count=1)
-        # tables are numeric dumps, not prose -- drop them from the text side
-        body_wo_head = re.sub(r"(?is)<table.*?</table>", " ", body_wo_head)
-        # figure/chart furniture ("Download this chart", "Source: ONS") is page chrome
-        text = strip_tags(body_wo_head)
-        out.append({"anchor": anchor, "title": title, "text": text})
-    return out
-
-
-CHROME_RE = re.compile(
-    r"(?i)^\s*(download (this|the) (chart|image|data)|source: |embed code|"
-    r"figure \d+[:.]|notes?: |back to table of contents|copy (this )?link|"
-    r"view online|hide|show|xlsx|csv)\b")
-
-
-def clean_paragraphs(text: str) -> list[str]:
-    """Keep real prose paragraphs only.
-
-    Chart furniture is the trap here -- an ONS section interleaves figure captions and
-    "Download this chart Figure 3: ..." lines with the narrative. RBNZ #60 shipped exactly this
-    class of leftover page chrome glued into a sentence before it was caught, so both a prefix
-    match AND a structural rule are applied: a real prose paragraph ENDS IN TERMINAL
-    PUNCTUATION. Captions, axis labels and sub-headings do not, so they drop out cleanly
-    (the cost is losing verbatim sub-headings, which carry no numbers).
-    """
-    paras = []
-    for p in re.split(r"\n\s*\n", text):
-        p = re.sub(r"\s+", " ", p).strip()
-        if not p or CHROME_RE.match(p):
-            continue
-        if len(p) < 25:            # stray labels / axis text
-            continue
-        if not re.search(r"[.!?][\"')’”]?$", p):
-            continue               # caption / heading / chart title, not prose
-        paras.append(p)
-    return paras
-
-
-FIG_RE = re.compile(r"(-?\d+\.\d)\s*%")
-
-
-def n_figures(s: str) -> int:
-    return len(FIG_RE.findall(s))
-
-
-# --- text selection (all modes keep text VERBATIM) -------------------------------------------
-
-def select_span(paras: list[str], cap: int, mode: str, cfg: dict, ctx: str) -> tuple[str, dict]:
-    """Choose a CONTIGUOUS run of whole paragraphs, in source order, within `cap` chars."""
-    if not paras:
-        return "", {"selector": mode, "n_paragraphs": 0}
-
-    def join(lo: int, hi: int) -> str:
-        return "\n\n".join(paras[lo:hi])
-
-    # candidate runs: every contiguous [lo, hi) that fits the cap
-    best = (None, -1, 0, 0)   # (text, score, lo, hi)
-    for lo in range(len(paras)):
-        for hi in range(lo + 1, len(paras) + 1):
-            t = join(lo, hi)
-            if len(t) > cap:
-                break
-            score = n_figures(t) * 1000 + len(t)   # figures first, then use the budget
-            if score > best[1]:
-                best = (t, score, lo, hi)
-    if best[0] is None:
-        # even one paragraph exceeds the cap -> keep the first, cut at a sentence boundary
-        first = paras[0]
-        cut = first[:cap]
-        m = list(re.finditer(r"(?<=[.!?])\s", cut))
-        text = cut[:m[-1].start() + 1].strip() if m else cut.strip()
-        return text, {"selector": mode, "n_paragraphs": 1, "sentence_truncated": True}
-
-    if mode == "llm_extractive":
-        chosen = _llm_pick_span(paras, cap, cfg, ctx)
-        if chosen is not None:
-            lo, hi = chosen
-            t = join(lo, hi)
-            if t and len(t) <= cap:
-                return t, {"selector": "llm_extractive", "n_paragraphs": hi - lo,
-                           "span": [lo, hi], "verbatim": True}
-            bump("llm_span_rejected")
-        bump("llm_fallback_numeric_density")
-    elif mode == "head":
-        lo = 0
-        hi = 1
-        while hi < len(paras) and len(join(lo, hi + 1)) <= cap:
-            hi += 1
-        return join(lo, hi), {"selector": "head", "n_paragraphs": hi - lo}
-
-    return best[0], {"selector": "numeric_density", "n_paragraphs": best[3] - best[2],
-                     "span": [best[2], best[3]], "n_figures": n_figures(best[0])}
-
-
-def _llm_pick_span(paras: list[str], cap: int, cfg: dict, ctx: str):
-    """Ask an LLM which contiguous paragraph run to KEEP. Extractive only -- the text it
-    selects is shipped verbatim, so text_quality stays "real". Same grounded shape as the
-    FNSPID B1 relevance judge. Returns (lo, hi) or None."""
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        bump("llm_no_api_key")
-        return None
-    try:
-        import anthropic  # optional dependency
-    except ImportError:
-        bump("llm_sdk_missing")
-        return None
-    listing = "\n".join(f"[{i}] ({len(p)} chars, {n_figures(p)} figures) {p[:300]}"
-                        for i, p in enumerate(paras))
-    prompt = (
-        "You are selecting which part of a real UK ONS statistical bulletin section to keep "
-        "for a text+time-series training corpus. Choose the CONTIGUOUS run of paragraphs that "
-        "most directly states measured values and their changes for the indicator series "
-        f"({ctx}). The kept text is used VERBATIM and must be at most {cap} characters total.\n"
-        "Do not write a summary. Do not paraphrase. Only choose a range.\n"
-        f"Paragraphs:\n{listing}\n\n"
-        'Reply with ONLY JSON: {"start": <int>, "end": <int>} where end is exclusive.')
-    try:
-        client = anthropic.Anthropic(api_key=key)
-        resp = client.messages.create(
-            model=cfg["text"].get("llm_model", "claude-sonnet-5"),
-            max_tokens=100,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        body = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
-        m = re.search(r'\{[^}]*"start"\s*:\s*(\d+)[^}]*"end"\s*:\s*(\d+)[^}]*\}', body)
-        if not m:
-            return None
-        lo, hi = int(m.group(1)), int(m.group(2))
-        if 0 <= lo < hi <= len(paras):
-            bump("llm_span_used")
-            return lo, hi
-    except Exception:
-        bump("llm_call_failed")
-    return None
-
-
-# --- evidence: does the prose actually recite the series? ------------------------------------
-
-def month_name(ref: str) -> str:
-    return MONTHS[int(ref[5:7])].capitalize()
-
-
-def prev_month(ref: str) -> str:
-    y, m = int(ref[:4]), int(ref[5:7])
-    return f"{y-1:04d}-12" if m == 1 else f"{y:04d}-{m-1:02d}"
-
-
-def has_kw(clause: str, keywords: list[str]) -> bool:
-    """Keyword presence, word-bounded. \\bCPI\\b cannot match inside "CPIH", so CPI and CPIH
-    never satisfy each other (the substring trap that bit RBNZ #60 on tradables)."""
-    for kw in keywords:
-        pat = r"\b" + re.escape(kw) + (r"\b" if kw[-1].isalpha() else "")
-        if re.search(pat, clause, re.I):
-            return True
-    return False
-
-
-def split_clauses(text: str) -> list[tuple[int, str]]:
-    """Split into attribution units: sentences, then semicolon-joined sub-claims.
-
-    ONS chains distinct claims about DIFFERENT series with semicolons -- e.g. "Core CPIH ...
-    rose by 2.8% ...; the CPIH goods annual rate slowed from 2.0% to 1.7%". A sentence-level
-    window would let the "core" claim and the "goods" claim satisfy each other's keywords, so
-    the semicolon split is required, not cosmetic.
-    """
-    # A naive "[^.!?]+" split treats the decimal point in "2.8%" as a sentence end and shreds
-    # every figure (this exact bug produced 0 evidence on the first pass). A sentence break
-    # requires terminator + whitespace + an opening capital; paragraph breaks also split.
-    bounds = [0]
-    for m in re.finditer(r'(?<=[.!?])\s+(?=[A-Z"‘“(])|\n{2,}', text):
-        bounds.append(m.end())
-    bounds.append(len(text))
-    out = []
-    for a, b in zip(bounds, bounds[1:]):
-        sent = text[a:b]
-        pos = 0
-        for piece in sent.split(";"):
-            out.append((a + pos, piece))
-            pos += len(piece) + 1
-    return [(o, c) for o, c in out if c.strip()]
-
-
-MONTH_IN_CLAUSE = re.compile(
-    r"(?i)\b(?:12 months to|months to|in|for|during)\s+"
-    r"(january|february|march|april|may|june|july|august|september|october|november|december)"
-    r"(?:\s+(\d{4}))?")
-PREV_PHRASE = re.compile(r"(?i)\b(?:the previous month|a month earlier|last month)\b")
-FROM_TO = re.compile(r"(?i)from\s+-?\d+\.\d\s*%?\s*to\s+-?\d+\.\d\s*%")
-
-
-def clause_target_months(clause: str, ref: str, fig_idx_in_clause: int, n_figs: int) -> list:
-    """Which month(s) a figure inside this clause is allowed to refer to.
-
-    Returns a list of (label, 'YYYY-MM') the figure may legitimately match. Restricting this
-    is what stops a figure being silently credited to the wrong month (a false match found in
-    the first build: a June CPIH monthly figure matched May's CPI monthly value).
-    """
-    prev = prev_month(ref)
-    named = []
-    for m in MONTH_IN_CLAUSE.finditer(clause):
-        mi = MONTHS.index(m.group(1).lower())
-        yr = int(m.group(2)) if m.group(2) else int(ref[:4])
-        named.append(f"{yr:04d}-{mi:02d}")
-    # "slowed from 2.0% to 1.7%" -> first figure is the earlier month, second is the reference
-    if FROM_TO.search(clause) and n_figs >= 2:
-        if fig_idx_in_clause == 0:
-            return [("previous_month", prev)]
-        if fig_idx_in_clause == 1:
-            return [("reference_month", ref)]
-    if PREV_PHRASE.search(clause):
-        # "rose by 2.8% ..., down from 3.0% the previous month" -> the LAST figure is prev
-        if fig_idx_in_clause == n_figs - 1 and n_figs >= 2:
-            return [("previous_month", prev)]
-        return [("reference_month", ref)]
-    if named:
-        out = []
-        for k in named:
-            out.append(("named_month", k))
-        # a clause naming exactly one month pins the figure to it
-        return out
-    return [("reference_month", ref), ("previous_month", prev)]
-
-
-def verify(text: str, ref: str, chans: list[dict], disq: list[str]) -> tuple[str, list, int, dict]:
-    """Match each 'N.N%' figure to a channel, conservatively.
+def verify_chunk(text: str, ref: str, chans: list[dict]) -> tuple[str, list, int, dict]:
+    """Attribute each TYPED figure in `text` to a channel, conservatively.
 
     A figure becomes evidence only if ALL of these hold:
-      1. the channel's keyword appears in the figure's OWN clause (not a neighbouring one),
-      2. the clause carries no disqualifying modifier that points at a series we do not hold
-         ("core", "excluding", "goods", "services", "contribution", ...),
-      3. the channel's value at the month the CLAUSE ITSELF names rounds to the figure.
-    Anything else is left unattributed and counted in `rejected`. Being wrong here is worse
-    than being silent: a polluted evidence array inflates apparent quality.
+      1. the clause NAMES the series -- measure token exact, every restriction named, one whole
+         concept segment named (`onslib.names_series`);
+      2. the channel's value at the month THE CLAUSE ITSELF names rounds to the figure, at the
+         precision the figure was quoted to;
+      3. no second guess: the first channel to satisfy both wins and the search stops.
+    Channels arrive sorted by discovery specificity, so the most precisely-named series is
+    tried first and a headline channel cannot pre-empt a sub-series that the clause names more
+    exactly. A figure matching nothing is left unattributed and counted: being wrong here is
+    worse than being silent, because a polluted evidence array inflates apparent quality.
     """
-    ev, rejected = [], {"disqualified_clause": 0, "no_keyword": 0, "value_mismatch": 0}
-    n_all = 0
-    for c_off, clause in split_clauses(text):
-        figs = list(FIG_RE.finditer(clause))
-        n_all += len(figs)
-        if not figs:
+    ev = []
+    rej = {"not_named": 0, "value_mismatch": 0, "no_data_at_month": 0,
+           "ambiguous_multi_channel": 0}
+    n_typed = 0
+    for _off, clause in L.split_clauses(text):
+        cl = [c for c in L.claims(clause) if c[1] in L.TYPED]
+        if not cl:
             continue
-        blocked = [d for d in disq if re.search(r"\b" + re.escape(d) + r"\b", clause, re.I)]
-        for i, m in enumerate(figs):
-            try:
-                val = float(m.group(1))
-            except ValueError:
-                continue
-            targets = clause_target_months(clause, ref, i, len(figs))
-            matched = False
-            saw_kw = False
+        low, ctoks = clause.lower(), L.clause_tokens(clause)
+        n_typed += len(cl)
+        for i, (v, kind, scale, numtext) in enumerate(cl):
+            targets = L.clause_target_months(clause, ref, i, len(cl))
+            named_any = had_data = False
+            cands = []
             for ch in chans:
-                kws = ch.get("keywords") or []
-                if kws and not has_kw(clause, kws):
+                if not L.unit_compatible(kind, ch.get("ons_unit", "")):
                     continue
-                saw_kw = True
-                # a modifier the channel does not cover -> refuse to attribute
-                bad = [b for b in blocked if not has_kw(" ".join(kws), [b])]
-                if bad:
+                ok, spec = L.names_series(ch["_pt"], ctoks, low)
+                if not ok:
                     continue
+                named_any = True
                 for label, key in targets:
                     got = ch["_series"].get(key)
                     if got is None:
                         continue
-                    if abs(round(got, 1) - val) < 0.05:
-                        ev.append({"figure_pct": val, "unit": ch["unit"], "month": key,
-                                   "month_source": label, "series_value": got,
-                                   "clause": re.sub(r"\s+", " ", clause).strip()[:200]})
-                        matched = True
+                    had_data = True
+                    matched = False
+                    for lo, hi, us in L.probes_for(v, kind, scale, numtext):
+                        if (kind in ("money", "count") and ch["_scale"] is not None
+                                and ch["_scale"] != us):
+                            continue
+                        if lo <= got <= hi:
+                            matched = True
+                            break
+                    if matched:
+                        cands.append({"figure": v, "kind": kind, "unit": ch["unit"],
+                                      "cdid": ch["cdid"], "month": key, "month_source": label,
+                                      "series_value": got, "specificity": spec,
+                                      "clause": re.sub(r"\s+", " ", clause).strip()[:220]})
                         break
-                if matched:
-                    break
-            if not matched:
-                if blocked and saw_kw:
-                    rejected["disqualified_clause"] += 1
-                elif not saw_kw:
-                    rejected["no_keyword"] += 1
+            # Identifiability, the same rule discovery uses: a figure that fits several channels
+            # at once identifies none of them, so it is recorded as ambiguous rather than credited
+            # to whichever happened to sort first. Sorting by specificity makes the choice
+            # deterministic, not correct.
+            uniq = {c["cdid"]: c for c in cands}
+            if len(uniq) == 1:
+                ev.append(next(iter(uniq.values())))
+            elif len(uniq) > 1:
+                if len(uniq) <= L.MAX_MULTIPLICITY:
+                    best = max(uniq.values(), key=lambda c: c["specificity"])
+                    tie = [c for c in uniq.values()
+                           if c["specificity"] == best["specificity"]]
+                    if len(tie) == 1:
+                        best["ambiguous_with"] = sorted(c["unit"] for c in uniq.values()
+                                                        if c["cdid"] != best["cdid"])
+                        ev.append(best)
+                    else:
+                        rej["ambiguous_multi_channel"] += 1
                 else:
-                    rejected["value_mismatch"] += 1
-    align = "recites" if ev else "describes"
-    return align, ev, n_all, rejected
+                    rej["ambiguous_multi_channel"] += 1
+            elif not named_any:
+                rej["not_named"] += 1
+            elif not had_data:
+                rej["no_data_at_month"] += 1
+            else:
+                rej["value_mismatch"] += 1
+    return ("recites" if ev else "describes"), ev, n_typed, rej
 
 
-SUPERLATIVE_RE = re.compile(
-    r"(?i)\b(highest|lowest|record high|record low|strongest|weakest|"
-    r"largest|smallest)\b[^.]{0,80}?\b(on record|since records began|ever)\b")
-
-# ONS far more often makes a BOUNDED superlative: "the lowest since August 2024, when it was
-# 1.3%". That is fully checkable against 450 months of held history and is the more common
-# claim shape, so it gets its own check rather than being ignored.
-BOUNDED_SUP_RE = re.compile(
-    r"(?i)\b(highest|lowest)\b[^.;]{0,60}?\bsince\s+"
-    r"(january|february|march|april|may|june|july|august|september|october|november|december)"
-    r"\s+(\d{4})(?:[^.;]{0,30}?\bwhen it was\s+(-?\d+\.\d)\s*%)?")
+def _enclosing(text: str, idx: int) -> str:
+    """The paragraph containing idx -- a superlative's subject is set in an earlier sentence."""
+    a = text.rfind("\n\n", 0, idx)
+    a = 0 if a < 0 else a + 2
+    b = text.find("\n\n", idx)
+    return text[a:(len(text) if b < 0 else b)]
 
 
-def enclosing_paragraph(text: str, idx: int) -> str:
-    """The paragraph containing `idx`. Used for SUPERLATIVE attribution only.
-
-    Figures are attributed at CLAUSE scope (tight, because a wrong attribution creates false
-    evidence). A superlative's subject is normally established in an earlier sentence of the
-    same paragraph -- "Food ... prices rose by 1.7% ... The annual rate in June was the lowest
-    since August 2024" -- so clause scope leaves every superlative unattributed and the check
-    becomes dead code. Paragraph scope fixes that; the ambiguity rule below keeps it safe.
-    """
-    start = text.rfind("\n\n", 0, idx)
-    start = 0 if start < 0 else start + 2
-    end = text.find("\n\n", idx)
-    return text[start:(len(text) if end < 0 else end)]
-
-
-def attribute(scope: str, chans: list[dict]) -> list[dict]:
-    """Every channel whose keyword appears in `scope`. More than one -> ambiguous."""
-    return [ch for ch in chans
-            if not (ch.get("keywords") or []) or has_kw(scope, ch["keywords"])]
-
-
-def _drop_worthy(text: str, idx: int, ch: dict, chans: list[dict], disq: list[str]) -> bool:
-    """May a contradiction on this claim DROP the record?
-
-    Only if the claim's OWN CLAUSE identifies the channel unambiguously and carries no
-    modifier pointing at a series we do not hold. Paragraph-scope attribution is good enough
-    to FLAG but not to discard data: in the first build it produced three false
-    "contradictions" -- "housing and household services", "owner occupiers' housing costs" and
-    "domestic heating oil" all matched the COICOP-04 keyword "housing" while being different
-    series -- and silently dropped a good record. A false drop is worse than a noisy flag
-    because nothing downstream can see it.
-    """
-    clauses = split_clauses(text)
-    own = next((c for off, c in reversed(clauses) if off <= idx), "")
-    if any(re.search(r"\b" + re.escape(d) + r"\b", own, re.I) for d in disq):
+def _clause_names(text: str, idx: int, ch: dict, chans: list[dict]) -> bool:
+    """Does the claim's OWN clause name this channel, and only this channel?"""
+    own = ""
+    for off, cl in L.split_clauses(text):
+        if off <= idx:
+            own = cl
+        else:
+            break
+    if not own:
         return False
-    kws = ch.get("keywords") or []
-    if not kws or not has_kw(own, kws):
-        return False
-    return len(attribute(own, chans)) == 1
+    low, ctoks = own.lower(), L.clause_tokens(own)
+    named = [c for c in chans if L.names_series(c["_pt"], ctoks, low)[0]]
+    return len(named) == 1 and named[0]["cdid"] == ch["cdid"]
 
 
-def bounded_superlative_flags(text: str, chans: list[dict], ref: str,
-                              disq: list[str] | None = None) -> tuple[list, bool]:
-    """Verify "X is the highest/lowest since <Month Year>" against the held history.
+def superlative_checks(text: str, cur_month: str, chans: list[dict]) -> tuple[list, bool]:
+    """Check "highest/lowest since <Month Year>" (and "on record") against the held history.
 
-    Two independent checks per claim:
-      1. extremum -- the reference-month value really is the max/min over (since_month, ref].
-      2. back-reference -- if the prose also states the value at that earlier month
-         ("when it was 1.3%"), that value must match the series there.
+    ONS makes BOUNDED superlatives far more often than unbounded ones ("the lowest since August
+    2024, when it was 1.3%"), and a bounded claim is fully checkable against 450 months of held
+    history -- including the back-reference value. Attribution uses the same naming rule as the
+    evidence pass, at paragraph scope because the subject is usually established in an earlier
+    sentence; two candidate channels means the claim is reported as ambiguous and never acted
+    on. `cur_month` is the window anchor, i.e. the latest month actually held.
     """
     flags, contradicted = [], False
-    for m in BOUNDED_SUP_RE.finditer(text):
-        word = m.group(1).lower()
-        since = f"{int(m.group(3)):04d}-{MONTHS.index(m.group(2).lower()):02d}"
-        quoted = float(m.group(4)) if m.group(4) else None
-        claim = re.sub(r"\s+", " ", m.group(0)).strip()
-        cands = attribute(enclosing_paragraph(text, m.start()), chans)
+    for m in list(BOUNDED_SUP_RE.finditer(text)) + list(SUPERLATIVE_RE.finditer(text)):
+        bounded = m.re is BOUNDED_SUP_RE
+        claim = re.sub(r"\s+", " ", text[max(0, m.start() - 80):m.end() + 60]).strip()
+        para = _enclosing(text, m.start())
+        low, ctoks = para.lower(), L.clause_tokens(para)
+        cands = [c for c in chans if L.names_series(c["_pt"], ctoks, low)[0]]
+        rec = {"claim": claim, "bounded": bounded}
         if not cands:
-            flags.append({"claim": claim, "since": since, "verdict": "unchecked_no_channel"})
+            rec["verdict"] = "unchecked_no_named_channel"
+            flags.append(rec)
             continue
         if len(cands) > 1:
-            # two or more channels could own this claim -> record it, but never drop on it
-            flags.append({"claim": claim, "since": since, "verdict": "ambiguous_multi_channel",
-                          "candidates": [c["unit"] for c in cands]})
+            rec.update(verdict="ambiguous_multi_channel",
+                       candidates=[c["unit"] for c in cands][:6])
+            flags.append(rec)
             continue
         ch = cands[0]
         hist = ch["_series"]
-        cur = hist.get(ref)
-        span = {k: v for k, v in hist.items() if since < k <= ref}
-        if cur is None or not span:
-            flags.append({"claim": claim, "since": since, "unit": ch["unit"],
-                          "verdict": "unchecked_no_data"})
+        cur = hist.get(cur_month)
+        word = m.group(1).lower()
+        is_high = word.startswith(("high", "record h", "strong", "larg"))
+        # The claim may scope its own comparison to a narrower series than the one we hold.
+        # "the largest ever recorded increase in the CPI NATIONAL STATISTIC 12-month rate" is
+        # true of the National Statistic series (from 1997) and false of the 449-month history
+        # including the earlier modelled estimates. We cannot represent that scope, so we cannot
+        # judge it -- and saying "contradicted" would be an accusation the data does not support.
+        if SCOPE_QUALIFIER.search(_enclosing(text, m.start())):
+            rec.update(verdict="unchecked_scope_qualifier", unit=ch["unit"],
+                       note="the claim scopes its comparison to a narrower series than the one "
+                            "held (e.g. 'National Statistic'), so it is not checkable here")
+            flags.append(rec)
             continue
-        extremum = max(span.values()) if word == "highest" else min(span.values())
-        ok = cur >= extremum - 1e-9 if word == "highest" else cur <= extremum + 1e-9
-        hit = {"claim": claim, "since": since, "unit": ch["unit"], "current": cur,
-               "extremum_over_span": extremum, "n_months_in_span": len(span),
-               "verdict": "consistent" if ok else "contradicted"}
-        if quoted is not None:
-            at = hist.get(since)
-            hit["quoted_at_since"] = quoted
-            hit["series_at_since"] = at
-            hit["back_reference"] = ("match" if at is not None
-                                     and abs(round(at, 1) - quoted) < 0.05 else "mismatch")
-        if not ok:
-            if _drop_worthy(text, m.start(), ch, chans, disq or []):
-                contradicted = True
+        if cur is None:
+            rec.update(verdict="unchecked_no_data", unit=ch["unit"])
+            flags.append(rec)
+            continue
+        if bounded:
+            since = f"{int(m.group(3)):04d}-{L.MONTHS.index(m.group(2).lower()):02d}"
+            span = {k: v for k, v in hist.items() if since < k <= cur_month}
+            if not span:
+                rec.update(verdict="unchecked_no_data", unit=ch["unit"], since=since)
+                flags.append(rec)
+                continue
+            extremum = max(span.values()) if is_high else min(span.values())
+            ok = (cur >= extremum - 1e-9) if is_high else (cur <= extremum + 1e-9)
+            rec.update(unit=ch["unit"], since=since, current=cur,
+                       extremum_over_span=extremum, n_months_in_span=len(span),
+                       verdict="consistent" if ok else "contradicted")
+            if m.group(4):
+                q, at = float(m.group(4)), hist.get(since)
+                rec.update(quoted_at_since=q, series_at_since=at,
+                           back_reference=("match" if at is not None and abs(at - q) < 0.05
+                                           else "mismatch"))
+        else:
+            # "the largest ever recorded INCREASE in the CPI 12-month inflation rate" is a claim
+            # about the month-on-month CHANGE, not the level. Comparing it against the level's
+            # own max produced all 4 surviving contradictions in the second full build -- the
+            # source was right and the check was asking the wrong question. When the superlative
+            # is qualified by a change word, test the first difference instead.
+            about_change = re.search(r"(?i)\b(increase|rise|fall|decrease|change|jump|drop)\b",
+                                     text[max(0, m.start() - 60):m.end() + 40]) is not None
+            ks = sorted(hist)
+            if about_change and len(ks) > 1:
+                diffs = {ks[i]: hist[ks[i]] - hist[ks[i - 1]] for i in range(1, len(ks))}
+                val = diffs.get(cur_month)
+                if val is None:
+                    rec.update(verdict="unchecked_no_data", unit=ch["unit"], basis="change")
+                    flags.append(rec)
+                    continue
+                hi, lo = max(diffs.values()), min(diffs.values())
+                ok = (val >= hi - 1e-9) if is_high else (val <= lo + 1e-9)
+                rec.update(unit=ch["unit"], basis="month_on_month_change", current_change=val,
+                           change_max=round(hi, 4), change_min=round(lo, 4),
+                           n_months=len(diffs), verdict="consistent" if ok else "contradicted")
             else:
-                hit["verdict"] = "contradicted_weak_attribution"
-                hit["note"] = ("attributed only at paragraph scope -- the claim's own clause "
+                hi, lo = max(hist.values()), min(hist.values())
+                ok = (cur >= hi - 1e-9) if is_high else (cur <= lo + 1e-9)
+                rec.update(unit=ch["unit"], basis="level", current=cur, series_max=hi,
+                           series_min=lo, n_months=len(hist),
+                           verdict="consistent" if ok else "contradicted")
+        # A contradiction is only a contradiction if the attribution holds. Two independent ways
+        # to show it does not -- both of which fired on the smoke build, where all 4 apparent
+        # contradictions turned out to be mis-attributions:
+        #   * the prose states the value at the earlier month and the series disagrees there
+        #     ("lowest since October 2021, when it was 3.1%" against a series reading 3.8), so
+        #     the claim is demonstrably about a series we do not hold;
+        #   * the claim's own CLAUSE does not unambiguously name the channel, only its paragraph
+        #     does. That is enough to flag but never enough to accuse the source, because ONS
+        #     references far more series than any channel set holds.
+        if rec.get("verdict") == "contradicted":
+            if rec.get("back_reference") == "mismatch":
+                rec["verdict"] = "attribution_rejected_back_reference"
+                rec["note"] = ("the prose's own back-reference value does not match this series "
+                               "at that month, so the claim is about a series we do not hold")
+            elif not _clause_names(text, m.start(), ch, chans):
+                rec["verdict"] = "contradicted_weak_attribution"
+                rec["note"] = ("attributed only at paragraph scope -- the claim's own clause "
                                "does not unambiguously name this channel, so this is reported, "
                                "not acted on")
-        flags.append(hit)
+        if rec["verdict"] == "contradicted":
+            contradicted = True
+        flags.append(rec)
     return flags, contradicted
 
 
-def superlative_flags(text: str, chans: list[dict], ref: str) -> tuple[list, bool]:
-    """A verbatim 'highest on record' that its own paired history contradicts is a real risk
-    (caught on FAS GAIN #58). Check the claim against the FULL channel history, not the window.
+# ============================ per-family build ================================================
+
+def load_channels(fam_rep: dict) -> list[dict]:
+    """Attach live series, parsed titles and sorted month keys to the discovered channels."""
+    datasets = {i: L.load_dataset(p, i) for p, i in fam_rep.get("datasets", [])}
+    out = []
+    for ch in fam_rep.get("channels", []):
+        s = next((d[ch["cdid"]] for d in datasets.values() if ch["cdid"] in d), None)
+        if not s or not s["m"]:
+            continue
+        c = dict(ch)
+        c["_series"] = s["m"]
+        c["_keys"] = sorted(s["m"])
+        # The requirement frozen by discovery, which was calibrated against this
+        # family's own prose vocabulary. Falling back to a fresh parse would re-introduce the
+        # notation tokens (CPNSA, CVM, Liabs) that discovery proved unmatchable.
+        c["_pt"] = ch.get("require") or L.parse_title(s["title"])
+        c["_scale"] = L.unit_scale(s["unit"])
+        out.append(c)
+    # most precisely-named channels first, so a headline series cannot pre-empt a sub-series
+    out.sort(key=lambda c: (-int(c.get("spec") or 0), -int(c.get("claims") or 0)))
+    return out
+
+
+def anchor_for(chans: list[dict], ref: str) -> tuple[str | None, str]:
+    """Where the window ENDS.
+
+    Not always `ref`. A labour-market bulletin published for July reports rolling quarters that
+    end in May, so no July point exists yet; anchoring blindly at `ref` made the window empty
+    and silently dropped the entire family. So back off to the latest month <= ref at which a
+    majority of channels hold data, and record which rule fired. Uses each channel's
+    pre-sorted key list -- scanning full histories per edition is 52M dict operations on a full
+    build.
     """
-    flags, contradicted = [], False
-    clauses = split_clauses(text)
-    for m in SUPERLATIVE_RE.finditer(text):
-        claim = re.sub(r"\s+", " ", text[max(0, m.start() - 90):m.end() + 60]).strip()
-        hit = {"claim": claim, "verdict": "unchecked"}
-        # attribute the superlative using its OWN clause, same rule as the figure matcher
-        own = next((c for off, c in reversed(clauses) if off <= m.start()), text)
-        for ch in chans:
-            kws = ch.get("keywords") or []
-            if kws and not has_kw(own, kws):
-                continue
-            hist = ch["_series"]
-            cur = hist.get(ref)
-            if cur is None:
-                continue
-            hi = max(hist.values())
-            lo = min(hist.values())
-            word = m.group(1).lower()
-            if word in ("highest", "record high", "strongest", "largest"):
-                ok = cur >= hi - 1e-9
-            else:
-                ok = cur <= lo + 1e-9
-            hit = {"claim": claim, "unit": ch["unit"], "current": cur,
-                   "series_max": hi, "series_min": lo,
-                   "verdict": "consistent" if ok else "contradicted"}
-            if not ok:
-                contradicted = True
-            break
-        flags.append(hit)
-    return flags, contradicted
+    latest = []
+    for c in chans:
+        ks = c["_keys"]
+        i = bisect.bisect_right(ks, ref) - 1
+        if i >= 0:
+            latest.append(ks[i])
+    if not latest:
+        return None, "no_data_before_ref"
+    latest.sort(reverse=True)
+    need = max(1, len(chans) // 2)
+    best = latest[min(need, len(latest)) - 1]      # latest month >= need channels reach
+    return best, ("ref" if best == ref else "backoff")
 
 
-# --- main ------------------------------------------------------------------------------------
+def build_family(fam_rep: dict, editions: list, cfg: dict, shard: Path) -> dict:
+    tcfg, scfg, ocfg = cfg["text"], cfg["series"], cfg["output"]
+    st = collections.Counter()
+    fam, path = fam_rep["family"], fam_rep["path"]
+    chans = load_channels(fam_rep)
+    if not chans:
+        return {"family": fam, "records": 0, "counters": {"family_no_channels": 1}}
+    excl = set(tcfg["exclude_anchors"])
+    cap, min_chars = int(tcfg["max_chars"]), int(tcfg["min_chars"])
+    min_figs = int(tcfg["min_figures"])
+    wmonths, minpts = int(scfg["window_months"]), int(scfg["min_points"])
+    sim_cap = tcfg.get("max_similarity")
+    per_fam_cap = ocfg.get("max_records_per_family")
+    seen_exact, seen_group = set(), collections.defaultdict(list)
+    n = 0
+    ev_total = 0
+    n_recites = 0
+    sims = []
+    # Evidence yield bucketed by the EDITION's own year. This measures the vintage question
+    # directly and for free: series come from the current vintage, so if that were drifting away
+    # from what older bulletins quoted, yield would fall off with edition age. Measuring the
+    # effect beats measuring the cause -- comparing vintage CSVs costs 23MB per vintage per
+    # family, and on CPI vintage v70 turned out identical to current in 0 of 1,172 points.
+    by_year = collections.defaultdict(lambda: {"records": 0, "evidence": 0, "typed": 0})
+    fh = shard.open("w")
+    try:
+        for row in editions:
+            slug = row[0]
+            url = f"https://www.ons.gov.uk/{path}/bulletins/{fam}/{slug}"
+            code, page = fetch(url)
+            if code != 200:
+                st[f"edition_http_{code}"] += 1
+                continue
+            title = L.page_title(page)
+            ref, shape = L.coverage_period(title)
+            if not ref:
+                st["no_reference_period"] += 1
+                continue
+            if "-Q" in ref:
+                st["quarterly_period_skipped"] += 1
+                continue
+            slug_ref = _slug_month(slug)
+            # Three-valued on purpose. 7 CPI editions are slugged with their PUBLICATION date
+            # (`2015-07-14`) while covering the month before (2015-06) -- the FHFA #59 trap, live
+            # in this source. Those slugs encode no reference month at all, which is a different
+            # statement from "the slug disagrees", and collapsing the two would report a source
+            # inconsistency that does not exist.
+            st["slug_encodes_no_month" if slug_ref is None else
+               "slug_matches_dateline" if slug_ref == ref else
+               "slug_differs_from_dateline"] += 1
+            st["editions_parsed"] += 1
+
+            anch, how = anchor_for(chans, ref)
+            if not anch:
+                st["no_window_anchor"] += 1
+                continue
+            st[f"anchor_{how}"] += 1
+            wins, keys = [], None
+            for c in chans:
+                vals, ks = L.window(c["_series"], anch, wmonths, "m")
+                if sum(v is not None for v in vals) < minpts:
+                    continue
+                wins.append((c, vals))
+                keys = ks
+            if not wins:
+                st["no_windowed_channels"] += 1
+                continue
+            live = [c for c, _ in wins]
+
+            for sec in L.parse_sections(page):
+                if sec["anchor"] in excl:
+                    st["section_excluded_boilerplate"] += 1
+                    continue
+                paras = L.clean_paragraphs(sec["text"])
+                if not paras:
+                    st["section_no_prose"] += 1
+                    continue
+                # A paragraph longer than the cap is divided at sentence bounds, not truncated,
+                # so it cannot push a record over the 500-token cap and no sentence is lost.
+                split = []
+                for p in paras:
+                    parts = L.split_long_paragraph(p, cap)
+                    if len(parts) > 1:
+                        st["long_paragraph_split"] += 1
+                    split.extend(parts)
+                paras = split
+                spans = L.chunk_paragraphs(paras, cap)
+                st["chunks_seen"] += len(spans)
+                for ci, (lo, hi) in enumerate(spans):
+                    span = "\n\n".join(paras[lo:hi])
+                    if len(span) < min_chars:
+                        st["chunk_too_short"] += 1
+                        continue
+                    if sum(1 for _o, c2 in L.split_clauses(span)
+                           for c3 in L.claims(c2) if c3[1] in L.TYPED) < min_figs:
+                        st["chunk_too_few_figures"] += 1
+                        continue
+                    h = hashlib.sha1(span.encode()).hexdigest()
+                    if h in seen_exact:
+                        st["exact_duplicate_dropped"] += 1
+                        continue
+                    if sim_cap is not None:
+                        grp = seen_group[(sec["anchor"], ci)]
+                        worst = max((difflib.SequenceMatcher(None, span, p).ratio()
+                                     for p in grp), default=0.0)
+                        if grp:
+                            sims.append(round(worst, 3))
+                        if worst > float(sim_cap):
+                            st["near_duplicate_dropped"] += 1
+                            continue
+                        grp.append(span)
+                        del grp[:-10]         # template reuse is month-to-month adjacent
+                    seen_exact.add(h)
+
+                    align, ev, n_typed, rej = verify_chunk(span, ref, live)
+                    for k, v in rej.items():
+                        st[f"rejected_{k}"] += v
+                    flags, contra = superlative_checks(span, anch, live)
+                    st["superlative_flags"] += len(flags)
+                    st["superlative_contradicted"] += sum(
+                        1 for f in flags if f.get("verdict") == "contradicted")
+                    if contra and tcfg.get("drop_on_superlative_contradiction"):
+                        st["superlative_dropped"] += 1
+                        continue
+                    rec = emit_record(
+                        text=f"{span}\n\n<ts></ts>",
+                        timeseries=[{"values": [None if v is None else round(v, 4) for v in vals],
+                                     "unit": c["unit"], "freq": scfg["freq"]}
+                                    for c, vals in wins],
+                        timestamps=keys,
+                        alignment=align,
+                        license=LICENSE_TAG,
+                        text_source="first_party_official",
+                        source=url,
+                        dataset="ons_statistical_bulletins",
+                        series_id=f"ons:{fam}:{slug}:{sec['anchor']}:{ci}",
+                        domain="macro",
+                        region="GB",
+                        period_start=keys[0],
+                        period_end=keys[-1],
+                        meta={
+                            "true_license": TRUE_LICENSE,
+                            "attribution": ATTRIBUTION,
+                            "bulletin_family": fam,
+                            "bulletin_title": title,
+                            "edition_slug": slug,
+                            "reference_period": ref,
+                            "reference_period_source": "document_h1",
+                            "reference_period_shape": shape,
+                            "slug_derived_month": slug_ref,
+                            "slug_agrees_with_dateline": (None if slug_ref is None
+                                                          else slug_ref == ref),
+                            "window_anchor": anch,
+                            "window_anchor_rule": how,
+                            "section_anchor": sec["anchor"],
+                            "section_title": sec["title"],
+                            "chunk_index": ci,
+                            "n_chunks_in_section": len(spans),
+                            "section_paragraphs": len(paras),
+                            "chunk_paragraphs": hi - lo,
+                            "n_channels": len(wins),
+                            "n_points": len(keys),
+                            "n_nulls": sum(1 for _c, vs in wins for v in vs if v is None),
+                            "n_typed_figures": n_typed,
+                            "n_evidenced": len(ev),
+                            "evidenced_channels": sorted({e["unit"] for e in ev}),
+                            "recite_evidence": ev,
+                            "evidence_rejected": rej,
+                            "superlative_flags": flags,
+                            "channels": [{"cdid": c["cdid"], "unit": c["unit"],
+                                          "ons_title": c.get("title", ""),
+                                          "ons_unit": c.get("ons_unit", ""),
+                                          "discovery_claims": c.get("claims"),
+                                          "discovery_control": c.get("control")}
+                                         for c, _ in wins],
+                            "channel_discovery": {
+                                "method": "value_verified_from_prose",
+                                "family_floor": fam_rep.get("floor"),
+                                "n_candidate_series": fam_rep.get("n_candidate_series"),
+                            },
+                            "vintage": {"series_vintage": "current", "caveat": VINTAGE_CAVEAT},
+                        },
+                    )
+                    fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                    n += 1
+                    ev_total += len(ev)
+                    n_recites += 1 if align == "recites" else 0
+                    st["recites" if align == "recites" else "describes"] += 1
+                    yb = by_year[ref[:4]]
+                    yb["records"] += 1
+                    yb["evidence"] += len(ev)
+                    yb["typed"] += n_typed
+                    if per_fam_cap and n >= int(per_fam_cap):
+                        raise _CapReached
+    except _CapReached:
+        st["per_family_cap_hit"] += 1
+    finally:
+        fh.close()
+    return {"family": fam, "records": n, "recites": n_recites, "evidence_claims": ev_total,
+            "evidence_per_record": round(ev_total / max(1, n), 2),
+            "editions_parsed": st.get("editions_parsed", 0),
+            "similarity_p95": (sorted(sims)[int(len(sims) * 0.95)] if sims else None),
+            "similarity_max": (max(sims) if sims else None),
+            "evidence_by_edition_year": {
+                y: {**d, "evidence_per_record": round(d["evidence"] / max(1, d["records"]), 2)}
+                for y, d in sorted(by_year.items())},
+            "counters": dict(st), "shard": str(shard)}
+
+
+class _CapReached(Exception):
+    pass
+
+
+def _slug_month(slug: str) -> str | None:
+    """Month implied by the slug, or None if the slug does not encode one.
+
+    Handles the abbreviated form too (`aug2017`, `apr2017`): without it, 97 records reported
+    `slug_agrees_with_dateline: false` when the slug and the dateline in fact agreed and only
+    the parser could not read it. Claiming a disagreement that is not there is worse than
+    reporting "could not tell", because it looks like evidence the source is inconsistent.
+    """
+    m = re.search(rf"({L.MONTH_ALT})(\d{{4}})$", slug)
+    if m:
+        return f"{int(m.group(2)):04d}-{L.MONTHS.index(m.group(1)):02d}"
+    m = re.search(r"([a-z]{3})(\d{4})$", slug)
+    if m and m.group(1).upper() in L.ABBR:
+        return f"{int(m.group(2)):04d}-{L.ABBR[m.group(1).upper()]:02d}"
+    return None
+
+
+def _job(args):
+    rep, eds, cfg, shard = args
+    try:
+        return build_family(rep, eds, cfg, Path(shard))
+    except Exception as e:
+        return {"family": rep["family"], "records": 0, "counters": {},
+                "error": f"{type(e).__name__}: {e}"}
+
 
 def deep_set(d: dict, dotted: str, raw: str) -> None:
     cur = d
@@ -602,222 +599,140 @@ def deep_set(d: dict, dotted: str, raw: str) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--config", default=str(PKG_ROOT / "config.example.yaml"))
-    ap.add_argument("--set", action="append", default=[],
-                    help="override a config key, e.g. --set output.max_records=null")
-    ap.add_argument("--dry-run", action="store_true", help="parse + report, write nothing")
+    ap.add_argument("--config", default=str(PKG / "config.example.yaml"))
+    ap.add_argument("--set", action="append", default=[])
+    ap.add_argument("--family", action="append")
+    ap.add_argument("--limit-editions", type=int, default=0, help="smoke test: newest N only")
+    ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 4) // 6))
+    ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text())
     for ov in args.set:
         k, _, v = ov.partition("=")
         deep_set(cfg, k.strip(), v.strip())
-
-    tcfg, scfg, ocfg = cfg["text"], cfg["series"], cfg["output"]
-    if tcfg.get("abstractive_summary"):
-        print("ERROR: text.abstractive_summary is not shippable yet.\n"
-              "  schema/validate.py allows text_quality in {'real','generated'} only -- there\n"
-              "  is no `llm_summarized` value, and 'generated' would conflate a grounded\n"
-              "  summary of a real document with fully synthetic text. Get the schema tag\n"
-              "  signed off first (see README 'The LLM question'), then wire this path.",
+    if cfg["text"].get("abstractive_summary"):
+        print("ERROR: text.abstractive_summary is not shippable -- schema/validate.py allows\n"
+              "  text_quality in {'real','generated'} only; there is no `llm_summarized` value,\n"
+              "  and 'generated' would conflate a grounded summary of a real document with\n"
+              "  fully synthetic text. Get the schema tag signed off first (README).",
               file=sys.stderr)
         return 2
 
-    cache = PKG_ROOT / cfg["data"].get("cache_dir", ".cache")
-    cap = int(tcfg["max_chars"])
-    min_chars = int(tcfg["min_chars"])
-    excl = set(tcfg.get("exclude_anchors") or [])
-    min_figs = int(tcfg.get("min_figures", 0))
-    max_records = ocfg.get("max_records")
+    # The corpus runner (cpt_corpus/run_full.py) drives every package with the same three
+    # overrides -- output.max_records / output.output_path / output.report_path -- so honour
+    # those names as aliases rather than making this package the one that needs a special case.
+    ocfg = cfg["output"]
+    if ocfg.get("output_path"):
+        ocfg["path"] = ocfg["output_path"]
+    if ocfg.get("report_path"):
+        ocfg["run_report"] = ocfg["report_path"]
+    global_cap = ocfg.get("max_records")
 
-    records: list[dict] = []
-    seen_text: dict = {}
-    for fam in cfg["data"]["families"]:
-        # ---- channels (fetched once per family, reused across editions) ----
-        chans = []
-        for ch in fam["channels"]:
-            series, title, ons_unit = load_series(fam, ch, cfg, cache)
-            if not series:
-                bump("channel_empty")
-                continue
-            c = dict(ch)
-            c["_series"] = series
-            c["_title"] = title
-            c["_ons_unit"] = ons_unit
-            chans.append(c)
-        if not chans:
-            bump("family_no_channels")
+    def _p(key):
+        v = cfg["data"][key]
+        return Path(v) if os.path.isabs(v) else PKG / v
+
+    census = json.load(open(_p("census")))
+    chans = json.load(open(_p("channels")))
+    ok = {r["family"]: r for r in chans if r.get("status") == "ok"}
+    shard_dir = PKG / "output" / "shards"
+    if shard_dir.exists():
+        shutil.rmtree(shard_dir)
+    shard_dir.mkdir(parents=True, exist_ok=True)
+
+    jobs = []
+    for key, eds in sorted(census.items(), key=lambda kv: -len(kv[1])):
+        path, fam = key.split("||")
+        if fam not in ok or (args.family and fam not in args.family):
             continue
-        print(f"[{fam['family']}] {len(chans)} channels, "
-              f"{min(len(c['_series']) for c in chans)}-{max(len(c['_series']) for c in chans)} months each")
+        if args.limit_editions:
+            eds = eds[:args.limit_editions]
+        jobs.append((ok[fam], eds, cfg, str(shard_dir / f"{fam}.jsonl")))
+    print(f"building {len(jobs)} families ({sum(len(j[1]) for j in jobs)} editions) "
+          f"with {args.workers} workers")
 
-        for edition in fam["editions"]:
-            m = re.match(r"^([a-z]+)(\d{4})$", edition)
-            if not m or m.group(1) not in MONTHS:
-                bump("bad_edition_slug")
-                continue
-            ref = f"{int(m.group(2)):04d}-{MONTHS.index(m.group(1)):02d}"
-            url = cfg["data"]["bulletin_url"].format(theme=fam["theme"], subtopic=fam["subtopic"],
-                                                     family=fam["family"], edition=edition)
-            try:
-                page = fetch(url, cache / "bulletins" / f"{fam['family']}_{edition}.html", cfg)
-            except Exception as e:
-                bump("bulletin_fetch_failed")
-                print(f"  ! {edition}: {e}")
-                continue
+    t0 = time.time()
+    results = []
+    if args.workers <= 1 or len(jobs) == 1:
+        for j in jobs:
+            results.append(_job(j))
+            print(f"  {results[-1]['family'][:44]:<44} recs={results[-1]['records']:>5}", flush=True)
+    else:
+        with ProcessPoolExecutor(max_workers=args.workers) as ex:
+            futs = {ex.submit(_job, j): j[0]["family"] for j in jobs}
+            for i, fu in enumerate(as_completed(futs), 1):
+                r = fu.result()
+                results.append(r)
+                print(f"[{i}/{len(jobs)}] {r['family'][:42]:<42} recs={r['records']:>5} "
+                      f"ev/rec={r.get('evidence_per_record')} "
+                      f"{'ERR ' + r['error'] if r.get('error') else ''}", flush=True)
 
-            # window the channels once per edition
-            wins, ts_keys = [], None
-            for c in chans:
-                vals, keys = window(c["_series"], ref, int(scfg["window_months"]))
-                if len(vals) < int(scfg["min_points"]) or any(v is None for v in vals):
-                    continue
-                wins.append((c, vals))
-                ts_keys = keys
-            if not wins:
-                bump("no_windowed_channels")
-                continue
+    agg = collections.Counter()
+    per_fam, errs = {}, {}
+    for r in results:
+        agg.update(r.get("counters") or {})
+        if r.get("error"):
+            errs[r["family"]] = r["error"]
+        per_fam[r["family"]] = {k: v for k, v in r.items()
+                                if k not in ("counters", "shard", "family", "error")}
 
-            secs = parse_sections(page)
-            bump("sections_seen", len(secs))
-            for sec in secs:
-                if sec["anchor"] in excl:
-                    bump("section_excluded_boilerplate")
-                    continue
-                paras = clean_paragraphs(sec["text"])
-                full = "\n\n".join(paras)
-                if n_figures(full) < min_figs:
-                    bump("section_too_few_figures")
-                    continue
-                span, sel_meta = select_span(paras, cap, tcfg.get("selector", "numeric_density"),
-                                            cfg, f"{fam['family']} {month_name(ref)} {ref[:4]}")
-                if len(span) < min_chars:
-                    bump("section_too_short")
-                    continue
+    gate = float(cfg["output"].get("min_evidence_per_record", 1.0))
+    keep, dropped = [], {}
+    for r in results:
+        if r["records"] and r.get("evidence_per_record", 0) >= gate:
+            keep.append(r)
+        elif r["records"]:
+            dropped[r["family"]] = r.get("evidence_per_record")
 
-                align, ev, n_fig, rej = verify(span, ref, [c for c, _ in wins],
-                                               tcfg.get("disqualifying_terms") or [])
-                for k, v in rej.items():
-                    bump(f"evidence_rejected_{k}", v)
-                flags, contra = superlative_flags(span, [c for c, _ in wins], ref)
-                bflags, bcontra = bounded_superlative_flags(
-                    span, [c for c, _ in wins], ref, tcfg.get("disqualifying_terms") or [])
-                flags = flags + bflags
-                contra = contra or bcontra
-                bump("superlative_flags_seen", len(flags))
-                if contra and tcfg.get("drop_on_superlative_contradiction"):
-                    bump("superlative_dropped")
-                    continue
-
-                # ---- near-duplicate gate -------------------------------------------------
-                # ONS reuses sentence templates month to month ("The 12-month rate for X was
-                # Y% in <month>, down from Z% in <prev>"). Measured on the demo: consecutive
-                # editions of the SAME section reach 0.806 similarity -- distinct (the numbers
-                # carry the information), but at ~130 editions per family the tail needs a
-                # ceiling or the corpus fills with near-copies.
-                sim_cap = tcfg.get("max_similarity")
-                if sim_cap is not None:
-                    prev_same = [p for p in seen_text.get((fam["family"], sec["anchor"]), [])]
-                    worst = max((difflib.SequenceMatcher(None, span, p).ratio()
-                                 for p in prev_same), default=0.0)
-                    if worst > float(sim_cap):
-                        bump("near_duplicate_dropped")
-                        continue
-                    seen_text.setdefault((fam["family"], sec["anchor"]), []).append(span)
-
-                text = f"{span}\n\n<ts></ts>"
-                timeseries = [{"values": [round(v, 4) for v in vals],
-                               "unit": c["unit"], "freq": scfg["freq"]} for c, vals in wins]
-                rec = emit_record(
-                    text=text,
-                    timeseries=timeseries,
-                    timestamps=ts_keys,
-                    alignment=align,
-                    license="cc-by-4.0",
-                    text_source="first_party_official",
-                    source=url,
-                    dataset="ons_statistical_bulletins",
-                    series_id=f"ons:{fam['family']}:{edition}:{sec['anchor']}",
-                    domain=fam.get("domain", "macro"),
-                    region=fam.get("region", "GB"),
-                    period_start=ts_keys[0],
-                    period_end=ts_keys[-1],
-                    meta={
-                        "true_license": "Open Government Licence v3.0 (OGL v3) -- ONS states OGL "
-                                        "v3 is interoperable with CC BY 4.0; attribution required. "
-                                        "Tagged cc-by-4.0 as closest schema fit.",
-                        "attribution": "Source: Office for National Statistics licensed under the "
-                                       "Open Government Licence v.3.0",
-                        "bulletin_family": fam["family"],
-                        "edition": edition,
-                        "reference_month": ref,
-                        "section_anchor": sec["anchor"],
-                        "section_title": sec["title"],
-                        "n_channels": len(wins),
-                        "n_points": len(ts_keys),
-                        "text_selection": sel_meta,
-                        "section_full_chars": len(full),
-                        "shipped_chars": len(span),
-                        "compression_ratio": round(len(full) / max(1, len(span)), 2),
-                        "n_figures_in_text": n_fig,
-                        "recite_evidence": ev,
-                        "evidence_rejected": rej,
-                        "superlative_flags": flags,
-                        "channels": [{"cdid": c["cdid"], "unit": c["unit"], "ons_title": c["_title"]}
-                                     for c, _ in wins],
-                        "vintage_caveat": "Series come from the CURRENT ONS vintage; the bulletin "
-                                          "quotes its contemporaneous vintage. ONS revises, so a "
-                                          "claim can drift from live data (same class as FHFA #59 "
-                                          "and ons_awe). A full historical run should archive "
-                                          "per-release vintages.",
-                    },
-                )
-                records.append(rec)
-                bump("recites" if align == "recites" else "describes")
-                if max_records and len(records) >= int(max_records):
-                    break
-            if max_records and len(records) >= int(max_records):
-                break
-        if max_records and len(records) >= int(max_records):
-            break
-
-    # ---- per-family evidence yield: the per-family ACCEPTANCE GATE ----------------------
-    # Measured on this build: consumerpriceinflation 2.95 evidence claims/record (channels are
-    # the right variants) vs retailsales 0.25 (two of three CDIDs are the wrong variant of the
-    # figure the prose quotes). A family whose ev/rec is near zero has a channel-mapping
-    # problem, not a text problem -- fix the CDIDs before scaling that family.
-    per_fam: dict = {}
-    for r in records:
-        f = r["meta"]["bulletin_family"]
-        d = per_fam.setdefault(f, {"records": 0, "recites": 0, "evidence_claims": 0})
-        d["records"] += 1
-        d["recites"] += 1 if r.get("alignment") == "recites" else 0
-        d["evidence_claims"] += len(r["meta"]["recite_evidence"])
-    for f, d in per_fam.items():
-        d["evidence_per_record"] = round(d["evidence_claims"] / max(1, d["records"]), 2)
-        d["channels_look_verified"] = d["evidence_per_record"] >= 1.0
-    _stats["per_family"] = per_fam
-    _stats["emitted"] = len(records)
-    report = {"dataset": "ons_statistical_bulletins", "stats": _stats,
-              "config_snapshot": {"data": {k: v for k, v in cfg["data"].items()},
-                                  "series": scfg, "text": tcfg, "output": ocfg}}
-    print(json.dumps(_stats, indent=2))
+    n_kept = sum(r["records"] for r in keep)
+    st = {
+        "families_built": len([r for r in results if r["records"]]),
+        "families_shipped": len(keep),
+        "families_below_gate": dropped,
+        "records_before_gate": sum(r["records"] for r in results),
+        "records_shipped": n_kept,
+        "recites": sum(r.get("recites", 0) for r in keep),
+        "evidence_claims": sum(r.get("evidence_claims", 0) for r in keep),
+        "editions_parsed": sum(r.get("editions_parsed", 0) for r in keep),
+        "counters": dict(agg), "errors": errs,
+        "elapsed_s": round(time.time() - t0, 1), "fetch": stats(),
+    }
+    st["evidence_per_record"] = round(st["evidence_claims"] / max(1, n_kept), 2)
+    st["recites_share"] = round(st["recites"] / max(1, n_kept), 3)
+    print(json.dumps({k: v for k, v in st.items() if k != "counters"}, indent=2)[:3000])
+    print("counters:", json.dumps(dict(agg), indent=1)[:2000])
     if args.dry_run:
-        print("(dry run -- nothing written)")
+        print("(dry run -- shards written, nothing concatenated)")
         return 0
 
-    out = PKG_ROOT / ocfg["path"]
+    outp = ocfg["path"]
+    out = Path(outp) if os.path.isabs(outp) else PKG / outp
     out.parent.mkdir(parents=True, exist_ok=True)
+    written = 0
     with out.open("w") as fh:
-        for r in records:
-            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
-    (PKG_ROOT / ocfg["run_report"]).write_text(json.dumps(report, indent=2))
-    sp = PKG_ROOT / ocfg["samples_path"]
+        for r in sorted(keep, key=lambda r: -r["records"]):
+            with open(r["shard"]) as sh:
+                for line in sh:
+                    if global_cap and written >= int(global_cap):
+                        break
+                    fh.write(line)
+                    written += 1
+    if global_cap:
+        st["records_shipped"] = written
+        st["global_cap"] = int(global_cap)
+    repp = ocfg["run_report"]
+    (Path(repp) if os.path.isabs(repp) else PKG / repp).write_text(json.dumps(
+        {"dataset": "ons_statistical_bulletins", "stats": st, "per_family": per_fam,
+         "config_snapshot": cfg}, indent=1))
+    sp = PKG / cfg["output"]["samples_path"]
     sp.parent.mkdir(parents=True, exist_ok=True)
-    with sp.open("w") as fh:
-        for r in records[:3]:
-            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
-    print(f"wrote {len(records)} records -> {out}")
+    with out.open() as src, sp.open("w") as dst:
+        for i, line in enumerate(src):
+            if i >= 5:
+                break
+            dst.write(line)
+    print(f"wrote {written} records -> {out}")
     return 0
 
 

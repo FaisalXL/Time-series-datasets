@@ -1,3 +1,8 @@
 .cache/
 __pycache__/
 *.pyc
+# per-worker build shards; the concatenated output.jsonl is the artifact
+output/shards/
+# crawl/discovery stdout captures (progress only; run_report.json is the record)
+output/*.out
+output/ons_bulletins_cpt.jsonl
