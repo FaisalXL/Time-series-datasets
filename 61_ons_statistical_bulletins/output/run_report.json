@@ -1,282 +1,171 @@
 {
-  "dataset": "ons_statistical_bulletins",
-  "stats": {
-    "sections_seen": 54,
-    "evidence_rejected_disqualified_clause": 98,
-    "evidence_rejected_no_keyword": 62,
-    "evidence_rejected_value_mismatch": 46,
-    "superlative_flags_seen": 11,
-    "recites": 18,
-    "describes": 10,
-    "section_too_few_figures": 6,
-    "section_excluded_boilerplate": 20,
-    "per_family": {
-      "consumerpriceinflation": {
-        "records": 20,
-        "recites": 16,
-        "evidence_claims": 59,
-        "evidence_per_record": 2.95,
-        "channels_look_verified": true
-      },
-      "retailsales": {
-        "records": 8,
-        "recites": 2,
-        "evidence_claims": 2,
-        "evidence_per_record": 0.25,
-        "channels_look_verified": false
-      }
-    },
-    "emitted": 28
+ "dataset": "ons_statistical_bulletins",
+ "stats": {
+  "families_built": 1,
+  "families_shipped": 1,
+  "families_below_gate": {},
+  "records_before_gate": 1014,
+  "records_shipped": 1014,
+  "recites": 388,
+  "evidence_claims": 1267,
+  "editions_parsed": 136,
+  "counters": {
+   "slug_matches_dateline": 128,
+   "editions_parsed": 136,
+   "anchor_ref": 136,
+   "chunks_seen": 1634,
+   "rejected_not_named": 4981,
+   "rejected_value_mismatch": 1216,
+   "rejected_no_data_at_month": 2,
+   "rejected_ambiguous_multi_channel": 2,
+   "superlative_flags": 358,
+   "superlative_contradicted": 2,
+   "recites": 388,
+   "describes": 626,
+   "chunk_too_few_figures": 511,
+   "section_excluded_boilerplate": 360,
+   "near_duplicate_dropped": 59,
+   "chunk_too_short": 49,
+   "slug_encodes_no_month": 8,
+   "exact_duplicate_dropped": 1,
+   "section_no_prose": 10
   },
-  "config_snapshot": {
-    "data": {
-      "series_url": "https://www.ons.gov.uk/{theme}/{subtopic}/timeseries/{cdid}/{dataset}/data",
-      "bulletin_url": "https://www.ons.gov.uk/{theme}/{subtopic}/bulletins/{family}/{edition}",
-      "previous_releases_url": "https://www.ons.gov.uk/{theme}/{subtopic}/bulletins/{family}/previousreleases",
-      "cache_dir": ".cache",
-      "user_agent": "CPT-dataset-research faisal@usc.edu",
-      "timeout_s": 120,
-      "retries": 4,
-      "min_interval_s": 3.0,
-      "families": [
-        {
-          "family": "consumerpriceinflation",
-          "theme": "economy",
-          "subtopic": "inflationandpriceindices",
-          "dataset": "mm23",
-          "domain": "macro",
-          "region": "GB",
-          "slug_is_reference_month": true,
-          "channels": [
-            {
-              "cdid": "l55o",
-              "unit": "cpih_annual_rate_pct",
-              "keywords": [
-                "CPIH"
-              ],
-              "monthly_rate": false
-            },
-            {
-              "cdid": "d7g7",
-              "unit": "cpi_annual_rate_pct",
-              "keywords": [
-                "CPI"
-              ],
-              "monthly_rate": false
-            },
-            {
-              "cdid": "d7oe",
-              "unit": "cpi_monthly_rate_pct",
-              "keywords": [
-                "CPI"
-              ],
-              "monthly_rate": true
-            },
-            {
-              "cdid": "d7bt",
-              "unit": "cpi_index_2015_100",
-              "keywords": [
-                "CPI"
-              ],
-              "index": true
-            },
-            {
-              "cdid": "l522",
-              "unit": "cpih_index_2015_100",
-              "keywords": [
-                "CPIH"
-              ],
-              "index": true
-            },
-            {
-              "cdid": "chaw",
-              "unit": "rpi_all_items_index_1987_100",
-              "keywords": [
-                "RPI"
-              ],
-              "index": true
-            },
-            {
-              "cdid": "d7g8",
-              "unit": "cpi_annual_rate_food_nonalc_pct",
-              "keywords": [
-                "food",
-                "non-alcoholic"
-              ]
-            },
-            {
-              "cdid": "d7g9",
-              "unit": "cpi_annual_rate_alcohol_tobacco_pct",
-              "keywords": [
-                "alcohol",
-                "tobacco"
-              ]
-            },
-            {
-              "cdid": "d7ga",
-              "unit": "cpi_annual_rate_clothing_footwear_pct",
-              "keywords": [
-                "clothing",
-                "footwear"
-              ]
-            },
-            {
-              "cdid": "d7gb",
-              "unit": "cpi_annual_rate_housing_water_fuels_pct",
-              "keywords": [
-                "housing",
-                "water",
-                "fuels"
-              ]
-            },
-            {
-              "cdid": "d7gc",
-              "unit": "cpi_annual_rate_furniture_household_pct",
-              "keywords": [
-                "furniture",
-                "household equipment"
-              ]
-            },
-            {
-              "cdid": "d7gd",
-              "unit": "cpi_annual_rate_health_pct",
-              "keywords": [
-                "health"
-              ]
-            },
-            {
-              "cdid": "d7ge",
-              "unit": "cpi_annual_rate_transport_pct",
-              "keywords": [
-                "transport"
-              ]
-            },
-            {
-              "cdid": "d7gf",
-              "unit": "cpi_annual_rate_communication_pct",
-              "keywords": [
-                "communication"
-              ]
-            },
-            {
-              "cdid": "d7gg",
-              "unit": "cpi_annual_rate_recreation_culture_pct",
-              "keywords": [
-                "recreation",
-                "culture"
-              ]
-            },
-            {
-              "cdid": "d7gh",
-              "unit": "cpi_annual_rate_education_pct",
-              "keywords": [
-                "education"
-              ]
-            },
-            {
-              "cdid": "d7gi",
-              "unit": "cpi_annual_rate_restaurants_hotels_pct",
-              "keywords": [
-                "restaurant",
-                "hotel",
-                "cafe"
-              ]
-            },
-            {
-              "cdid": "d7gj",
-              "unit": "cpi_annual_rate_misc_goods_services_pct",
-              "keywords": [
-                "miscellaneous"
-              ]
-            }
-          ],
-          "editions": [
-            "june2026",
-            "may2026",
-            "april2026",
-            "march2026"
-          ]
-        },
-        {
-          "family": "retailsales",
-          "theme": "businessindustryandtrade",
-          "subtopic": "retailindustry",
-          "dataset": "drsi",
-          "domain": "macro",
-          "region": "GB",
-          "slug_is_reference_month": true,
-          "channels": [
-            {
-              "cdid": "j5ec",
-              "unit": "rsi_all_retail_incl_fuel_mom_pct",
-              "keywords": [
-                "retail sales",
-                "retail"
-              ]
-            },
-            {
-              "cdid": "j4mc",
-              "unit": "internet_sales_share_of_retail_pct",
-              "keywords": [
-                "internet sales",
-                "online"
-              ]
-            },
-            {
-              "cdid": "eafv",
-              "unit": "rsi_household_goods_stores_value_nsa_index",
-              "keywords": [
-                "household goods"
-              ]
-            }
-          ],
-          "editions": [
-            "june2026",
-            "may2026"
-          ]
-        }
-      ]
+  "errors": {},
+  "elapsed_s": 10.7,
+  "fetch": {
+   "nlive": 0,
+   "nhit": 136,
+   "n429": 0,
+   "n404": 0,
+   "nfail": 0
+  },
+  "evidence_per_record": 1.25,
+  "recites_share": 0.383
+ },
+ "per_family": {
+  "consumerpriceinflation": {
+   "records": 1014,
+   "recites": 388,
+   "evidence_claims": 1267,
+   "evidence_per_record": 1.25,
+   "editions_parsed": 136,
+   "similarity_p95": 0.956,
+   "similarity_max": 1.0,
+   "evidence_by_edition_year": {
+    "2015": {
+     "records": 38,
+     "evidence": 22,
+     "typed": 187,
+     "evidence_per_record": 0.58
     },
-    "series": {
-      "freq": "1M",
-      "window_months": 36,
-      "min_points": 32
+    "2016": {
+     "records": 73,
+     "evidence": 63,
+     "typed": 331,
+     "evidence_per_record": 0.86
     },
-    "text": {
-      "max_chars": 2000,
-      "min_chars": 300,
-      "selector": "numeric_density",
-      "abstractive_summary": false,
-      "llm_model": "claude-sonnet-5",
-      "exclude_anchors": [
-        "glossary",
-        "data-sources-and-quality",
-        "related-links",
-        "cite-this-statistical-bulletin",
-        "measuring-the-data",
-        "strengths-and-limitations",
-        "future-developments"
-      ],
-      "min_figures": 2,
-      "disqualifying_terms": [
-        "core",
-        "excluding",
-        "goods",
-        "services",
-        "contribution",
-        "contributions",
-        "seasonally adjusted",
-        "annual average",
-        "equivalent rent"
-      ],
-      "max_similarity": 0.93,
-      "drop_on_superlative_contradiction": false
+    "2017": {
+     "records": 50,
+     "evidence": 58,
+     "typed": 207,
+     "evidence_per_record": 1.16
     },
-    "output": {
-      "path": "output/ons_bulletins_cpt.jsonl",
-      "run_report": "output/run_report.json",
-      "samples_path": "samples/example_output.jsonl",
-      "max_records": null
+    "2018": {
+     "records": 52,
+     "evidence": 58,
+     "typed": 196,
+     "evidence_per_record": 1.12
+    },
+    "2019": {
+     "records": 55,
+     "evidence": 71,
+     "typed": 290,
+     "evidence_per_record": 1.29
+    },
+    "2020": {
+     "records": 97,
+     "evidence": 98,
+     "typed": 630,
+     "evidence_per_record": 1.01
+    },
+    "2021": {
+     "records": 125,
+     "evidence": 106,
+     "typed": 842,
+     "evidence_per_record": 0.85
+    },
+    "2022": {
+     "records": 130,
+     "evidence": 123,
+     "typed": 1086,
+     "evidence_per_record": 0.95
+    },
+    "2023": {
+     "records": 121,
+     "evidence": 214,
+     "typed": 1131,
+     "evidence_per_record": 1.77
+    },
+    "2024": {
+     "records": 107,
+     "evidence": 176,
+     "typed": 1088,
+     "evidence_per_record": 1.64
+    },
+    "2025": {
+     "records": 108,
+     "evidence": 191,
+     "typed": 1003,
+     "evidence_per_record": 1.77
+    },
+    "2026": {
+     "records": 58,
+     "evidence": 87,
+     "typed": 477,
+     "evidence_per_record": 1.5
     }
+   }
   }
+ },
+ "config_snapshot": {
+  "data": {
+   "census": "census.json",
+   "channels": "channels.json"
+  },
+  "series": {
+   "freq": "1M",
+   "window_months": 36,
+   "min_points": 24
+  },
+  "text": {
+   "max_chars": 2000,
+   "min_chars": 300,
+   "abstractive_summary": false,
+   "exclude_anchors": [
+    "glossary",
+    "data-sources-and-quality",
+    "related-links",
+    "cite-this-statistical-bulletin",
+    "measuring-the-data",
+    "strengths-and-limitations",
+    "future-developments",
+    "collaboration",
+    "related-publications",
+    "authors",
+    "acknowledgements",
+    "contact-details",
+    "notes"
+   ],
+   "min_figures": 2,
+   "max_similarity": 0.93,
+   "drop_on_superlative_contradiction": false
+  },
+  "output": {
+   "path": "output/ons_bulletins_cpt.jsonl",
+   "run_report": "output/run_report.json",
+   "samples_path": "samples/example_output.jsonl",
+   "max_records_per_family": null,
+   "min_evidence_per_record": 1.0
+  }
+ }
 }
