@@ -51,9 +51,10 @@
           "label": "NHL"
         }
       ],
-      "scoreboard_url": "https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}",
-      "summary_url": "https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={event_id}",
+      "scoreboard_url": "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}",
+      "summary_url": "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={event_id}",
       "discovery": {
+        "event_ids_file": null,
         "start_date": "20260101",
         "end_date": "20260320",
         "step_days": 1

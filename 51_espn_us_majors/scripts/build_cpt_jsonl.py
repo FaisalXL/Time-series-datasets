@@ -134,8 +134,33 @@ def date_range(start: str, end: str, step_days: int) -> List[str]:
 
 
 def discover_events(league_cfg: dict, d: dict, cache: Path) -> List[str]:
-    """Walk the configured date range for one league's scoreboard; return finished event ids."""
+    """Finished event ids for one league.
+
+    Prefers a pre-built id list (`discovery.event_ids_file`) over walking the scoreboard
+    day by day. The walk costs one request per day per league — 4,425 days x 3 leagues =
+    13,275 requests, ~3.4 h measured — and it all happens before a single record is
+    emitted. The same enumeration takes 85 s with monthly range queries, but ONLY with
+    `&limit=1000`: without it the range endpoint silently truncates at 100 events and
+    still returns HTTP 200 (NBA Jan 2024 gives 100 of 233 real games), so the fast path is
+    a pre-built file rather than a range walk bolted in here.
+
+    File format: {event_id: [league, "YYYY-MM", status], ...} — as written by the census.
+    """
     sport, league = league_cfg["sport"], league_cfg["league"]
+    ids_file = (d.get("discovery") or {}).get("event_ids_file")
+    if ids_file:
+        p = Path(ids_file)
+        if not p.is_absolute():
+            p = ROOT / p
+        if not p.exists():
+            raise SystemExit(f"discovery.event_ids_file not found: {p}")
+        uni = json.loads(p.read_text())
+        picked = [eid for eid, v in uni.items()
+                  if v[0] == league and v[2] == "STATUS_FINAL"]
+        # stable order so a capped run is reproducible; note it is id order, which is
+        # roughly chronological, so `max_records` takes the OLDEST games, not a sample
+        return sorted(picked, key=lambda s: (len(s), s))
+
     ids: List[str] = []
     for date in date_range(d["discovery"]["start_date"], d["discovery"]["end_date"], int(d["discovery"]["step_days"])):
         url = d["scoreboard_url"].format(sport=sport, league=league, date=date)

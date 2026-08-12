@@ -75,12 +75,37 @@
 - **Etiquette:** every fetch (scoreboard + summary) is rate-limited (`request_delay_s`, ~2–3 req/s) and cached per date/event under `.cache/`, so reruns don't re-hit ESPN.
 - **Environment:** stdlib only for the core; PyYAML only to read config. Works on Python 3.9+.
 
-## Scaling up
+## Scaling up — done, 2026-08-12
 
-The demo's 50-record, 3-league, 3-month window is deliberately narrow. To move toward the verified ~29,000-record ceiling:
-1. Widen `data.discovery.start_date`/`end_date` per league to that league's actual season windows back to 2014-15 (NBA/NHL: Oct–Jun; NFL: Sept–Feb) — the current code accepts one shared window for simplicity, but a full build should probably run leagues on separate, season-aware windows rather than one continuous multi-year walk (fewer wasted off-season scoreboard calls).
-2. Raise `output.max_records` — but **do not commit or distribute** a full-scale build until the license question above is resolved.
-3. Consider `min_periods` per league if extending to sports with different OT/shootout conventions (already handled for NHL's regular shootout case via `score_mismatch`).
+**Built: 33,266 records, 33,266/33,266 `validate.py --strict`, 0 warnings.** The bank lives in
+corpus storage, not here: `/data/defu/cpt_corpus/packages/51_espn_us_majors/output.jsonl`
+(234 MB). This directory keeps the builder and the 50-record demo.
+
+The ~29,000 ceiling this section used to aim at was **17% too low**. Measured instead of
+projected: **36,659 finished games** counted across NBA+NFL+NHL for 2014-07 → 2026-08
+(NBA 15,699 / NFL 3,939 / NHL 17,021), of which **92.7%** carry a ≥400-char recap.
+
+Use the sanctioned runner for a rebuild — it redirects output into the corpus tree, then gates
+and records it:
+
+```bash
+python3.11 /data/defu/cpt_corpus/run_full.py 51_espn_us_majors
+```
+
+Two things that made the full run practical:
+
+1. **`discovery.event_ids_file`** — a pre-built event list. Discovery drops from **3.4 h to
+   0.2 s**, because the day-by-day scoreboard walk is 4,425 days × 3 leagues = 13,275 requests
+   and all of it happens before a single record is emitted. Season-aware per-league windows
+   (the old suggestion below) would have trimmed that; skipping the walk removes it.
+2. **`&limit=1000` on any range query.** Without it the scoreboard endpoint silently truncates
+   at 100 events and still returns HTTP 200 — NBA January 2024 returns 100 of 233 real games.
+   A 57% undercount that looks like a successful call.
+
+Still open: `min_periods` per league if extending to sports with other OT/shootout conventions
+(NHL's regular shootout case is already handled via `score_mismatch`). And **the licence
+question above is unchanged** — 33,101 of the 33,266 records are AP wire copy, so nothing here
+may be distributed until that is cleared.
 
 ## Run
 
@@ -88,7 +113,15 @@ The demo's 50-record, 3-league, 3-month window is deliberately narrow. To move t
 pip install -r requirements.txt
 python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=5   # smoke test
 python scripts/build_cpt_jsonl.py                                        # demo (50, round-robin across leagues)
+
+# full scale -> corpus storage, gated + recorded (NOT into this repo)
+python3.11 /data/defu/cpt_corpus/run_full.py 51_espn_us_majors
 ```
+
+> ⚠️ `--set` cannot set the discovery dates: the shared `coerce()` helper turns `20141201`
+> into an int because it matches `^-?\d+$`, and `date_range()` calls `strptime` on it, so
+> `--set data.discovery.start_date=...` dies with `TypeError`. Edit a config copy instead.
+
 Fetches real AP recaps via ESPN's API — mind the license note before scaling past the demo or sharing output.
 
 **Output:** `output/espn_us_majors_cpt.jsonl` + `output/run_report.json`; `samples/example_output.jsonl` = first 3 records. Committed as a **50-record demo for review** (not a full build). `.cache/` (git-ignored) holds per-date scoreboard responses and per-event summaries.

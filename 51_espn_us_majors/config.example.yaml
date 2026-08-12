@@ -26,20 +26,43 @@
 
 data:
   # ESPN's own site API (not a bulk archive — no equivalent of Cricsheet's zip).
-  # Same parent host Cricket already uses (site.api.espn.com); each sport is its
-  # own path segment. Scoreboard resolves by date; summary resolves by event id.
+  # Same parent host Cricket uses; each sport is its own path segment. Scoreboard
+  # resolves by date; summary resolves by event id.
+  #
+  # 2026-08-12: host moved. site.api.espn.com now returns 403 (Akamai) for every UA
+  # including browser ones — verified against this package's own NFL scoreboard call,
+  # not just cricket's. site.web.api.espn.com serves the identical payload and accepts
+  # our identifying research UA, so no spoofing. ⚠️ Everything this package claims about
+  # coverage and scale was scouted through the dead host and is therefore UNVERIFIED —
+  # see #45, whose ceiling was wrong by 14× until it was actually measured.
   leagues:
     - {sport: "basketball", league: "nba", label: "NBA"}
     - {sport: "football", league: "nfl", label: "NFL"}
     - {sport: "hockey", league: "nhl", label: "NHL"}
 
-  scoreboard_url: "https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}"
-  summary_url: "https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={event_id}"
+  scoreboard_url: "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}"
+  summary_url: "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={event_id}"
 
-  # Date-range to WALK for event discovery (demo: a short recent window is enough
-  # to fill max_records across 3 leagues; the full ~29k-record universe needs
-  # 2014-15-season -> present per league — see README "Scaling up").
+  # Event discovery. Two paths:
+  #
+  #  (a) event_ids_file — a pre-built id list. Set this for full-scale runs. Discovery
+  #      becomes instant (0.2 s vs 3.4 h) because it skips the scoreboard walk entirely.
+  #      Format: {event_id: [league, "YYYY-MM", status], ...}. Build one with a monthly
+  #      range query per league — but ONLY with `&limit=1000`: without it the range
+  #      endpoint silently truncates at 100 events and still returns HTTP 200 (NBA
+  #      Jan 2024 returns 100 of 233 real games), i.e. a 57% undercount that looks like
+  #      a successful call. With the limit it reproduces a day-by-day walk exactly.
+  #      Measured universe 2014-07 -> 2026-08: 36,659 finished games
+  #      (NBA 15,699 / NFL 3,939 / NHL 17,021).
+  #
+  #  (b) start_date/end_date — the day-by-day scoreboard walk. Fine for a demo window;
+  #      at full scale it is 4,425 days x 3 leagues = 13,275 requests (~3.4 h) spent
+  #      before a single record is emitted.
+  #
+  # ⚠️ A capped run (`max_records`) takes ids in sorted order = roughly OLDEST first, and
+  #    recap coverage is era-skewed, so a capped build is NOT a random sample.
   discovery:
+    event_ids_file: null     # e.g. ".cache/event_universe.json" — takes precedence when set
     start_date: "20260101"   # YYYYMMDD, inclusive -- Jan covers NFL playoffs too
     end_date: "20260320"     # YYYYMMDD, inclusive -- through mid NBA/NHL season
     step_days: 1
