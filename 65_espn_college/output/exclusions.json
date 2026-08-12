@@ -1,0 +1,47 @@
+[
+ {
+  "series_id": "espn_womens-college-basketball_323220096",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_323220096"
+ },
+ {
+  "series_id": "espn_womens-college-basketball_323290221",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_323290221"
+ },
+ {
+  "series_id": "espn_womens-college-basketball_323290153",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_323290153"
+ },
+ {
+  "series_id": "espn_womens-college-basketball_323360275",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_323360275"
+ },
+ {
+  "series_id": "espn_womens-college-basketball_323360204",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_323360204"
+ },
+ {
+  "series_id": "espn_womens-college-basketball_323360058",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_323360058"
+ },
+ {
+  "series_id": "espn_womens-college-basketball_323640127",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_323640127"
+ },
+ {
+  "series_id": "espn_womens-college-basketball_330062032",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_330062032"
+ },
+ {
+  "series_id": "espn_college-football_400548101",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_401752668"
+ }
+]

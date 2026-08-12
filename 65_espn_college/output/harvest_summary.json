@@ -1,0 +1,104 @@
+{
+ "shards": 29,
+ "records": 16322,
+ "series_id_unique": true,
+ "duplicate_series_ids": 0,
+ "distinct_texts": 16313,
+ "duplicate_texts": 9,
+ "distinct_text_share": 0.99945,
+ "final_anchor_all_records": 0.98762,
+ "duplicate_examples": [],
+ "by_league": {
+  "CFB": 11060,
+  "FCS": 4749,
+  "WCB": 513
+ },
+ "by_league_season": {
+  "CFB_2012": 861,
+  "CFB_2013": 851,
+  "CFB_2014": 872,
+  "CFB_2015": 906,
+  "CFB_2016": 934,
+  "CFB_2017": 940,
+  "CFB_2018": 908,
+  "CFB_2019": 952,
+  "CFB_2020": 256,
+  "CFB_2021": 604,
+  "CFB_2022": 637,
+  "CFB_2023": 719,
+  "CFB_2024": 812,
+  "CFB_2025": 808,
+  "FCS_2012": 336,
+  "FCS_2013": 437,
+  "FCS_2014": 421,
+  "FCS_2015": 446,
+  "FCS_2016": 448,
+  "FCS_2017": 479,
+  "FCS_2018": 427,
+  "FCS_2019": 517,
+  "FCS_2020": 15,
+  "FCS_2021": 10,
+  "FCS_2022": 10,
+  "FCS_2023": 254,
+  "FCS_2024": 427,
+  "FCS_2025": 522,
+  "WCB_2012": 513
+ },
+ "report_sources": {
+  "Associated Press": 11345,
+  "AP": 4977
+ },
+ "series_healthy": 16322,
+ "series_unhealthy": 0,
+ "health_problems": {},
+ "health_examples": [],
+ "n_plays": {
+  "min": 27,
+  "p50": 181,
+  "p99": 355,
+  "max": 497
+ },
+ "report_chars": {
+  "min": 472,
+  "p50": 1535,
+  "p99": 5723,
+  "max": 12440
+ },
+ "score_fix_frac": {
+  "p50": 0,
+  "p90": 0.0225,
+  "p99": 0.1429,
+  "max": 0.25
+ },
+ "alignment": {
+  "CFB": {
+   "sampled": 2500,
+   "final_pair_real": 0.9908,
+   "final_pair_control": 0.0046,
+   "final_pair_lift": 215.0,
+   "final_pair_z": 728.1,
+   "halftime_real": 0.2056,
+   "halftime_control": 0.0502
+  },
+  "FCS": {
+   "sampled": 2500,
+   "final_pair_real": 0.9896,
+   "final_pair_control": 0.0039,
+   "final_pair_lift": 253.1,
+   "final_pair_z": 789.7,
+   "halftime_real": 0.1676,
+   "halftime_control": 0.0423
+  },
+  "WCB": {
+   "sampled": 513,
+   "final_pair_real": 0.9805,
+   "final_pair_control": 0.0019,
+   "final_pair_lift": 503.0,
+   "final_pair_z": 502.5,
+   "halftime_real": 0.616,
+   "halftime_control": 0.0015
+  }
+ },
+ "shared_text_exclusions": 9,
+ "shared_text_unresolvable_groups": 0
+}
