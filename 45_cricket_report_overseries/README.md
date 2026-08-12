@@ -3,8 +3,10 @@
 > **Status: Built at full scale, schema-v1 clean, quarantined on licence.** One record =
 > **one innings** (limited-overs) or **one match** (Tests/multi-day) — the real **ESPNcricinfo
 > match report** paired with the **per-over series** it narrates. `text_quality: "real"` always;
-> matches with no recap are dropped, never synthesized. **Built 2026-08-11: 20,678 records,
-> 20,678/20,678 `--strict`, 85 MB, 5,203,680 datapoints, 99.99% distinct texts.**
+> matches with no recap are dropped, never synthesized. **Built: 20,678 records,
+> 20,678/20,678 `--strict`, 190 MB, 31,518,835 datapoints, 99.99% distinct texts.**
+> Series are at the **source's own granularity — one step per delivery** (`1play`).
+> The bank lives in `/data/defu/cpt_corpus/packages/45_cricket_report_overseries/`.
 >
 > **⚠️ Licence:** the report prose is **copyrighted ESPNcricinfo editorial**, tagged
 > `proprietary-review` = *excluded from any release until cleared* (`SCHEMA.md` §6). The
@@ -108,25 +110,15 @@ Two notation traps, both handled: ESPN uses **both** score conventions — Engli
 figures ("Lyon 3-48") superficially look like scores, but admitting them injected 8 false
 positives per 874 matches, so the hyphen form is excluded.
 
-## ⚠️ Exposure: the window floor
+## The window floor: no longer applicable
 
-A T20 innings is **exactly 20 per-over steps**, below the 32-step floor used elsewhere in the
-corpus, and T20 is 56% of the package. As built, surviving records by floor: **12 → 20,678 ·
-16 → 19,987 · 20 → 17,231 · 24 → 7,239 · 32 → 6,885** — a 3× swing on the same open decision
-that gates `58_fas_gain_attache`.
-
-**This is removable, and measured (2026-08-12).** A T20 innings is 20 overs but ~125
-deliveries. Switching *limited-overs innings only* to per-delivery series — leaving `TEST`/`MDM`
-per-match records on `1over`, where they already run ~360 steps — puts **20,675 of 20,678**
-records above floor 32: median **125** steps, max **446**, nothing above 600, at 15.1M
-datapoints (2.9×, from 5.2M). Per-delivery applied to *everything* would instead turn a whole
-Test match into a 2,695-step series at 5.3× the datapoints, which is why it is targeted.
-
-It needs no schema change (`1play` is already in `validate.py`'s `FREQ_RE`), does not touch the
-text, and leaves `cumulative_runs` ending on the total the prose states — so the `recites` tier
-and the permutation control carry over (to be re-confirmed on the rebuild, not assumed).
-The remaining fallback if per-delivery is unwanted: set `shape.two_innings_mode: per_match` and
-the package rebuilds at ~12k records with every format clearing 32 on per-over series.
+Aggregating to overs put a T20 innings at exactly 20 steps, below the 32-step floor used
+elsewhere in the corpus, and T20 is 56% of the package — so this package used to swing 3× on
+that open decision (**6,885** vs **19,987** records surviving floor 32). Keeping the source's
+delivery granularity ends that: **all 20,678 records clear every candidate floor
+(12/16/20/24/32).** `#58` is still exposed to the decision — its PSD balance sheets are 3–14
+*annual* points with no finer granularity to fall back on, which is the difference between
+the two cases.
 
 ---
 
@@ -140,19 +132,30 @@ the package rebuilds at ~12k records with every format clearing 32 on per-over s
 | **`text_quality`** | `"real"` — journalist prose, bylines like Sidharth Monga. Matches with no usable recap are **dropped**. |
 | **Never use `news[]`** | The same payload's `news[]` array is carrier-league contaminated with generic articles about unrelated matches. Only `article` is match-specific. |
 
-#### 📈 Time series — Cricsheet per-over aggregation
+#### 📈 Time series — Cricsheet ball-by-ball (source granularity)
 
 | | |
 |---|---|
 | **Source** | [Cricsheet](https://cricsheet.org/downloads/) `all_csv2.zip` (**ODC-BY 1.0**), 120 MB. Each match = `{id}.csv` (one row per delivery) + `{id}_info.csv`. **Stdlib only** — `zipfile`/`csv`. |
-| **Cadence** | `1over` — intra-match game clock (over count), not wall clock |
+| **Cadence** | `1play` — one step per delivery bowled, the unit Cricsheet ships. Intra-match game clock, not wall clock. |
 
 | Channel (`unit`) | Meaning |
 |---|---|
-| `runs_per_over` | Runs scored in each over (`runs_off_bat + extras`) |
-| `wickets_per_over` | Wickets falling in each over |
-| `cumulative_runs` | Running innings total at over end |
-| `run_rate` | Cumulative runs ÷ overs completed |
+| `runs_per_ball` | Runs off each delivery (`runs_off_bat + extras`) |
+| `wickets_per_ball` | 1 where a delivery took a wicket, else 0 |
+| `cumulative_runs` | Running innings total after each delivery |
+| `run_rate` | Runs per **over** at that point (`cumulative ÷ (balls/6)`) — kept in overs because that is the unit the reports talk in |
+
+> **Why per delivery.** Cricsheet's archive is one CSV row per ball (`ball` = 0.1, 0.2, …).
+> The first version of this builder aggregated 6:1 into overs with
+> `over = int(float(ball))` — a transform of our own, not something the source did. Keeping
+> the native granularity also dissolved a dependency this package should never have had:
+> aggregating put a T20 innings at exactly 20 steps, under the 32-step window floor used
+> elsewhere, so the package swung 3× on that open decision. Per-over is still available
+> (`shape.series_granularity: per_over`) and re-derivable from the archive at any time.
+> ⚠️ Consequence: whole-match Test/MDM records now run **median 1,779 / max 2,695** steps —
+> by a wide margin the longest series in the corpus (next is NWPS at 481). Nothing in the
+> schema caps length, but `SCHEMA.md` §11 lists it as an open question.
 
 Per-**match** records (TEST/MDM) carry the same channels concatenated across innings, with
 `cumulative_runs_in_innings` / `run_rate_in_innings` resetting at each innings boundary plus an
@@ -174,7 +177,9 @@ Per-**match** records (TEST/MDM) carry the same channels concatenated across inn
 > for 3**… Russell would go on to add a 19th to his tally when ending the innings with Pat
 > Cummins' wicket in the 19th over."*
 
-**📈 Series** — Cricsheet per-over, SRH innings
+**📈 Series** — the same innings, shown **aggregated to overs** for legibility. Records now
+carry the per-delivery form (19 overs = 121 deliveries here); this is that series bucketed by
+over, and the two agree on every over-end total.
 ```json
 [
   {"values": [3, 3, 9, 6, 2, 17, 7, 4, 7, 3, 9, 2, 10, 8, 0, 8, 10, 5, 0], "unit": "runs_per_over", "freq": "1over"},

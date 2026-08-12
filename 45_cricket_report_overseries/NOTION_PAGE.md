@@ -158,13 +158,15 @@ flowchart LR
    records is median 0%, mean 5.8%**, and 99.99% of texts are distinct — against 2.24×
    duplication in the old shape. (An earlier draft of this page estimated "~2 sentences of
    overlap"; the measured figure is lower and replaces it.)
-3. **T20 series length vs the window floor — no longer an open exposure.** As built (per-over)
-   the package swings 3× on the floor decision: **12 → 20,678 · 16 → 19,987 · 20 → 17,231 ·
-   24 → 7,239 · 32 → 6,885.** Measured 2026-08-12, switching limited-overs innings to
-   **per-delivery** series puts **20,675 of 20,678** records above floor 32 (median 125 steps,
-   max 446, 2.9× the datapoints). It needs no schema change — `1play` is already in the
-   validator's `FREQ_RE` — and does not touch the text, so the licence position and the
-   alignment evidence are unchanged. **This is ours to fix and is not part of your decision.**
+3. **Series are at the source's own granularity, and the window floor no longer applies.**
+   Cricsheet ships one row per delivery; the earlier build aggregated 6:1 into overs, which
+   put a T20 innings at 20 steps — under the corpus's 32-step floor — and made this package
+   swing 3× on that open decision. Records now carry the delivery-level series, and **all
+   20,678 clear every candidate floor.** No schema change was needed (`1play` was already in
+   the validator's `FREQ_RE`) and the text is untouched, so the alignment tier and its
+   permutation control are unchanged. **This is no longer part of your decision.** One
+   consequence to note: whole-match Test/MDM records run up to 2,695 steps, the longest
+   series in the corpus.
 4. **Two builder bugs fixed in this pass**, both of which corrupted the number the alignment
    claim rests on: `retired hurt` / `retired not out` were counted as wickets (they are not
    dismissals — this is the "152 for 8" vs a computed 9 gap), and `report_published` stored
