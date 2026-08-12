@@ -11,3 +11,6 @@ scratch_*
 # is ESPNcricinfo's own staff journalism. Keep output.max_records small; never commit a full
 # build.
 output/espn_college_cpt.jsonl
+
+# census run logs (the JSON reports next to them are the artifact worth keeping)
+output/*.out
