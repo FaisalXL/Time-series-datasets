@@ -1,0 +1,501 @@
+{
+  "stats": {
+    "codes_seen": 11,
+    "no_body": 0,
+    "no_family": 5,
+    "no_period": 0,
+    "short_series": 0,
+    "no_evidence": 2,
+    "too_short": 0,
+    "emitted": 4
+  },
+  "families": [
+    "unemployment",
+    "inflation",
+    "industrial_production",
+    "producer_prices",
+    "retail_trade",
+    "services_production"
+  ],
+  "geo_resolved": {
+    "unemployment": {
+      "EA": "EA21",
+      "EU": "EU27_2020"
+    },
+    "inflation": {
+      "EA": "EA20",
+      "EU": "EU27_2020"
+    },
+    "industrial_production": {
+      "EA": "EA21",
+      "EU": "EU27_2020"
+    },
+    "producer_prices": {
+      "EA": "EA21",
+      "EU": "EU27_2020"
+    },
+    "retail_trade": {
+      "EA": "EA21",
+      "EU": "EU27_2020"
+    },
+    "services_production": {
+      "EA": "EA21",
+      "EU": "EU27_2020"
+    }
+  },
+  "config_snapshot": {
+    "data": {
+      "listing_url": "https://ec.europa.eu/eurostat/web/main/news/euro-indicators",
+      "release_url": "https://ec.europa.eu/eurostat/product?code={code}",
+      "listing_only_page_one": true,
+      "extra_codes": [],
+      "api_url": "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/{dataset}",
+      "cache_dir": ".cache",
+      "user_agent": "CPT-dataset-research faisal@usc.edu",
+      "timeout_s": 120,
+      "retries": 4,
+      "min_interval_s": 1.5,
+      "euro_area_preference": [
+        "EA21",
+        "EA20",
+        "EA",
+        "EA19"
+      ],
+      "eu_preference": [
+        "EU27_2020",
+        "EU",
+        "EU28"
+      ],
+      "families": [
+        {
+          "name": "unemployment",
+          "dataset": "une_rt_m",
+          "keywords": [
+            "unemployment",
+            "unemployed"
+          ],
+          "channels": [
+            {
+              "unit": "ea_unemployment_rate_pct",
+              "geo": "EA",
+              "scale": 1,
+              "filters": {
+                "s_adj": "SA",
+                "age": "TOTAL",
+                "sex": "T",
+                "unit": "PC_ACT"
+              },
+              "keywords": [
+                "euro area",
+                "unemployment rate"
+              ]
+            },
+            {
+              "unit": "eu_unemployment_rate_pct",
+              "geo": "EU",
+              "scale": 1,
+              "filters": {
+                "s_adj": "SA",
+                "age": "TOTAL",
+                "sex": "T",
+                "unit": "PC_ACT"
+              },
+              "keywords": [
+                "EU",
+                "unemployment rate"
+              ]
+            },
+            {
+              "unit": "ea_unemployed_thousands",
+              "geo": "EA",
+              "scale": 1000,
+              "filters": {
+                "s_adj": "SA",
+                "age": "TOTAL",
+                "sex": "T",
+                "unit": "THS_PER"
+              },
+              "keywords": [
+                "euro area",
+                "unemployed"
+              ]
+            },
+            {
+              "unit": "eu_unemployed_thousands",
+              "geo": "EU",
+              "scale": 1000,
+              "filters": {
+                "s_adj": "SA",
+                "age": "TOTAL",
+                "sex": "T",
+                "unit": "THS_PER"
+              },
+              "keywords": [
+                "EU",
+                "unemployed"
+              ]
+            },
+            {
+              "unit": "ea_youth_unemployment_rate_pct",
+              "geo": "EA",
+              "scale": 1,
+              "filters": {
+                "s_adj": "SA",
+                "age": "Y_LT25",
+                "sex": "T",
+                "unit": "PC_ACT"
+              },
+              "keywords": [
+                "young",
+                "youth"
+              ]
+            },
+            {
+              "unit": "eu_youth_unemployment_rate_pct",
+              "geo": "EU",
+              "scale": 1,
+              "filters": {
+                "s_adj": "SA",
+                "age": "Y_LT25",
+                "sex": "T",
+                "unit": "PC_ACT"
+              },
+              "keywords": [
+                "young",
+                "youth"
+              ]
+            },
+            {
+              "unit": "eu_unemployment_rate_women_pct",
+              "geo": "EU",
+              "scale": 1,
+              "filters": {
+                "s_adj": "SA",
+                "age": "TOTAL",
+                "sex": "F",
+                "unit": "PC_ACT"
+              },
+              "keywords": [
+                "women"
+              ]
+            },
+            {
+              "unit": "eu_unemployment_rate_men_pct",
+              "geo": "EU",
+              "scale": 1,
+              "filters": {
+                "s_adj": "SA",
+                "age": "TOTAL",
+                "sex": "M",
+                "unit": "PC_ACT"
+              },
+              "keywords": [
+                "men"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "inflation",
+          "dataset": "prc_hicp_manr",
+          "keywords": [
+            "inflation",
+            "HICP",
+            "consumer price"
+          ],
+          "channels": [
+            {
+              "unit": "ea_hicp_annual_rate_pct",
+              "geo": "EA",
+              "scale": 1,
+              "filters": {
+                "unit": "RCH_A",
+                "coicop": "CP00"
+              },
+              "keywords": [
+                "euro area",
+                "annual inflation"
+              ]
+            },
+            {
+              "unit": "eu_hicp_annual_rate_pct",
+              "geo": "EU",
+              "scale": 1,
+              "filters": {
+                "unit": "RCH_A",
+                "coicop": "CP00"
+              },
+              "keywords": [
+                "EU",
+                "annual inflation"
+              ]
+            },
+            {
+              "unit": "ea_hicp_food_alc_tob_pct",
+              "geo": "EA",
+              "scale": 1,
+              "filters": {
+                "unit": "RCH_A",
+                "coicop": "FOOD"
+              },
+              "keywords": [
+                "food",
+                "alcohol",
+                "tobacco"
+              ]
+            },
+            {
+              "unit": "ea_hicp_energy_pct",
+              "geo": "EA",
+              "scale": 1,
+              "filters": {
+                "unit": "RCH_A",
+                "coicop": "NRG"
+              },
+              "keywords": [
+                "energy"
+              ],
+              "signed": true
+            },
+            {
+              "unit": "ea_hicp_services_pct",
+              "geo": "EA",
+              "scale": 1,
+              "filters": {
+                "unit": "RCH_A",
+                "coicop": "SERV"
+              },
+              "keywords": [
+                "services"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "industrial_production",
+          "dataset": "sts_inpr_m",
+          "keywords": [
+            "industrial production",
+            "production in industry"
+          ],
+          "channels": [
+            {
+              "unit": "ea_industrial_production_mom_pct",
+              "geo": "EA",
+              "scale": 1,
+              "filters": {
+                "indic_bt": "PRD",
+                "nace_r2": "B-D",
+                "s_adj": "SCA",
+                "unit": "PCH_PRE"
+              },
+              "keywords": [
+                "euro area"
+              ],
+              "signed": true
+            },
+            {
+              "unit": "eu_industrial_production_mom_pct",
+              "geo": "EU",
+              "scale": 1,
+              "filters": {
+                "indic_bt": "PRD",
+                "nace_r2": "B-D",
+                "s_adj": "SCA",
+                "unit": "PCH_PRE"
+              },
+              "keywords": [
+                "EU"
+              ],
+              "signed": true
+            },
+            {
+              "unit": "ea_industrial_production_yoy_pct",
+              "geo": "EA",
+              "scale": 1,
+              "filters": {
+                "indic_bt": "PRD",
+                "nace_r2": "B-D",
+                "s_adj": "CA",
+                "unit": "PCH_SM"
+              },
+              "keywords": [
+                "euro area",
+                "compared with"
+              ],
+              "signed": true
+            }
+          ]
+        },
+        {
+          "name": "producer_prices",
+          "dataset": "sts_inppd_m",
+          "keywords": [
+            "producer prices",
+            "industrial producer price"
+          ],
+          "channels": [
+            {
+              "unit": "ea_producer_prices_mom_pct",
+              "geo": "EA",
+              "scale": 1,
+              "filters": {
+                "indic_bt": "PRC_PRR_DOM",
+                "nace_r2": "B-E36",
+                "s_adj": "NSA",
+                "unit": "PCH_PRE"
+              },
+              "keywords": [
+                "euro area"
+              ],
+              "signed": true
+            },
+            {
+              "unit": "eu_producer_prices_mom_pct",
+              "geo": "EU",
+              "scale": 1,
+              "filters": {
+                "indic_bt": "PRC_PRR_DOM",
+                "nace_r2": "B-E36",
+                "s_adj": "NSA",
+                "unit": "PCH_PRE"
+              },
+              "keywords": [
+                "EU"
+              ],
+              "signed": true
+            }
+          ]
+        },
+        {
+          "name": "retail_trade",
+          "dataset": "sts_trtu_m",
+          "keywords": [
+            "retail trade",
+            "volume of retail"
+          ],
+          "channels": [
+            {
+              "unit": "ea_retail_trade_volume_mom_pct",
+              "geo": "EA",
+              "scale": 1,
+              "filters": {
+                "indic_bt": "VOL_SLS",
+                "nace_r2": "G47",
+                "s_adj": "SCA",
+                "unit": "PCH_PRE"
+              },
+              "keywords": [
+                "euro area"
+              ],
+              "signed": true
+            },
+            {
+              "unit": "eu_retail_trade_volume_mom_pct",
+              "geo": "EU",
+              "scale": 1,
+              "filters": {
+                "indic_bt": "VOL_SLS",
+                "nace_r2": "G47",
+                "s_adj": "SCA",
+                "unit": "PCH_PRE"
+              },
+              "keywords": [
+                "EU"
+              ],
+              "signed": true
+            }
+          ]
+        },
+        {
+          "name": "services_production",
+          "dataset": "sts_sepr_m",
+          "keywords": [
+            "services production",
+            "production in services"
+          ],
+          "channels": [
+            {
+              "unit": "ea_services_production_mom_pct",
+              "geo": "EA",
+              "scale": 1,
+              "filters": {
+                "indic_bt": "PRD",
+                "nace_r2": "G-N_X_K",
+                "s_adj": "SCA",
+                "unit": "PCH_PRE"
+              },
+              "keywords": [
+                "euro area"
+              ],
+              "signed": true
+            },
+            {
+              "unit": "eu_services_production_mom_pct",
+              "geo": "EU",
+              "scale": 1,
+              "filters": {
+                "indic_bt": "PRD",
+                "nace_r2": "G-N_X_K",
+                "s_adj": "SCA",
+                "unit": "PCH_PRE"
+              },
+              "keywords": [
+                "EU"
+              ],
+              "signed": true
+            }
+          ]
+        }
+      ]
+    },
+    "series": {
+      "freq": "1M",
+      "window": 36,
+      "min_points": 32
+    },
+    "text": {
+      "max_chars": 2000,
+      "min_chars": 250,
+      "stop_markers": [
+        "The estimates in this News Release are based on",
+        "To capture in full the labour market situation",
+        "Eurostat publishes harmonised",
+        "Geographical information",
+        "Methods and definitions",
+        "For more information",
+        "The data in this News Release can be subject to revisions"
+      ],
+      "drop_paragraphs_containing": [
+        "Euro area (EA",
+        "European Union (EU",
+        "Disclaimer"
+      ],
+      "abstractive_summary": false
+    },
+    "evidence": {
+      "tolerance": 0.005,
+      "match_window": 6,
+      "proximity_chars": 140,
+      "min_evidence": 1,
+      "allow_describes": false,
+      "disqualifying_terms": [
+        "women",
+        "men",
+        "young",
+        "youth",
+        "under 25",
+        "core",
+        "excluding",
+        "seasonally adjusted"
+      ]
+    },
+    "output": {
+      "path": "output/eurostat_euro_indicators_cpt.jsonl",
+      "run_report": "output/run_report.json",
+      "samples_path": "samples/example_output.jsonl",
+      "max_records": 10
+    }
+  },
+  "dry_run": false
+}

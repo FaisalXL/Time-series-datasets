@@ -1,0 +1,204 @@
+# Eurostat "Euro indicators" news releases + Eurostat dissemination API -> CPT JSONL
+#
+# One record = ONE euro-indicator news release: its own VERBATIM headline prose paired with the
+# trailing multi-channel window of the exact Eurostat dataset the release reports on. The prose
+# RECITES its numbers ("Eurostat estimates that 13.317 million persons in the EU ... were
+# unemployed in June 2026") -> alignment decided per release by EVIDENCE, never assumed.
+#
+# LICENSE: CC BY 4.0. Verbatim from ec.europa.eu/eurostat/web/main/help/copyright-notice:
+#   "The copyright for the editorial content of this website, which is owned by the EU, is
+#    licensed under the Creative Commons Attribution 4.0 International licence."
+#   "Reuse of statistical data, metadata, publications ... for commercial or non-commercial
+#    purposes is authorised provided the source is acknowledged."
+# Commercial reuse is explicitly allowed. No API key, no login for the API.
+#
+# Quick start:
+#   pip install -r requirements.txt
+#   python scripts/build_cpt_jsonl.py --dry-run
+#   python scripts/build_cpt_jsonl.py                                  # demo
+#   python scripts/build_cpt_jsonl.py --set output.max_records=null    # full build
+
+data:
+  # ---- release side ---------------------------------------------------------------------
+  # ACCESS TRAP: https://ec.europa.eu/eurostat/web/products-euro-indicators (the URL the
+  # source docs give) 301-redirects to the ECAS / EU Login wall. The working listing is
+  # /web/main/news/euro-indicators. Confirmed 2026-08-11.
+  listing_url: "https://ec.europa.eu/eurostat/web/main/news/euro-indicators"
+  # Individual releases resolve by product code, e.g. 3-30072026-bp.
+  release_url: "https://ec.europa.eu/eurostat/product?code={code}"
+  # Live server-side count on the listing: "Showing 1 - 11 out of 4442 results" (2026-08-11;
+  # it was 4,291 when DR#6 read it, so the family grows ~monthly). The listing is a Liferay
+  # portlet -- paginating it needs the p_p_* parameter set, which is NOT wired here. The demo
+  # reads page 1; the server agent must implement pagination (or Wayback CDX) for a full run.
+  # See NOTION_PAGE.md open question 1.
+  listing_only_page_one: true
+  # Optional explicit codes, appended to whatever the listing yields (used to widen the demo
+  # across indicator families without pagination).
+  extra_codes: []
+
+  # ---- series side (keyless dissemination API) ------------------------------------------
+  api_url: "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/{dataset}"
+
+  cache_dir: ".cache"
+  user_agent: "CPT-dataset-research faisal@usc.edu"
+  timeout_s: 120
+  retries: 4
+  # Eurostat throttles hard on concurrency: bulk pulls measured 3/150 and 19/80 success at
+  # 6-8 threads. This build is strictly serial and paced. Do NOT parallelise it.
+  min_interval_s: 1.5
+
+  # ---- the euro-area geo code is NOT constant -------------------------------------------
+  # This is the single most dangerous thing about the Eurostat API. Filtering on a geo code a
+  # dataset does not carry returns HTTP 200 with a well-formed JSON-stat envelope whose
+  # `value` object is EMPTY -- a silent zero, not an error. DR#6's own recipe used geo=EA20
+  # and got exactly that.
+  # Measured 2026-08-11, same day, same API:
+  #     une_rt_m        geo: [EU27_2020, EA21, ...]                 <- EA21 only
+  #     prc_hicp_manr   geo: [EU, EU27_2020, EU28, EA, EA20, EA19]  <- NO EA21 AT ALL
+  #     sts_inpr_m      geo: [EU27_2020, EU28, EA21, EA20, EA19]    <- all three
+  # So NO single hardcoded euro-area code works across datasets. The build reads each
+  # dataset's own geo dimension and picks the first of these that is actually present:
+  euro_area_preference: ["EA21", "EA20", "EA", "EA19"]
+  eu_preference: ["EU27_2020", "EU", "EU28"]
+  # If a resolved filter yields zero values the build RAISES. Never emit on a silent empty.
+
+  # ---- indicator families ---------------------------------------------------------------
+  # Every dataset + dimension code below was read back live from the API before being written
+  # here; none are guessed. `geo: EA` / `geo: EU` are placeholders resolved at runtime by the
+  # preference lists above.
+  families:
+    - name: unemployment
+      dataset: une_rt_m
+      keywords: ["unemployment", "unemployed"]
+      channels:
+        - {unit: ea_unemployment_rate_pct,       geo: EA, scale: 1,
+           filters: {s_adj: SA, age: TOTAL, sex: T, unit: PC_ACT},  keywords: ["euro area", "unemployment rate"]}
+        - {unit: eu_unemployment_rate_pct,       geo: EU, scale: 1,
+           filters: {s_adj: SA, age: TOTAL, sex: T, unit: PC_ACT},  keywords: ["EU", "unemployment rate"]}
+        - {unit: ea_unemployed_thousands,        geo: EA, scale: 1000,
+           filters: {s_adj: SA, age: TOTAL, sex: T, unit: THS_PER}, keywords: ["euro area", "unemployed"]}
+        - {unit: eu_unemployed_thousands,        geo: EU, scale: 1000,
+           filters: {s_adj: SA, age: TOTAL, sex: T, unit: THS_PER}, keywords: ["EU", "unemployed"]}
+        - {unit: ea_youth_unemployment_rate_pct, geo: EA, scale: 1,
+           filters: {s_adj: SA, age: Y_LT25, sex: T, unit: PC_ACT}, keywords: ["young", "youth"]}
+        - {unit: eu_youth_unemployment_rate_pct, geo: EU, scale: 1,
+           filters: {s_adj: SA, age: Y_LT25, sex: T, unit: PC_ACT}, keywords: ["young", "youth"]}
+        - {unit: eu_unemployment_rate_women_pct, geo: EU, scale: 1,
+           filters: {s_adj: SA, age: TOTAL, sex: F, unit: PC_ACT},  keywords: ["women"]}
+        - {unit: eu_unemployment_rate_men_pct,   geo: EU, scale: 1,
+           filters: {s_adj: SA, age: TOTAL, sex: M, unit: PC_ACT},  keywords: ["men"]}
+
+    - name: inflation
+      dataset: prc_hicp_manr
+      keywords: ["inflation", "HICP", "consumer price"]
+      channels:
+        - {unit: ea_hicp_annual_rate_pct, geo: EA, scale: 1,
+           filters: {unit: RCH_A, coicop: CP00}, keywords: ["euro area", "annual inflation"]}
+        - {unit: eu_hicp_annual_rate_pct, geo: EU, scale: 1,
+           filters: {unit: RCH_A, coicop: CP00}, keywords: ["EU", "annual inflation"]}
+        - {unit: ea_hicp_food_alc_tob_pct, geo: EA, scale: 1,
+           filters: {unit: RCH_A, coicop: FOOD}, keywords: ["food", "alcohol", "tobacco"]}
+        - {unit: ea_hicp_energy_pct, geo: EA, scale: 1,
+           filters: {unit: RCH_A, coicop: NRG}, keywords: ["energy"], signed: true}
+        - {unit: ea_hicp_services_pct, geo: EA, scale: 1,
+           filters: {unit: RCH_A, coicop: SERV}, keywords: ["services"]}
+
+    - name: industrial_production
+      dataset: sts_inpr_m
+      keywords: ["industrial production", "production in industry"]
+      channels:
+        - {unit: ea_industrial_production_mom_pct, geo: EA, scale: 1,
+           filters: {indic_bt: PRD, nace_r2: "B-D", s_adj: SCA, unit: PCH_PRE}, keywords: ["euro area"], signed: true}
+        - {unit: eu_industrial_production_mom_pct, geo: EU, scale: 1,
+           filters: {indic_bt: PRD, nace_r2: "B-D", s_adj: SCA, unit: PCH_PRE}, keywords: ["EU"], signed: true}
+        - {unit: ea_industrial_production_yoy_pct, geo: EA, scale: 1,
+           filters: {indic_bt: PRD, nace_r2: "B-D", s_adj: CA, unit: PCH_SM}, keywords: ["euro area", "compared with"], signed: true}
+
+    - name: producer_prices
+      dataset: sts_inppd_m
+      keywords: ["producer prices", "industrial producer price"]
+      channels:
+        - {unit: ea_producer_prices_mom_pct, geo: EA, scale: 1,
+           filters: {indic_bt: PRC_PRR_DOM, nace_r2: "B-E36", s_adj: NSA, unit: PCH_PRE}, keywords: ["euro area"], signed: true}
+        - {unit: eu_producer_prices_mom_pct, geo: EU, scale: 1,
+           filters: {indic_bt: PRC_PRR_DOM, nace_r2: "B-E36", s_adj: NSA, unit: PCH_PRE}, keywords: ["EU"], signed: true}
+
+    # ---- these two families were added AFTER the pipeline was written, to prove the claim
+    # that federating costs a config block and no build-script change. Dimension codes read
+    # back live: sts_trtu_m carries nace_r2 G47 (retail trade); sts_sepr_m does NOT carry G47
+    # -- services needs G-N_X_K with s_adj SCA. The first guess (G-N_STS) parsed fine and returned
+    # 200 + an EMPTY value object; the silent-empty guard caught it. Codes are verified, not reused.
+    - name: retail_trade
+      dataset: sts_trtu_m
+      keywords: ["retail trade", "volume of retail"]
+      channels:
+        - {unit: ea_retail_trade_volume_mom_pct, geo: EA, scale: 1,
+           filters: {indic_bt: VOL_SLS, nace_r2: "G47", s_adj: SCA, unit: PCH_PRE}, keywords: ["euro area"], signed: true}
+        - {unit: eu_retail_trade_volume_mom_pct, geo: EU, scale: 1,
+           filters: {indic_bt: VOL_SLS, nace_r2: "G47", s_adj: SCA, unit: PCH_PRE}, keywords: ["EU"], signed: true}
+
+    - name: services_production
+      dataset: sts_sepr_m
+      keywords: ["services production", "production in services"]
+      channels:
+        - {unit: ea_services_production_mom_pct, geo: EA, scale: 1,
+           filters: {indic_bt: PRD, nace_r2: "G-N_X_K", s_adj: SCA, unit: PCH_PRE}, keywords: ["euro area"], signed: true}
+        - {unit: eu_services_production_mom_pct, geo: EU, scale: 1,
+           filters: {indic_bt: PRD, nace_r2: "G-N_X_K", s_adj: SCA, unit: PCH_PRE}, keywords: ["EU"], signed: true}
+
+series:
+  freq: "1M"            # 1M = one MONTH (1m would be one MINUTE)
+  window: 36            # >32 per the 2026-08-03 meeting floor
+  min_points: 32
+
+text:
+  max_chars: 2000       # ~500 tokens
+  min_chars: 250
+  # A Eurostat release is ~4,100 chars of real prose followed by a long, IDENTICAL-every-month
+  # methodology tail (ILO definition, geographical composition lists, revision policy). That
+  # tail is where the cross-edition duplication lives, so it is cut, not summarised.
+  # Measured: naive extraction gives ~30,000 chars/release, but ~84% of that is TABLE content
+  # leaking through <p> tags -- tables are stripped before any of this runs.
+  stop_markers:
+    - "The estimates in this News Release are based on"
+    - "To capture in full the labour market situation"
+    - "Eurostat publishes harmonised"
+    - "Geographical information"
+    - "Methods and definitions"
+    - "For more information"
+    - "The data in this News Release can be subject to revisions"
+  drop_paragraphs_containing:
+    - "Euro area (EA"
+    - "European Union (EU"
+    - "Disclaimer"
+  abstractive_summary: false   # no `llm_summarized` value exists in the schema vocab
+
+evidence:
+  tolerance: 0.005      # releases quote to 1 decimal; tighter than EIA #63's 1%
+  match_window: 6
+  proximity_chars: 140
+  min_evidence: 1
+  allow_describes: false
+
+  # ---- modifier guard (ONS #61's mechanism) ---------------------------------------------
+  # A euro-indicator release discusses far more series than any channel set holds. If one of
+  # these words appears in a figure's own clause and is not part of the candidate channel's
+  # identity, the figure is left UNATTRIBUTED rather than credited to the headline channel.
+  # Caught live: "the unemployment rate for women was 6.4%" was being credited to the euro
+  # area TOTAL rate (really 6.3), because 6.4 was a real value earlier in the same window.
+  # Matching is word-boundary, so "men" cannot fire inside "women".
+  disqualifying_terms:
+    - women
+    - men
+    - young
+    - youth
+    - "under 25"
+    - core
+    - excluding
+    - seasonally adjusted
+
+output:
+  path: output/eurostat_euro_indicators_cpt.jsonl
+  run_report: output/run_report.json
+  samples_path: samples/example_output.jsonl
+  max_records: 10       # demo cap. null = full build.
