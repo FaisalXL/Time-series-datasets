@@ -1,9 +1,10 @@
 # ESPN College Sports Recaps + Score-Progression Series → CPT
 
-> **Status 2026-08-12: full harvest in progress.** Football is complete — **CFB 11,059 records
-> from 13,206 games** and FCS building — and Division I basketball, which is 87% of the universe,
-> is harvesting now. `validate.py --strict` clean on every shard checked (861/861, 1194/1194, 0
-> warnings).
+> **Status 2026-08-13: FULL BUILD COMPLETE — 73,347 records, 44,336,746 datapoints.**
+> All 56 shards (4 tiers x 14 seasons) harvested from a censused 185,453-game universe.
+> **`validate.py --strict`: 73,347/73,347 passed, 0 failed, 0 warnings.**
+> Every record is Associated Press wire copy; 73,347/73,347 series healthy; 0 duplicate
+> `series_id`; 99.966% distinct texts.
 > **Licence-gated: every record is `proprietary-review` (AP wire copy). Not cleared for
 > distribution — this is the same rightsholder ask as `51_espn_us_majors`.**
 
@@ -19,7 +20,8 @@ and women's basketball**.
 | | |
 |---|---|
 | **Universe** | **185,453 finished games**, 2012–2025, censused day by day (not extrapolated) |
-| **Records** | CFB **11,059** complete · FCS + basketball in flight |
+| **Records** | **73,347** — CFB 11,060 · FCS 4,749 · MCB 49,455 · WCB 8,083 |
+| **Datapoints** | **44,336,746** (2 channels x median 316 plays); 402 MB of JSONL |
 | **Domain / region** | sports / `US` |
 | **License** | ⚠️ `proprietary-review` — AP wire copy via ESPN's API. **Same rightsholder as `51`** |
 | **Alignment** | `describes` · `text_quality: real` (verbatim recap; nothing generated, nothing templated) |
@@ -70,17 +72,65 @@ are worth zero records here.
 
 ### Yield, measured per season rather than assumed
 
-| league | records / games | yield | note |
+| league | records / games | yield | shape across the window |
 |---|--:|--:|---|
-| CFB | 11,059 / 13,206 | **83.7%** | 93–97% for 2012–2019; 44% in 2020, 62% in 2021 |
-| FCS | in flight | **~55–64%** | lower than CFB because the well-covered games are the FBS matchups |
-| MCB | in flight | 2012 = **41.8%** | 2012 is the WORST season in the window, not a typical one — see below |
-| WCB | in flight | 2012–13 = **9.5% / 12.6%** | genuine coverage sparsity: 29 of 40 sampled games have no `article` key at all |
+| CFB | 11,060 / 13,261 | **83.4%** | 93–97% for 2012–19; 41% in 2020, 62% in 2021, recovering to 84% |
+| FCS | 4,749 / 9,337 | **50.9%** | lower than CFB: the well-covered games are the FBS matchups, which are excluded as overlap |
+| MCB | 49,455 / 82,763 | **59.8%** | 0.42 → **0.91** (2017) → **0.28** (2021) — two cliffs, both explained below |
+| WCB | 8,083 / 77,540 | **10.4%** | flat 0.09–0.14, and **exactly 0.00 in 2020 and 2021** |
+| **total** | **73,347 / 185,453** | **39.6%** | |
+
+Per-season yield, measured (not sampled):
+
+```
+MCB  2012:0.42 2013:0.79 2014:0.81 2015:0.88 2016:0.90 2017:0.91 2018:0.87
+     2019:0.88 2020:0.74 2021:0.28 2022:0.23 2023:0.27 2024:0.24 2025:0.25
+WCB  2012:0.09 2013:0.13 2014:0.13 2015:0.13 2016:0.14 2017:0.13 2018:0.14
+     2019:0.12 2020:0.00 2021:0.00 2022:0.05 2023:0.12 2024:0.12 2025:0.12
+```
+
+### The Data Skrive cutover is a cliff between the 2020 and 2021 seasons
+
+This was the open question that mattered most for scale, and it now has an exact answer. Men's
+basketball yield goes **0.74 → 0.28 between the 2020 and 2021 seasons** and never recovers: 0.23,
+0.27, 0.24, 0.25. Everything lost there is automated content caught on the publisher's own
+`article.source`, not on any guess about the prose:
+
+| vendor filtered | records |
+|---|--:|
+| Data Skrive | 12,153 |
+| Automated Insights | 2,319 |
+| STATS Perform dba Automated Insights | 822 |
+| ESPN.com news services (+ variants) | 187 |
+
+**15,486 games, 8.4% of the universe, are machine-written** and are disqualified by `SCHEMA.md` §7
+as boilerplate/template text. So the AP-only archive is front-loaded: the five seasons 2015–2019
+alone supply more usable men's basketball than the five seasons 2021–2025 do.
+
+**Women's basketball is 0.00 for 2020 and 2021** — not sparse, zero. ESPN carried no recaps at all
+for D-I women's games in those two seasons, which is consistent with the era census finding
+"(no story)" on 6 of 6 sampled days for both.
+
+### Where the other 60% of the universe goes
+
+| reason | games | share of universe |
+|---|--:|--:|
+| `no_report` — no recap ≥400 chars | 85,172 | 45.9% |
+| `source_not_allowed` — automated content | 15,486 | 8.4% |
+| `short_game` — recap present, **no play-by-play** | 6,926 | 3.7% |
+| `score_mismatch` — series does not land on the official final | 1,393 | 0.8% |
+| `unreliable_scores` — >25% of plays needed the monotonic fix | 576 | 0.3% |
+| `implausible_play_count` | 1 | 0.0% |
+| **kept** | **73,347** | **39.6%** |
+
+Recap coverage, not anything in this pipeline, is the binding constraint: 45.9% of all finished
+college games simply have no wire recap.
 
 **A 40-game sample is not an instrument for this.** At a 13.8% true rate it carries a standard
 deviation of 2.35 games — roughly ±6 percentage points — which is why a 40-game probe once read
 women's coverage as 25% when the censused answer is 9.5%. Confirmed by 200-draw Monte Carlo against
-the full population. The original "~15k" scale claim for this source rested on 40-game samples.
+the full population. The original "~15k" scale claim for this source rested on 40-game samples;
+the censused answer is **73,347**, so it was low by ~5x.
 
 **There is essentially no automated content in football.** CFB's rejections are `no_report` (1,445)
 — coverage gaps — against just **91** `source_not_allowed` across 13,206 games. The
@@ -123,15 +173,17 @@ paired with a *different* game's series values, same league, same era, same hous
 match rate without a measured coincidence floor means nothing (the lesson from `61`). Scores are
 small integers and recaps are full of them, so the floor is not zero by assumption.
 
-| tier | final score in own prose | control | lift | halftime anchor | control |
-|---|--:|--:|--:|--:|--:|
-| CFB | 0.9853 | 0.0058 | **169×** | 0.227 | 0.054 |
-| FCS | 0.9860 | 0.0038 | **261×** | 0.159 | 0.041 |
-| MCB (demo) | 1.000 | 0.000 | — | 0.650 | 0.000 |
-| WCB (demo) | 1.000 | 0.025 | 40× | 0.350 | 0.000 |
+Final numbers, n=4,000 sampled per tier for the control:
 
-Across **all 12,699 records harvested so far, 0.98724 state their own final score** — a census, not
-a sample, because the anchor is just a regex. The halftime score is a genuinely independent second
+| tier | final score in own prose | control | lift | z | halftime anchor | control |
+|---|--:|--:|--:|--:|--:|--:|
+| CFB | 0.9840 | 0.0048 | **204×** | 894 | 0.202 | 0.051 |
+| FCS | 0.9895 | 0.0039 | **254×** | — | 0.182 | 0.044 |
+| MCB | 0.9880 | 0.0015 | **659×** | — | 0.481 | 0.0012 |
+| WCB | 0.9870 | 0.0018 | **548×** | — | 0.370 | 0.0035 |
+
+Across **all 73,347 records, 0.98912 state their own final score** — a census, not a sample,
+because the anchor is just a regex. The halftime score is a genuinely independent second
 anchor, recoverable from the series only because `meta.period_end_idx` records where each period
 ends.
 
@@ -141,7 +193,8 @@ grounds for promoting the tier.
 
 ### Shared recaps are resolved, not just counted
 
-Text distinctness is **99.992%**, and the one collision is worth knowing about: ESPN serves the
+Text distinctness is **99.966%** (25 collisions in 73,347 records, resolved into 28 exclusions),
+and the first one found is worth knowing about: ESPN serves the
 *same* recap for events 400548101 (Eastern Michigan at Florida, 2014, 0–65) and 401752668 (LIU at
 Florida, 2025, 0–55). Different teams, dates and scores — so at most one of those records has prose
 describing its own series, and the other is a mispairing that **every id-level check passes
@@ -164,7 +217,10 @@ ordered and unique (verified against `sequenceNumber`), so this is a field-level
 parsing bug.
 
 A cumulative score cannot decrease, so each channel carries a **running max**, and
-`meta.score_fix_plays` records how many plays needed it. **12,699/12,699 records are healthy.**
+`meta.score_fix_plays` records how many plays needed it. **73,347/73,347 records are healthy** —
+zero decreasing channels, zero nulls, zero non-parallel channels, every series landing on its
+official final. Final fix-fraction distribution across the whole build: p50 0.000, p90 0.006,
+p99 0.071, max 0.25 (the cap, working).
 
 Guards, each set from a measured distribution rather than a round number:
 
@@ -300,12 +356,15 @@ AIMD backoff widens the gap on 502s, which is what ESPN returns instead of 429. 
 
 ## Open items
 
-- **AP licence** is the only thing between this and a shippable package. Same ask as `51`.
-- **SFT-overlap check (SCHEMA §8 item 5) has not been run.** Required before banking.
-- **Basketball yield is unmeasured** and is 87% of the universe. It will come from the harvest's own
-  per-shard source counts, not from a sample.
-- **The CFB/FCS 2020 shards need rebuilding** under the corrected spring-2021 window; the cells are
-  already re-walked.
-- **D-II/D-III basketball and lower football divisions are untested.** `groups=81` proved that a
-  group id can hide a whole populated tier, so "no other tiers exist" should be measured, not
-  assumed.
+- **AP licence is the only thing between this and a shippable package.** Same ask as `51`; one
+  request covers both. Nothing else here requires a human.
+- **SFT-overlap check (SCHEMA §8 item 5) has not been run.** Required before banking, independent
+  of the licence answer.
+- **`output/exclusions.json` (28 records) is produced but not applied to the shards.** Whoever banks
+  the package should drop those `series_id`s — they are the losers of shared-recap groups.
+- **D-II/D-III basketball and lower football divisions are untested.** `groups=81` proved a group id
+  can hide a whole populated tier, so "no other tiers exist" should be measured, not assumed. On the
+  measured pattern (FCS at 50.9%) a lower tier would be lower still, but that is a guess.
+- **The 2021–2025 men's seasons are worth revisiting if the `generated` policy ever changes.** The
+  12,153 Data Skrive games are excluded on §7 grounds, not licence grounds, and they are the
+  difference between 73,347 and ~89,000.

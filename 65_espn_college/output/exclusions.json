@@ -1,5 +1,20 @@
 [
  {
+  "series_id": "espn_mens-college-basketball_323152084",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_323152084"
+ },
+ {
+  "series_id": "espn_college-football_323220202",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_mens-college-basketball_323220202"
+ },
+ {
+  "series_id": "espn_mens-college-basketball_323222460",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_323222460"
+ },
+ {
   "series_id": "espn_womens-college-basketball_323220096",
   "reason": "shared recap text; final-score anchor attributes this recap to another game",
   "kept_instead": "espn_college-football_323220096"
@@ -13,6 +28,24 @@
   "series_id": "espn_womens-college-basketball_323290153",
   "reason": "shared recap text; final-score anchor attributes this recap to another game",
   "kept_instead": "espn_college-football_323290153"
+ },
+ {
+  "series_id": "espn_college-football_323290328",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_mens-college-basketball_323290328"
+ },
+ {
+  "series_id": "espn_college-football_323292393",
+  "reason": "shared recap text, unresolvable by anchor"
+ },
+ {
+  "series_id": "espn_mens-college-basketball_323292393",
+  "reason": "shared recap text, unresolvable by anchor"
+ },
+ {
+  "series_id": "espn_college-football_323292751",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_mens-college-basketball_323292751"
  },
  {
   "series_id": "espn_womens-college-basketball_323360275",
@@ -30,6 +63,16 @@
   "kept_instead": "espn_college-football_323360058"
  },
  {
+  "series_id": "espn_college-football_323570309",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_mens-college-basketball_323570309"
+ },
+ {
+  "series_id": "espn_mens-college-basketball_323640009",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_323640009"
+ },
+ {
   "series_id": "espn_womens-college-basketball_323640127",
   "reason": "shared recap text; final-score anchor attributes this recap to another game",
   "kept_instead": "espn_college-football_323640127"
@@ -43,5 +86,51 @@
   "series_id": "espn_college-football_400548101",
   "reason": "shared recap text; final-score anchor attributes this recap to another game",
   "kept_instead": "espn_college-football_401752668"
+ },
+ {
+  "series_id": "espn_college-football_323150159",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_mens-college-basketball_323150159"
+ },
+ {
+  "series_id": "espn_mens-college-basketball_323220079",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_323220079"
+ },
+ {
+  "series_id": "espn_mens-college-basketball_323292619",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_college-football_323292619"
+ },
+ {
+  "series_id": "espn_mens-college-basketball_400991442",
+  "reason": "shared recap text, unresolvable by anchor"
+ },
+ {
+  "series_id": "espn_mens-college-basketball_400991474",
+  "reason": "shared recap text, unresolvable by anchor"
+ },
+ {
+  "series_id": "espn_mens-college-basketball_401174994",
+  "reason": "shared recap text, unresolvable by anchor"
+ },
+ {
+  "series_id": "espn_womens-college-basketball_401179944",
+  "reason": "shared recap text, unresolvable by anchor"
+ },
+ {
+  "series_id": "espn_mens-college-basketball_401470430",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_womens-college-basketball_401474764"
+ },
+ {
+  "series_id": "espn_mens-college-basketball_401625682",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_mens-college-basketball_401625683"
+ },
+ {
+  "series_id": "espn_mens-college-basketball_401724848",
+  "reason": "shared recap text; final-score anchor attributes this recap to another game",
+  "kept_instead": "espn_womens-college-basketball_401724691"
  }
 ]

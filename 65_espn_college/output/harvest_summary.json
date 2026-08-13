@@ -1,17 +1,18 @@
 {
- "shards": 29,
- "records": 16322,
+ "shards": 56,
+ "records": 73347,
  "series_id_unique": true,
  "duplicate_series_ids": 0,
- "distinct_texts": 16313,
- "duplicate_texts": 9,
- "distinct_text_share": 0.99945,
- "final_anchor_all_records": 0.98762,
+ "distinct_texts": 73322,
+ "duplicate_texts": 25,
+ "distinct_text_share": 0.99966,
+ "final_anchor_all_records": 0.98912,
  "duplicate_examples": [],
  "by_league": {
   "CFB": 11060,
   "FCS": 4749,
-  "WCB": 513
+  "MCB": 49455,
+  "WCB": 8083
  },
  "by_league_season": {
   "CFB_2012": 861,
@@ -42,63 +43,98 @@
   "FCS_2023": 254,
   "FCS_2024": 427,
   "FCS_2025": 522,
-  "WCB_2012": 513
+  "MCB_2012": 2437,
+  "MCB_2013": 4709,
+  "MCB_2014": 4828,
+  "MCB_2015": 5262,
+  "MCB_2016": 5360,
+  "MCB_2017": 5438,
+  "MCB_2018": 5239,
+  "MCB_2019": 5088,
+  "MCB_2020": 3184,
+  "MCB_2021": 1686,
+  "MCB_2022": 1453,
+  "MCB_2023": 1664,
+  "MCB_2024": 1529,
+  "MCB_2025": 1578,
+  "WCB_2012": 513,
+  "WCB_2013": 705,
+  "WCB_2014": 724,
+  "WCB_2015": 748,
+  "WCB_2016": 776,
+  "WCB_2017": 755,
+  "WCB_2018": 764,
+  "WCB_2019": 649,
+  "WCB_2021": 1,
+  "WCB_2022": 298,
+  "WCB_2023": 710,
+  "WCB_2024": 692,
+  "WCB_2025": 748
  },
  "report_sources": {
-  "Associated Press": 11345,
-  "AP": 4977
+  "Associated Press": 54780,
+  "AP": 18567
  },
- "series_healthy": 16322,
+ "series_healthy": 73347,
  "series_unhealthy": 0,
  "health_problems": {},
  "health_examples": [],
  "n_plays": {
   "min": 27,
-  "p50": 181,
-  "p99": 355,
-  "max": 497
+  "p50": 316,
+  "p99": 502,
+  "max": 984
  },
  "report_chars": {
-  "min": 472,
-  "p50": 1535,
-  "p99": 5723,
+  "min": 404,
+  "p50": 1181,
+  "p99": 5267,
   "max": 12440
  },
  "score_fix_frac": {
   "p50": 0,
-  "p90": 0.0225,
-  "p99": 0.1429,
+  "p90": 0.0061,
+  "p99": 0.0711,
   "max": 0.25
  },
  "alignment": {
   "CFB": {
-   "sampled": 2500,
-   "final_pair_real": 0.9908,
-   "final_pair_control": 0.0046,
-   "final_pair_lift": 215.0,
-   "final_pair_z": 728.1,
-   "halftime_real": 0.2056,
-   "halftime_control": 0.0502
+   "sampled": 4000,
+   "final_pair_real": 0.984,
+   "final_pair_control": 0.0048,
+   "final_pair_lift": 204.0,
+   "final_pair_z": 893.9,
+   "halftime_real": 0.202,
+   "halftime_control": 0.0507
   },
   "FCS": {
-   "sampled": 2500,
-   "final_pair_real": 0.9896,
+   "sampled": 4000,
+   "final_pair_real": 0.9895,
    "final_pair_control": 0.0039,
-   "final_pair_lift": 253.1,
-   "final_pair_z": 789.7,
-   "halftime_real": 0.1676,
-   "halftime_control": 0.0423
+   "final_pair_lift": 250.6,
+   "final_pair_z": 994.0,
+   "halftime_real": 0.182,
+   "halftime_control": 0.0436
+  },
+  "MCB": {
+   "sampled": 4000,
+   "final_pair_real": 0.988,
+   "final_pair_control": 0.0015,
+   "final_pair_lift": 658.0,
+   "final_pair_z": 1611.3,
+   "halftime_real": 0.481,
+   "halftime_control": 0.0012
   },
   "WCB": {
-   "sampled": 513,
-   "final_pair_real": 0.9805,
-   "final_pair_control": 0.0019,
-   "final_pair_lift": 503.0,
-   "final_pair_z": 502.5,
-   "halftime_real": 0.616,
-   "halftime_control": 0.0015
+   "sampled": 4000,
+   "final_pair_real": 0.987,
+   "final_pair_control": 0.0018,
+   "final_pair_lift": 563.7,
+   "final_pair_z": 1490.4,
+   "halftime_real": 0.3703,
+   "halftime_control": 0.0035
   }
  },
- "shared_text_exclusions": 9,
- "shared_text_unresolvable_groups": 0
+ "shared_text_exclusions": 28,
+ "shared_text_unresolvable_groups": 3
 }
