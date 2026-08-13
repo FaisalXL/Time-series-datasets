@@ -120,9 +120,20 @@ sports, found independently here.
 > **RETRACTED:** discovery previously started at 2014-07 with no recorded justification, costing
 > the 2012-13 and 2013-14 seasons of all three leagues. The census window is now 2012–2026.
 
-**The pre-2012 tail was harvested rather than assumed away**, into `output/shards_pre2012/`:
-2005–2011 across all three leagues yields a rounding error — NBA 2005 gave **1 record from 1,442
-games**, NBA 2006 **0 from 1,452**. It is excluded on that measurement, not on a guess.
+**The pre-2012 tail was harvested rather than assumed away**, in full, into
+`output/shards_pre2012/` — 21 shards, 2005–2011, all three leagues:
+
+| | records | games | yield |
+|---|--:|--:|--:|
+| NBA | 27 | 9,565 | 0.0028 |
+| NFL | 20 | 2,331 | 0.0086 |
+| NHL | 48 | 9,222 | 0.0052 |
+| **total** | **95** | **21,118** | **0.0045** |
+
+**20,685 of those games have no recap at all.** 95 records for 21,118 fetches is a 0.45% yield
+against the recap era's 88%, and even the best year (NHL 2011) returns 33 records from 1,430 games.
+The era is excluded **on this measurement, not on a guess** — and the shards are kept so the
+exclusion stays auditable rather than becoming another inherited window.
 
 ### 2. `article.source` is not always `"AP"`, and the common spelling is the other one
 
