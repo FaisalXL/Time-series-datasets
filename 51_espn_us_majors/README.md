@@ -70,7 +70,7 @@ prose with a *different game's* values — same league, same era, same house sty
 
 | league | states own final | control | teams named | control | **joint** | control | lift |
 |---|--:|--:|--:|--:|--:|--:|--:|
-| NBA | 0.9952 | 0.0020 | 0.9990 | 0.0103 | **0.9942** | **0.000000** | 0 control hits in 16,000 trials |
+| NBA | 0.9952 | 0.0020 | 0.9990 | 0.0103 | **0.9942** | **0.000000** | 0 control hits in 15,985 trials |
 | NFL | 0.9928 | 0.0072 | 0.9832 | 0.0135 | **0.9762** | 0.000570 | **1,712×** |
 | NHL | 0.9970 | 0.1407 | 0.9985 | 0.0142 | **0.9958** | 0.003131 | **318×** |
 
