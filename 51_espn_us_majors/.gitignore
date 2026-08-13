@@ -1,12 +1,22 @@
 .cache/
 __pycache__/
+*.pyc
 scratch_*
 
-# NOTE: output/ + samples/ hold real AP wire-service recap prose (served via ESPN's
-# API, article.source == "AP" on every game checked across NBA/NFL/NHL). They ARE
-# committed here as a capped 50-record DEMO for the lead to inspect -- this is
-# internal review, NOT distribution. Do NOT scale/publish until redistribution is
-# cleared with Charon (same open question as datasets/45_cricket_report_overseries,
-# except this is AP wire copy, not ESPNcricinfo's own staff writers -- a different,
-# likely stricter copyright chain). Keep output.max_records small; never commit a
-# full build.
+# NOTE: output/ + samples/ hold real Associated Press wire-service recap prose (served via ESPN's
+# API; article.source is recorded on every record). A capped DEMO is committed here for the lead
+# to inspect -- internal review, NOT distribution. Do NOT scale or publish until redistribution is
+# cleared with Charon. Same rightsholder as 65_espn_college, so scope the ask to AP and it covers
+# both; a different chain from 45_cricket_report_overseries, which is ESPNcricinfo's own staff
+# journalism. Keep output.max_records small; never commit a full build.
+output/espn_us_majors_cpt.jsonl
+
+# census/harvest run logs (the JSON reports next to them are the artifact worth keeping)
+output/*.out
+
+# Full-scale harvest shards: real AP wire prose at scale. NEVER commit these.
+# shards_pre2012/ is the measured-dead 2005-2011 tail, kept so the exclusion stays auditable.
+output/shards/
+output/shards_pre2012/
+output/harvest_report.json
+output/exclusions.json
