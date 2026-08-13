@@ -1,103 +1,200 @@
 # ESPN US Majors (NBA + NFL + NHL) Game Recaps + Score-Progression Series → CPT
 #
-# One record = one FINISHED GAME: the real AP wire recap (served via ESPN's API)
-# paired with the game's PLAY-BY-PLAY running score (away/home cumulative, one
-# point per play -- not per period/quarter; period-level was tried first and
-# found far too short, 3-4 points, especially for NFL/NHL where scoring events
-# are rare -- play-level is the source's actual finest native granularity and
-# gives ~100-500 points depending on league). The recap *describes* the shape
-# of the game the series quantifies (comeback, blowout, lead held throughout)
-# → "describes". text_quality is always "real"; games with no usable recap are
-# dropped (no synthetic fallback).
+# One record = one FINISHED GAME: the real AP wire recap (served via ESPN's API) paired with the
+# game's PLAY-BY-PLAY running score (away/home cumulative, ONE POINT PER PLAY). The recap
+# *describes* the shape of the game the series quantifies (comeback, blowout, lead held throughout)
+# → alignment = "describes". text_quality is always "real"; games with no usable recap are dropped
+# (no synthetic fallback).
 #
-# ⚠️ LICENSE: the recap prose is Associated Press wire copy (article.source == "AP"
-#    on every game checked across all 3 leagues) served through ESPN's API — a
-#    DIFFERENT and likely STRICTER copyright chain than ESPNcricinfo's own staff
-#    writers (compare datasets/45_cricket_report_overseries). The committed
-#    output/ + samples/ are a capped 50-record demo for the lead to inspect
-#    (internal review, not distribution) — see the README. Keep output.max_records
-#    small; do not run/commit a full build or publish until redistribution is
-#    cleared with Charon.
+# Sibling of 65_espn_college (FBS/FCS football + D-I basketball). Same endpoints, same rightsholder
+# question, same pipeline — scripts/ here is that package's, adapted where the two leagues' APIs
+# genuinely differ (see `params` below, which is the big one). Records are built through
+# schema/emit.py so they are born strict-clean.
+#
+# ⚠️ LICENSE: the recap prose is Associated Press wire copy served through ESPN's API — a DIFFERENT
+#    and likely STRICTER copyright chain than ESPNcricinfo's own staff writers
+#    (compare 45_cricket_report_overseries). Every record is tagged `proprietary-review`,
+#    output/shards/ is gitignored, and NOTHING is added to cpt_corpus/manifest.jsonl. Do not
+#    publish until redistribution is cleared. Scope the ask to AP and it covers 51 + 65 together.
 #
 # Quick start:
 #   pip install -r requirements.txt
-#   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=5
-#   python scripts/build_cpt_jsonl.py
+#   python scripts/census.py --mode walk --years 2012:2026 --workers 6
+#   python scripts/harvest.py --years 2012:2026 --workers 8 --delay 0.15
+#   python scripts/aggregate.py
 
 data:
-  # ESPN's own site API (not a bulk archive — no equivalent of Cricsheet's zip).
-  # Same parent host Cricket uses; each sport is its own path segment. Scoreboard
-  # resolves by date; summary resolves by event id.
-  #
-  # 2026-08-12: host moved. site.api.espn.com now returns 403 (Akamai) for every UA
-  # including browser ones — verified against this package's own NFL scoreboard call,
-  # not just cricket's. site.web.api.espn.com serves the identical payload and accepts
-  # our identifying research UA, so no spoofing. ⚠️ Everything this package claims about
-  # coverage and scale was scouted through the dead host and is therefore UNVERIFIED —
-  # see #45, whose ceiling was wrong by 14× until it was actually measured.
-  leagues:
-    - {sport: "basketball", league: "nba", label: "NBA"}
-    - {sport: "football", league: "nfl", label: "NFL"}
-    - {sport: "hockey", league: "nhl", label: "NHL"}
-    # MLB is deliberately NOT here, on a measurement rather than an oversight. Probed
-    # 2026-08-12: 2,982 finished games in calendar 2024, but recap coverage is **2.5%** (1 of 40
-    # sampled) -- the summary payload has no `article` key at all on 39 of 40 games. Its series
-    # half is the richest of any league checked (413 plays, 69 win-probability points), so the
-    # gap is the TEXT, which is backwards from the "~17.2k" scouting claim. Realistic yield is
-    # ~900 records for a ~36k-game harvest. `_flatten_plays` already handles MLB's flat `plays`
-    # shape, so adding it is one line here if those ~900 are wanted -- but it is not free, and
-    # it perturbs an in-flight harvest.
-    #
-    # ESPN soccer is not addable at all: no `plays`, no `winprobability`, and a scoreline off
-    # `keyEvents` is 2-6 points -- under min_plays below, and under the window floor. Its
-    # rightsholders are also Reuters (EPL/UCL) and Field Level Media (MLS), i.e. NEW licence
-    # asks rather than this package's AP one. College football and D-I basketball ARE viable and
-    # live in 65_espn_college; see that README for all three measurements.
-
+  # 2026-08-12: host moved. site.api.espn.com returns 403 (Akamai) for every UA including browser
+  # ones. site.web.api.espn.com serves the identical payload and accepts our identifying research
+  # UA, so no spoofing. Re-confirmed 2026-08-13 on all three leagues.
   scoreboard_url: "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={date}"
   summary_url: "https://site.web.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={event_id}"
 
-  # Event discovery. Two paths:
-  #
-  #  (a) event_ids_file — a pre-built id list. Set this for full-scale runs. Discovery
-  #      becomes instant (0.2 s vs 3.4 h) because it skips the scoreboard walk entirely.
-  #      Format: {event_id: [league, "YYYY-MM", status], ...}. Build one with a monthly
-  #      range query per league — but ONLY with `&limit=1000`: without it the range
-  #      endpoint silently truncates at 100 events and still returns HTTP 200 (NBA
-  #      Jan 2024 returns 100 of 233 real games), i.e. a 57% undercount that looks like
-  #      a successful call. With the limit it reproduces a day-by-day walk exactly.
-  #      Measured universe 2014-07 -> 2026-08: 36,659 finished games
-  #      (NBA 15,699 / NFL 3,939 / NHL 17,021).
-  #
-  #  (b) start_date/end_date — the day-by-day scoreboard walk. Fine for a demo window;
-  #      at full scale it is 4,425 days x 3 leagues = 13,275 requests (~3.4 h) spent
-  #      before a single record is emitted.
-  #
-  # ⚠️ A capped run (`max_records`) takes ids in sorted order = roughly OLDEST first, and
-  #    recap coverage is era-skewed, so a capped build is NOT a random sample.
-  discovery:
-    event_ids_file: null     # e.g. ".cache/event_universe.json" — takes precedence when set
-    start_date: "20260101"   # YYYYMMDD, inclusive -- Jan covers NFL playoffs too
-    end_date: "20260320"     # YYYYMMDD, inclusive -- through mid NBA/NHL season
-    step_days: 1
-
-  request_delay_s: 0.4       # be polite: ~2-3 req/s, cached per event_id
+  user_agent: "CPT-dataset-research flnu@usc.edu"
+  timeout_s: 60
+  request_delay_s: 0.35
   cache_dir: ".cache"
-  user_agent: "CPT-dataset-research faisal@usc.edu"
-  timeout_s: 90
 
-  min_periods: 3              # drop games with fewer than this many periods of play data
-                               # (NHL regulation=3, NBA/NFL regulation=4; OT adds more)
-  min_plays: 20                # drop games with a suspiciously thin play-by-play feed
+  # A game needs this much play-by-play or the series is too short to describe.
+  # 3 rather than 65's 2 because NHL regulation is 3 periods and NBA/NFL are 4.
+  min_periods: 3
+  min_plays: 20
+
+  # ---- leagues ------------------------------------------------------------------------------
+  # `params` is PER LEAGUE and is not cosmetic. Measured 2026-08-13 by comparing event-id SETS
+  # (not counts) against a full day-by-day walk of the same month:
+  #
+  #   NBA 2024-01 : range bare **100** | range &limit=1000 **231** | day walk **231**
+  #   NFL 2023-11 : range bare  59 | range &limit=1000  59 | day walk  59
+  #   NHL 2024-01 : range bare 208 | range &limit=1000 208 | day walk 208
+  #
+  # With `&limit=1000` the monthly range reproduces the day walk EXACTLY (set equality). Without
+  # it NBA silently drops 131 of 231 games at HTTP 200. The cut is at 100 raw events and is per
+  # league — NBA's default page is 100, NHL returned 209 raw with no param at all — and the payload
+  # carries no `count`/`pageCount`/`pageSize` field, so NOTHING in the response announces the
+  # truncation. The only way to see it is to compare against a walk.
+  #
+  # ⚠️ This is the OPPOSITE of 65_espn_college, where `&limit=1000` TRUNCATES a single-date query
+  #    (52 college-football games bare, 25 with the limit). Same endpoint, same param, opposite
+  #    correct answer, because one package queries ranges and the other queries days. The params
+  #    are therefore part of the CACHE KEY (espnfetch.params_tag) — keyed on the date alone, the
+  #    fix would have silently read the truncated payload back out of the cache.
+  #
+  # Single dates are unaffected in both directions here: NBA 2024-01-10 returns 10 games bare and
+  # 10 with the limit; NFL 2023-11-12 12 and 12; NHL 2024-01-13 16 and 16.
+  leagues:
+    - {sport: "basketball", league: "nba", label: "NBA", params: "&limit=1000"}
+    - {sport: "football",   league: "nfl", label: "NFL", params: "&limit=1000"}
+    - {sport: "hockey",     league: "nhl", label: "NHL", params: "&limit=1000"}
+    # MLB is deliberately NOT here, on a measurement rather than an oversight. Probed 2026-08-12:
+    # 2,982 finished games in calendar 2024 but recap coverage is **2.5%** (1 of 40 sampled) — the
+    # summary payload has no `article` key at all on 39 of 40. Its series half is the richest of any
+    # league checked (413 plays), so the gap is the TEXT. Realistic yield ~900 records for a ~36k
+    # game harvest; it is one line here if those are wanted.
+    #
+    # ESPN soccer is not addable at all: no `plays`, and a scoreline off `keyEvents` is 2-6 points
+    # — under min_plays. Its rightsholders are also Reuters (EPL/UCL) and Field Level Media (MLS),
+    # i.e. NEW licence asks rather than this package's AP one.
+
+  # ---- what era is usable ---------------------------------------------------------------------
+  # Measured 2026-08-13, month by month across the boundary (10 games sampled per month). Recap
+  # coverage does not fade in — it switches on, in all three leagues, in the 2012-13 season:
+  #
+  #   NBA  2012-03 1/10 | 2012-04 0/10 | **2012-11 10/10** | 2012-12 10/10 | 2013-01 10/10
+  #   NFL  2011-11 1/10 | 2011-12 1/10 | **2012-09 10/10** | 2012-10 10/10 | 2012-11 10/10
+  #   NHL  2012-03 0/10 | 2012-04 1/10 | **2013-01 10/10** | 2013-02 10/10 | 2013-03 10/10
+  #     (NHL 2012-11/12 are empty: the 2012-13 lockout season did not start until 2013-01-19.)
+  #
+  # Play-by-play reaches back much further — 2002 payloads carry 300-450 plays in all three leagues
+  # — so PLAYS DO NOT BOUND THIS PACKAGE, RECAPS DO. Pre-2012 coverage is sporadic (0-30%) and is
+  # excluded: the yield is poor and those summaries are not in the cache, so they would cost a full
+  # fetch each. This is the same boundary 65_espn_college measured for college sports.
+  #
+  # ⚠️ RETRACTED: this package previously discovered from 2014-07 with no recorded reason, which
+  #    cost the 2012-13 and 2013-14 seasons of all three leagues — ~5,000 games at full coverage.
+  #    The 2014 start was inherited, not measured.
+
+  # ---- discovery ------------------------------------------------------------------------------
+  # Monthly RANGE queries, one request per (league, month). The census cell is (league, CALENDAR
+  # YEAR) rather than (league, season) because months tile the calendar exactly — no gap, no
+  # overlap, no window to get wrong — and because in THIS era a fixed season window is a trap:
+  # COVID moved the 2019-20 NBA season's end to 2020-10-11 and the 2020-21 NHL season to
+  # Jan-Jul 2021, and the 2012-13 NHL season did not start until 2013-01-19. Every record still
+  # carries ESPN's own `season.year` and `season.type`, so season slicing survives in the data.
+  discovery:
+    years: "2012:2026"
+
+  # ---- feed defects ---------------------------------------------------------------------------
+  # Cumulative score channels are monotonised (running max) because ESPN's per-play score fields
+  # are not reliable: administrative plays can carry a stale pre-score value, and some carry a value
+  # from an unrelated point in the game. Raw, this made the "cumulative" score DECREASE on 9 of the
+  # first 50 college records. `meta.score_fix_plays` records how many plays were corrected per game.
+  # The official-final check is the real guard: a spuriously HIGH value propagates to the last point
+  # and fails there, dropping the game.
+  #
+  # DELIBERATELY OFF, and now measured rather than assumed. In 65 an unmeasured setting of 0.02
+  # dropped real records for a defect monotonising already fixes, and an unmeasured filter like
+  # this is what capped #55 at 50 records.
+  #
+  # 2026-08-13, over all 39,527 records: p50 0.000, p90 0.018, p99 0.153, max 0.965, with 249
+  # records (0.63%) above 0.25 — the value 65 cuts at. Those 249 were checked rather than cut, and
+  # the tail here means something DIFFERENT from what it means in college football. Worked example,
+  # NHL event 401272664 (251 of 260 plays "fixed", the worst in the corpus): the raw pairs are
+  # (1,0) x94, (2,0) x80, (3,0) x58, (3,1) x16 — ESPN's NHL feed reports the acting team's score
+  # and ZEROES the other channel on most plays. The running max reconstructs the true game exactly:
+  # away scores at plays 7/101/182, home at 6/240, final 3-2, matching the official boxscore, and
+  # only 30% of the series sits at the final value. A high fix fraction here is a feed CONVENTION,
+  # not corruption, and cutting at 0.25 would discard 249 correct records.
+  max_score_fix_frac: null
+
+  # The clamp fraction is the one that DOES need a cut, and it is a different quantity: plays whose
+  # raw score exceeded the official final and were therefore ignored (see play_scores). Measured
+  # over all 39,527 records: only 160 carry any clamp at all, and among those p90 is 0.016 — the
+  # intended target, a handful of isolated bad plays (the NFL worked example is 1 clamp in 191
+  # plays). Then a gap, and a tail: 0.069, 0.21, 0.824, 0.886.
+  #
+  # Both sides of the gap were inspected, which is what sets the cut:
+  #   KEEP  401272400 at 0.21 — away steps 1,2,3 and home 1,2,3,4, every goal its own step,
+  #         "Giroux, Flyers top Rangers 4-3 despite Kreider hat trick". Path is perfect.
+  #   DROP  401350290 at 0.824 — home jumps 3 -> 5 in a single step
+  #   DROP  401298993 at 0.886 — home jumps 6 -> 9 in a single step
+  # In both dropped cases the ENDPOINT still matches the official final, so the official-final
+  # check cannot catch them: goals are missing from the middle of the path, which is exactly the
+  # shape the `describes` claim rests on. 0.5 sits in the measured gap and costs 2 records.
+  max_score_clamp_frac: 0.5
+
+  # Outlier guard on total plays, per sport, for a corrupt play list. 65_espn_college found one
+  # college-football payload carrying 1,493 plays (1,346 of them stamped period 3) that still
+  # passed the official-final check, so nothing else catches that shape.
+  #
+  # Set 2026-08-13 from the play counts of every cached payload (37,089 games, counted not sampled):
+  #   NBA  p50 465  p99 566  p99.9 615  max 700
+  #   NFL  p50 174  p99 215  p99.9 233  max 355
+  #   NHL  p50 311  p99 405  p99.9 528  max 766
+  # No pro-league payload shows the college corruption shape — the observed maxima are legitimate
+  # multi-overtime games. These caps sit ~1.3-1.7x above each observed max: a guard, not a filter.
+  # Nothing in the harvest is expected to hit them, and `implausible_play_count` in the skip counts
+  # is the check that they stayed unhit.
+  max_plays_by_sport:
+    basketball: 1000
+    football: 600
+    hockey: 1000
 
 text:
-  # No templated ts_intro: <ts></ts> is appended directly to the real recap prose,
-  # nothing is generated.
-  min_report_chars: 400   # drop games whose recap is missing or too short
+  min_report_chars: 400
+
+  # ---- the source allowlist -------------------------------------------------------------------
+  # Filters on the publisher's own `article.source` field, never inferred from the prose.
+  #
+  # COUNTED over all 37,089 cached summary payloads on 2026-08-13 — a census, not a sample. The
+  # package's previous 92.6% coverage figure came from a 421-game stratified sample; the full count
+  # agrees with it and is now the number of record:
+  #
+  #   NBA  AP 7,694 + Associated Press 7,098 = 14,792 / 15,845 = 93.35%
+  #   NFL  AP 1,735 + Associated Press 2,072 =  3,807 /  4,075 = 93.42%
+  #   NHL  AP 7,386 + Associated Press 8,021 = 15,407 / 17,169 = 89.74%
+  #   ---------------------------------------------------------------------
+  #   all                                      34,006 / 37,089 = 91.69%
+  #
+  # ⚠️ RETRACTED: the README's claim that `article.source == "AP"` on every game checked is wrong
+  #    in two ways. **Both spellings are in the feed and "Associated Press" is the more common
+  #    one** (17,191 vs 16,815) — an allowlist of just ["AP"] would have silently halved this
+  #    package. And the field is not always AP: the misses are 2,904 games with NO `article` key at
+  #    all (7.8%, a coverage gap, not a filtering one), 173 ESPN desk stories under four different
+  #    spellings, one "Sportradar" and one blank.
+  #
+  # "ESPN.com news services" (and "ESPN News Services" / "ESPN news services" / "ESPN News
+  # Editors") is ESPN's own desk copy — a DIFFERENT rightsholder from AP — and is excluded to keep
+  # the licence ask scoped to one wire service. At 173 games it costs 0.5%. Every record carries
+  # its own source in meta.report_source, so the split stays auditable either way.
+  source_allowlist: ["AP", "Associated Press"]
 
 output:
-  output_path: output/espn_us_majors_cpt.jsonl
-  report_path: output/run_report.json
+  path: output/espn_us_majors_cpt.jsonl
+  run_report: output/run_report.json
   samples_path: samples/example_output.jsonl
-  max_records: 50         # demo cap — see LICENSE note above. null = uncapped (do not use pre-clearance).
-  indent: null
+  # Demo caps for build_cpt_jsonl.py. The full build goes through harvest.py, which shards and
+  # ignores these. Per-league as well as global so the demo covers all three leagues: leagues are
+  # walked in order, so a global-only cap fills entirely from NBA.
+  max_records: 60
+  max_records_per_league: 20
