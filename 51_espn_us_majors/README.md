@@ -242,6 +242,14 @@ The cut costs 2 records.
 
 A flat channel is a **shutout, not a defect** — only a game where *neither* side scored is flagged.
 
+**Residual limitation, stated rather than implied:** a spurious value that is too high but still
+*below* the official final is not detectable by either constraint. It survives the clamp (it is not
+impossible), the running max carries it forward, and the endpoint check passes because the series
+still lands correctly. Such a record would have a plateau in the middle of an otherwise right path.
+Nothing in the corpus is known to be in this state — it is the shape neither guard can see, and it
+is why `meta.score_fix_plays` and `meta.score_clamp_plays` are stored per record rather than as a
+run-level total: a consumer who cares about path fidelity can filter on them.
+
 ---
 
 ## Skip reasons, reported separately
