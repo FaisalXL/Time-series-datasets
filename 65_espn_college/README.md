@@ -279,6 +279,67 @@ Full matrix, completed games returned for one date per league:
 
 ---
 
+## Text length, and why an LLM does NOT shorten it
+
+The recaps are long. A reviewer asked whether they exceed a 500-token budget, and whether an LLM
+should summarise them. **Measured with `cl100k_base` on a 3,096-record stratified sample across all
+56 shards:**
+
+| | tokens |
+|---|--:|
+| median | **357** |
+| p25 / p75 | 238 / 809 |
+| p90 / p99 | 1,009 / 1,239 |
+| max | **1,463** |
+| share over 500 | **36.1%** |
+| share over 1,024 | 8.6% |
+| share over 2,048 | **0.0%** |
+
+Per tier: CFB median 807 (61.1% over 500) · WCB 474 (44.7%) · MCB 348 (32.3%) · FCS 244 (1.9%).
+Football is the long tier; FCS is short. **Most records already fit under 500 tokens.**
+
+### A 500-token truncation costs nothing
+
+| | |
+|---|--:|
+| final-score anchor present in the full text | 0.9874 |
+| final-score anchor present in the **first 500 tokens** | **0.9874** |
+| records that lose the anchor | **0 (0.00%)** |
+| anchor already in the **first paragraph** | 0.7422 |
+
+AP writes the score into the lede, so truncation keeps the alignment evidence. This differs from
+`61_ons_statistical_bulletins`, where a token cap orphaned recited values in 92% of records and
+forced a split-don't-cut rule. Here plain truncation is safe. Record
+`meta.text_truncated_at` if you apply one.
+
+### The LLM option is rejected, on three grounds
+
+1. **It changes the §7 classification, from the good side to the blocked side.** LLM-rewritten text
+   must declare `text_quality: generated`. `SCHEMA.md` §7 disqualifies semi-synthetic text/series
+   pairs and permits generated text only as "a small, tagged minority" with sign-off. That gate is
+   what holds `05_fnspid`'s 120,522 records: 98.4% of them are LLM summaries. This package has one
+   blocker today, the AP licence. Summarising would add a second, and nobody has cleared the second
+   for anything.
+2. **Nothing needs the fix.** The median is 357 tokens, and truncation handles the 36% tail at zero
+   measured cost to the anchor.
+3. **It destroys what makes the package qualify.** The `describes` tag survives because AP wrote
+   prose that independently describes this game, which the permutation control measures at 204x to
+   659x over coincidence. A summary is text derived from a series we already hold. That is a
+   paraphrase, not world knowledge from a source.
+
+A practical point supports the same conclusion: sending 73,347 AP articles through an external
+model is itself a processing act on text whose redistribution is unresolved.
+
+### What to do instead
+
+- **Hard encoder cap at 500 tokens:** truncate. Zero anchors lost, measured.
+- **Boilerplate tail:** strip AP's trailing `---` separator and the `apnews.com` / Twitter promo
+  block. It appears on 35.9% of records at a median 32 tokens. §7 names boilerplate reuse directly,
+  so removing it is defensible, and it keeps `text_quality: real`.
+- **Do NOT strip the `UP NEXT` sections for size.** That trim buys only 5.9% of tokens.
+- **If the 500 figure is a corpus-balance budget rather than a model limit:** change sampling
+  weights, not the text. Editing text to balance a corpus damages the source; weighting does not.
+
 ## Record shape
 
 ```json
