@@ -40,9 +40,19 @@ for k in ("CFB","FCS","MCB","WCB"):
     y=pg[k] and per[k]/pg[k]
     print(f"  {k:5s} {done[k]:>4d}/14 {per[k]:>9,d} {pg[k]:>9,d} {y:>7.3f} {pg[k]/UNIVERSE[k]:>21.0%}")
 print(f"  {'TOTAL':5s} {sum(done.values()):>4d}/56 {tot:>9,d} {g:>9,d}")
-rem=sum(UNIVERSE.values())-g
-if rem>0:
-    print(f"\n  ~{rem:,} games left; at the measured ~13 games/s that is ~{rem/13/3600:.1f} h")
+# Remaining work is counted from SHARDS NOT YET BUILT, never from universe-minus-walked.
+# FCS legitimately walks fewer games than its census total -- ~2,550 of its games are FBS
+# matchups excluded as CFB overlap -- so universe-minus-walked reports phantom work left
+# on a finished build.
+todo_games=sum(v for k,v in UNIVERSE.items() for _ in [0] if done[k]<14)*0
+todo=[(k,UNIVERSE[k]) for k in UNIVERSE if done[k]<14]
+if todo:
+    est=sum(u*(14-done[k])/14 for k,u in todo)
+    print(f"\n  {sum(14-done[k] for k,_ in todo)} shards left (~{est:,.0f} games);"
+          f" at the measured ~13 games/s that is ~{est/13/3600:.1f} h")
+else:
+    print(f"\n  ✅ all 56 shards built. FCS walks {UNIVERSE['FCS']-pg['FCS']:,} fewer games than its"
+          f" census total: those are FBS matchups excluded as CFB overlap, not missing work.")
 PY
 
 echo
