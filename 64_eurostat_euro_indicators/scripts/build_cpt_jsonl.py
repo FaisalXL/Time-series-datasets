@@ -258,14 +258,43 @@ def build(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
         raise SystemExit("text.abstractive_summary unsupported: no `llm_summarized` in the schema vocab.")
     fetch = Fetcher(d)
 
+    # The listing is a Liferay portlet and it PAGINATES. Reading only page 1 -- which is what this
+    # did, and what the dead `listing_only_page_one` flag pretended to control -- sees 11 of the
+    # 4,445 releases the page itself reports, i.e. 0.2% of the source. Measured 2026-08-18.
+    #
+    # Two things make the full walk cheap: the portlet exposes an `atom` resource view that needs
+    # no p_auth CSRF token (the HTML paging links do), and it honours a large `pageSize` -- 500
+    # returns 500 distinct codes in 1.2s, so the whole catalogue is ~9 requests rather than 405.
     listing = fetch.get(d["listing_url"], "listing_p1.html")
+    total_m = re.search(r"out of ([\d,]+) results", listing)
+    total_n = int(total_m.group(1).replace(",", "")) if total_m else 0
+
     codes: List[str] = []
-    for m in re.finditer(r'href="https://ec\.europa\.eu/eurostat/product\?code=([^"]+)"', listing):
-        if m.group(1) not in codes:
-            codes.append(m.group(1))
+    page_size = int(d.get("listing_page_size", 500))
+    atom = d.get("listing_atom_url")
+    if atom and not d.get("listing_only_page_one"):
+        page = 1
+        while True:
+            url = atom.format(page=page, size=page_size)
+            body = fetch.get(url, f"listing_atom_p{page}_{page_size}.xml")
+            found = [m.group(1) for m in
+                     re.finditer(r"product\?code=([A-Za-z0-9_-]+)", body)]
+            fresh = [c for c in dict.fromkeys(found) if c not in codes]
+            codes.extend(fresh)
+            print(f"[listing] page {page}: {len(fresh)} new codes ({len(codes)} total)", flush=True)
+            if len(found) < page_size or (total_n and len(codes) >= total_n):
+                break
+            page += 1
+            if page > int(d.get("listing_max_pages", 60)):
+                print("[listing] hit listing_max_pages -- stopping", flush=True)
+                break
+    else:
+        for m in re.finditer(r'href="https://ec\.europa\.eu/eurostat/product\?code=([^"]+)"', listing):
+            if m.group(1) not in codes:
+                codes.append(m.group(1))
+
     codes += [c for c in d.get("extra_codes", []) if c not in codes]
-    total = re.search(r"out of ([\d,]+) results", listing)
-    print(f"[listing] {len(codes)} codes on page 1; server reports {total.group(1) if total else '?'} total",
+    print(f"[listing] {len(codes)} codes discovered; server reports {total_n or '?'} total",
           flush=True)
 
     # Resolve each family's geo codes + series once.

@@ -68,9 +68,55 @@ output:
 # confirmed 2026-08-03: the "2026/6" page's own narrative is about April data). Server enumerates
 # {year}/{month} directly off this same +2 rule instead of pinning (see README).
 reports:
-  - year: 2026
-    month: 4
-    published: "2026-06-30"
-  - year: 2026
-    month: 5
-    published: "2026-07-28"
+  # ENUMERATED 2026-08-18. Every /reports/house-price-index/{year}/{month} page for 2021-01..
+  # 2026-12 was probed: 46 return 200 and nothing before 2021 exists (2020/6 and earlier 404).
+  # The config previously listed TWO by hand, which is why an uncapped build emitted 2 records.
+  # NOTE these are INDEX months, not report months -- the script derives the URL as index+2
+  # (FHFA's publication lag). The report page each line resolves to is named in the comment.
+  # `published` is left null rather than invented; it is only echoed into meta.
+  - {year: 2020, month: 11, published: null}   # -> 2021/1
+  - {year: 2021, month: 1, published: null}   # -> 2021/3
+  - {year: 2021, month: 2, published: null}   # -> 2021/4
+  - {year: 2021, month: 4, published: null}   # -> 2021/6
+  - {year: 2021, month: 5, published: null}   # -> 2021/7
+  - {year: 2021, month: 7, published: null}   # -> 2021/9
+  - {year: 2021, month: 8, published: null}   # -> 2021/10
+  - {year: 2021, month: 10, published: null}   # -> 2021/12
+  - {year: 2021, month: 11, published: null}   # -> 2022/1
+  - {year: 2022, month: 1, published: null}   # -> 2022/3
+  - {year: 2022, month: 2, published: null}   # -> 2022/4
+  - {year: 2022, month: 4, published: null}   # -> 2022/6
+  - {year: 2022, month: 5, published: null}   # -> 2022/7
+  - {year: 2022, month: 7, published: null}   # -> 2022/9
+  - {year: 2022, month: 8, published: null}   # -> 2022/10
+  - {year: 2022, month: 10, published: null}   # -> 2022/12
+  - {year: 2022, month: 11, published: null}   # -> 2023/1
+  - {year: 2023, month: 1, published: null}   # -> 2023/3
+  - {year: 2023, month: 2, published: null}   # -> 2023/4
+  - {year: 2023, month: 4, published: null}   # -> 2023/6
+  - {year: 2023, month: 5, published: null}   # -> 2023/7
+  - {year: 2023, month: 7, published: null}   # -> 2023/9
+  - {year: 2023, month: 8, published: null}   # -> 2023/10
+  - {year: 2023, month: 10, published: null}   # -> 2023/12
+  - {year: 2023, month: 11, published: null}   # -> 2024/1
+  - {year: 2024, month: 1, published: null}   # -> 2024/3
+  - {year: 2024, month: 2, published: null}   # -> 2024/4
+  - {year: 2024, month: 4, published: null}   # -> 2024/6
+  - {year: 2024, month: 5, published: null}   # -> 2024/7
+  - {year: 2024, month: 7, published: null}   # -> 2024/9
+  - {year: 2024, month: 8, published: null}   # -> 2024/10
+  - {year: 2024, month: 10, published: null}   # -> 2024/12
+  - {year: 2024, month: 11, published: null}   # -> 2025/1
+  - {year: 2024, month: 12, published: null}   # -> 2025/2
+  - {year: 2025, month: 1, published: null}   # -> 2025/3
+  - {year: 2025, month: 2, published: null}   # -> 2025/4
+  - {year: 2025, month: 4, published: null}   # -> 2025/6
+  - {year: 2025, month: 5, published: null}   # -> 2025/7
+  - {year: 2025, month: 7, published: null}   # -> 2025/9
+  - {year: 2025, month: 8, published: null}   # -> 2025/10
+  - {year: 2025, month: 10, published: null}   # -> 2025/12
+  - {year: 2025, month: 11, published: null}   # -> 2026/1
+  - {year: 2026, month: 1, published: null}   # -> 2026/3
+  - {year: 2026, month: 2, published: null}   # -> 2026/4
+  - {year: 2026, month: 4, published: null}   # -> 2026/6
+  - {year: 2026, month: 5, published: null}   # -> 2026/7

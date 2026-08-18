@@ -35,6 +35,7 @@ import ssl
 import sys
 import time
 import urllib.parse
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -109,9 +110,33 @@ def rp(s: str) -> Path:
 
 # --- HTTP --------------------------------------------------------------------
 
-def http_get(url: str, ua: str, timeout: int) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept": "*/*"})
-    return urllib.request.urlopen(req, timeout=timeout, context=_SSL).read()
+def http_get(url: str, ua: str, timeout: int, tries: int = 5) -> bytes:
+    """GET with exponential backoff.
+
+    Added 2026-08-18 after two consecutive full builds died on the FIRST request with
+    `_ssl.c:989: The handshake operation timed out`, while curl and a bare urllib call to the same
+    URL succeeded 3/3 seconds later -- an intermittent TLS drop, not a blocked endpoint. Without a
+    retry a single blip costs the whole run, and this build is ~2,750 requests at the 2s crawl-delay
+    robots.txt asks for, i.e. over an hour in which one dropped handshake is close to certain.
+
+    A 404 is a real answer and is raised immediately rather than retried.
+    """
+    last = None
+    for attempt in range(tries):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept": "*/*"})
+            return urllib.request.urlopen(req, timeout=timeout, context=_SSL).read()
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                raise
+            last = e
+        except Exception as e:
+            last = e
+        wait = min(2 ** attempt, 30)
+        print(f"  ! {type(last).__name__} on {url[:70]} -- retry {attempt + 1}/{tries} in {wait}s",
+              file=sys.stderr)
+        time.sleep(wait)
+    raise last
 
 
 def download_cached(url: str, dest: Path, ua: str, timeout: int, delay: float) -> bytes:

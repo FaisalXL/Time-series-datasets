@@ -1,0 +1,17 @@
+[listing] page 1: 500 new codes (500 total)
+[listing] page 2: 500 new codes (1000 total)
+[listing] page 3: 499 new codes (1499 total)
+[listing] page 4: 500 new codes (1999 total)
+[listing] page 5: 500 new codes (2499 total)
+[listing] page 6: 500 new codes (2999 total)
+[listing] page 7: 500 new codes (3499 total)
+[listing] page 8: 500 new codes (3999 total)
+[listing] page 9: 445 new codes (4444 total)
+[listing] page 10: 0 new codes (4444 total)
+[listing] 4444 codes discovered; server reports 4445 total
+[series] unemployment           une_rt_m       EA=EA21      EU=EU27_2020  8 channels
+[series] inflation              prc_hicp_manr  EA=EA20      EU=EU27_2020  5 channels
+[series] industrial_production  sts_inpr_m     EA=EA21      EU=EU27_2020  3 channels
+[series] producer_prices        sts_inppd_m    EA=EA21      EU=EU27_2020  2 channels
+[series] retail_trade           sts_trtu_m     EA=EA21      EU=EU27_2020  2 channels
+[series] services_production    sts_sepr_m     EA=EA21      EU=EU27_2020  2 channels

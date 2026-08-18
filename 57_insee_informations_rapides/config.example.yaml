@@ -29,23 +29,16 @@ indicator:
 min_text_chars: 300
 
 # CDX discovery range (used only when seed_ids is null).
-year_from: 2018
+year_from: 2010        # widened 2026-08-18: 2018 was the demo's bound, not INSEE's
 year_to: 2026
 
 # Demo seed: known English CPI Informations Rapides release IDs (flash + definitive; the build
 # dedupes per reference month, preferring the richer definitive). Set to null for full CDX
 # discovery across all ~6,800 archived English releases (server-side full run).
-seed_ids:
-  - 3307940    # 2018 (older English edition; confirms depth)
-  - 8558560    # 2025-03 definitive
-  - 8598808    # 2025-06 flash
-  - 8608796    # 2025-06 definitive
-  - 8630008    # 2025-07 definitive
-  - 8662070    # 2025-10 flash
-  - 8667363    # 2025-10 definitive
-  - 8672064    # 2025-11 flash
-  - 8726812    # 2025-12 definitive
-  - 8974215    # 2026-03 definitive
+seed_ids: null           # null = enumerate via the Wayback CDX index (year_from..year_to).
+# The hardcoded 10-id seed list below was the OFFLINE DEMO path and is why an uncapped build
+# emitted 7 records. Kept here as a comment so the demo remains reproducible.
+#  3307940 8558560 8598808 8608796 8630008 8662070 8667363 8672064 8726812 8974215
 
 output:
   max_records: null        # null = all discovered; server full run sets seed_ids: null too

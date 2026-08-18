@@ -224,8 +224,45 @@ def detect_alignment(text: str, year: int, month: int, values: dict) -> tuple[st
                 checks["matched"] += 1
                 evidence.append({"place": div, "metric": metric,
                                  "claimed": sign * val, "computed": round(real, 2)})
-    alignment = "recites" if checks["matched"] >= max(3, checks["total"] - 1) else "describes"
+    # The checks above verify that percentage changes STATED in the prose match percentage changes
+    # COMPUTED from the series. That is strong alignment evidence and it is worth keeping -- but it
+    # is not what `recites` means. SCHEMA §7: "the text literally states the numbers that are the
+    # series", and this series stores index LEVELS, not the month-over-month percentages the
+    # narrative quotes. Tagging `recites` off a derived quantity is the same overclaim ONS #61 made
+    # across 71 of its 72 families, and it is what `schema/validate.py` now rejects at construction.
+    #
+    # So the evidence still gates the record; the TAG additionally requires a raw series value to
+    # appear in the prose.
+    strong = checks["matched"] >= max(3, checks["total"] - 1)
+    alignment = "recites" if (strong and _text_states_a_level(text, values)) else "describes"
     return alignment, evidence, checks
+
+
+_LEVEL_NUM = re.compile(r"-?\d[\d,]*\.?\d*")
+
+
+def _text_states_a_level(text: str, values: dict) -> bool:
+    """Does a raw index level from the paired series literally appear in the prose?
+
+    Same test as schema/validate.py and the team's verify_cpt.py, so the three cannot disagree.
+    """
+    nums = []
+    for m in _LEVEL_NUM.finditer(text or ""):
+        try:
+            nums.append(float(m.group(0).replace(",", "")))
+        except ValueError:
+            pass
+    if not nums:
+        return False
+    for series in (values or {}).values():
+        for v in (series or {}).values() if isinstance(series, dict) else (series or []):
+            if v is None or not isinstance(v, (int, float)):
+                continue
+            for cand in {v, round(v, 1), round(v, 2), round(v)}:
+                for t in nums:
+                    if cand and abs(t - cand) <= max(0.01 * abs(cand), 0.01):
+                        return True
+    return False
 
 
 _SUPERLATIVE = re.compile(r"\b(highest|largest|record[- ]high|all-time high|lowest|smallest|"

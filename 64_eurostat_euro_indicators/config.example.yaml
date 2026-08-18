@@ -31,7 +31,14 @@ data:
   # portlet -- paginating it needs the p_p_* parameter set, which is NOT wired here. The demo
   # reads page 1; the server agent must implement pagination (or Wayback CDX) for a full run.
   # See NOTION_PAGE.md open question 1.
-  listing_only_page_one: true
+  listing_only_page_one: false   # was true, and the builder never read the flag anyway -- it only
+                                 # ever fetched page 1: 11 codes of the 4,445 the page reports,
+                                 # 0.2% of the source. Pagination implemented 2026-08-18.
+  # Atom resource view of the same portlet. Needs no p_auth CSRF token (the HTML paging links do)
+  # and honours a large pageSize: 500 returns 500 codes in 1.2s, so the catalogue is ~9 requests.
+  listing_atom_url: "https://ec.europa.eu/eurostat/news/euro-indicators?p_p_id=estatsearchportlet_WAR_estatsearchportlet_INSTANCE_OaTpFrwlabNK&p_p_lifecycle=2&p_p_state=normal&p_p_mode=view&p_p_resource_id=atom&p_p_cacheability=cacheLevelPage&_estatsearchportlet_WAR_estatsearchportlet_INSTANCE_OaTpFrwlabNK_pageNumber={page}&_estatsearchportlet_WAR_estatsearchportlet_INSTANCE_OaTpFrwlabNK_pageSize={size}&_estatsearchportlet_WAR_estatsearchportlet_INSTANCE_OaTpFrwlabNK_sort=lastUpdateDate&_estatsearchportlet_WAR_estatsearchportlet_INSTANCE_OaTpFrwlabNK_collection=CAT_PREREL"
+  listing_page_size: 500
+  listing_max_pages: 60
   # Optional explicit codes, appended to whatever the listing yields (used to widen the demo
   # across indicator families without pagination).
   extra_codes: []
