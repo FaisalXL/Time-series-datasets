@@ -190,8 +190,11 @@ start until 2013-01-19. Each record still carries ESPN's own `season.year` and `
 `https://www.espn.com/nba/game/_/gameId/401810333` → **200**.
 
 > **RETRACTED:** `source` was built from the *sport*, which does not resolve. It is built from the
-> **league slug** now, verified 200 for all three leagues. ⚠️ `65_espn_college` builds the same
-> field the same wrong way and its 73,347 records carry non-resolving `source` URLs.
+> **league slug** now, verified 200 for all three leagues. `65_espn_college` had inherited the same
+> bug; its 73,347 records were rewritten on 2026-08-13 by that package's
+> `scripts/fix_source_urls.py`, so both siblings now emit resolving URLs. Note what this slipped
+> past: the schema requires `source` to be a *canonical* URL, not a *resolving* one, so every one
+> of those records passed `--strict` for as long as the bug existed.
 
 ### 6. Two defects predating schema v1, both fixed
 
