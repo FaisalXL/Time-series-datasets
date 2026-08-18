@@ -398,7 +398,7 @@
  "text_quality": "real",
  "series_id": "espn_college-football_401114167",
  "dataset": "espn_college",
- "source": "https://www.espn.com/football/boxscore/_/gameId/401114167",
+ "source": "https://www.espn.com/college-football/game/_/gameId/401114167",
  "license": "proprietary-review",
  "text_source": "third_party",
  "alignment": "describes",

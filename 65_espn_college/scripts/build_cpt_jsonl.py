@@ -331,8 +331,13 @@ def build_record(event_id: str, lg: dict, cfg: dict, f: Fetcher):
     away_name, home_name = team_names(summary)
     gdate = game_date(summary)
     gdate_short = gdate[:10] if gdate else None
-    page = "boxscore" if sport == "football" else "game"
-    report_url = f"https://www.espn.com/{sport}/{page}/_/gameId/{event_id}"
+    # The LEAGUE SLUG, not the sport. Measured 2026-08-13: the sport form does not resolve --
+    # www.espn.com/football/boxscore/_/gameId/322430238 and www.espn.com/basketball/game/... both
+    # 404, which is what every record built before that date carries. The league form returns 200,
+    # verified across all four tiers at both ends of the era (CFB/FCS 2012+2025,
+    # MCB/WCB 2012+2025). `/game/` for every tier, matching 51_espn_us_majors -- `/boxscore/`
+    # also resolves under the league slug, but there is no reason for the siblings to differ.
+    report_url = f"https://www.espn.com/{league}/game/_/gameId/{event_id}"
 
     rec = emit_record(
         text=f"{story}\n\n<ts></ts>",
