@@ -427,7 +427,9 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
 
     stat = {"gauges": 0, "gauges_ok": 0, "events_found": 0, "emitted": 0,
             "no_impacts": 0, "no_series": 0, "no_threshold": 0, "short_text": 0,
-            "no_matched_impact": 0, "invalid": 0}
+            "no_matched_impact": 0, "invalid": 0,
+            # extra windows of a crest already emitted -- see the by_event dedup below
+            "dup_crest_window": 0}
     records: List[dict] = []
 
     # Gauge universe: an enumerated national list (config `gauges_file`, produced by
@@ -488,8 +490,23 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
         river = ""
         buf_days = int(d.get("event_window_buffer_days", round(max(wb, wa) / 24) + 2))
 
+        # One record per CREST, not per candidate day. `crests` comes from a lenient scan of the
+        # DAILY series, so two candidate days routinely refine to the same 15-minute peak: `ci` is
+        # the argmax of each day's own loaded buffer, so the same crest is found again at a
+        # different offset and sliced into a different-length window. Every such record carries the
+        # SAME series_id (`nwps_<lid>_<crest hour>`) with a different `window_hours`.
+        #
+        # Measured on the 29,857-record build (2026-08-18): 3,246 series_ids reused across 4,638
+        # surplus records, up to 7 windows of one crest. Two things wrong at once -- series_id is
+        # not unique, and SCHEMA §7 disqualifies "arbitrary windows imposed by us rather than by the
+        # source's reporting structure": NWS published one crest, we shipped up to seven slices of
+        # it. It also made the package's own reconcile overstate distinct events by 18%.
+        #
+        # Keyed on the crest, keeping the LONGEST window (most context, and it still contains the
+        # crest, so the crest==series-max alignment claim is unaffected).
+        by_event: Dict[str, dict] = {}
         for (cday, _daily_cval) in crests:
-            if maxrec is not None and len(records) >= int(maxrec):
+            if maxrec is not None and len(records) + len(by_event) >= int(maxrec):
                 break
             # fetch 15-min iv only for this crest's window, then refine the precise crest
             aligned = [(tm, round(v + off, 3)) for tm, v in
@@ -545,8 +562,15 @@ def build(cfg: Dict[str, Any]) -> Tuple[List[dict], Dict[str, int]]:
             except ValueError:
                 stat["invalid"] += 1
                 continue
-            records.append(rec)
-            stat["emitted"] += 1
+            prev = by_event.get(ev_id)
+            if prev is None:
+                by_event[ev_id] = rec
+            else:
+                stat["dup_crest_window"] += 1
+                if len(rec["timeseries"][0]["values"]) > len(prev["timeseries"][0]["values"]):
+                    by_event[ev_id] = rec
+        records.extend(by_event.values())
+        stat["emitted"] += len(by_event)
     return records, stat
 
 
