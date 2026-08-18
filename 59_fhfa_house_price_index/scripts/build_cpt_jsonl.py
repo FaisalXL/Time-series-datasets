@@ -75,12 +75,22 @@ def html_to_text(html: bytes) -> str:
     t = re.sub(r"<style.*?</style>", " ", t, flags=re.S)
     t = re.sub(r"<[^>]+>", " ", t)
     t = t.replace("&nbsp;", " ").replace("&amp;", "&").replace("&#8217;", "’")
+    # Zero-width characters (U+200B/U+FEFF/U+00AD) appear inside FHFA's own markup, sometimes
+    # five in a row before the first word, and they break any regex anchored on a word.
+    t = re.sub(r"[\u200b\u200c\u200d\ufeff\u00ad]", "", t)
     return re.sub(r"\s+", " ", t).strip()
 
 
+# Surveyed across all 46 report pages on 2026-08-18 rather than inferred from the recent ones.
+# The opening sentence takes three forms and the older half does NOT carry the "U.S." prefix:
+#     12x  "U.S. house prices rose ..."          <- the only form the old anchors matched
+#     16x  "House prices rose/fell nationwide"   <- silently dropped 18 of 46 reports
+#      1x  "Washington, D.C. – U.S. ..."
+# and several are prefixed with ZERO-WIDTH SPACE (U+200B), sometimes five of them, which defeats a
+# regex anchored at a word boundary. html_to_text strips those now.
 _START_ANCHORS = (
     re.compile(r"Washington, D\.C\.\s*[-–]\s*"),
-    re.compile(r"(?=U\.S\. house prices (?:rose|fell|were unchanged))"),
+    re.compile(r"(?=(?:U\.S\. )?[Hh]ouse prices (?:rose|fell|were|increased|declined|remained))"),
 )
 
 
@@ -100,8 +110,15 @@ def extract_narrative(html: bytes, tcfg: dict) -> str:
         if m:
             start = m.end()
             break
-    m_end = re.search(re.escape(tcfg["end_anchor"]), text[max(start, 0):], re.I)
-    end = (start if start >= 0 else 0) + m_end.start() if m_end else -1
+    # The END marker is era-dependent too. 2021-2022 releases close the narrative with
+    # "Related News Release Attachment(s):" and never contain "Tables and graphs", which stranded
+    # 13 further reports after the start anchors were widened. Take the EARLIEST of the known
+    # terminators so a page carrying several still cuts at the right place.
+    ends = tcfg.get("end_anchors") or [tcfg["end_anchor"]]
+    tail = text[max(start, 0):]
+    hits = [m.start() for m in
+            (re.search(re.escape(a), tail, re.I) for a in ends) if m]
+    end = (start if start >= 0 else 0) + min(hits) if hits else -1
     if start < 0 or end < 0 or end <= start:
         return ""
     return text[start:end].strip()

@@ -54,6 +54,14 @@ text:
   # narrative-start anchors, tried in order (some releases open "Washington, D.C. -- ...", others
   # open directly with "U.S. house prices ..." -- confirmed both forms exist, see build script)
   end_anchor: "Tables and graphs"
+  # Era-dependent: 2021-2022 releases close the narrative with "Related News Release
+  # Attachment(s):" and never contain "Tables and graphs". The EARLIEST match wins.
+  # Surveyed across all 46 report pages 2026-08-18.
+  end_anchors:
+    - "Tables and graphs"
+    - "Related News Release"
+    - "Attachment(s):"
+    - "Sign up for email updates"
   min_chars: 200
   max_chars: 2000
   drop_on_superlative_contradiction: true   # same guard as #58, kept as cheap insurance
