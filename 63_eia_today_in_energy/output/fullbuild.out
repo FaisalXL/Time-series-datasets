@@ -1,0 +1,12 @@
+[series] loaded 12 channels from bulk
+[articles] enumerated 3569 across 2011-2026
+{
+  "articles_seen": 3569,
+  "no_body": 5,
+  "no_date": 0,
+  "no_bundle": 3076,
+  "short_series": 0,
+  "no_evidence": 356,
+  "too_short": 0,
+  "emitted": 132
+}

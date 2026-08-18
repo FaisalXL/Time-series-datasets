@@ -32,6 +32,48 @@ import sys
 
 FREQ_RE = re.compile(r"^\d+(ms|m|h|d|w|W|M|q|y|over|play)$")
 INF = float("inf")
+_NUM_RE = re.compile(r"-?\d[\d,]*\.?\d*")
+
+
+def _recites_a_value(rec) -> bool:
+    """Does any series value literally appear in the text?
+
+    SCHEMA §7 defines `recites` as "the text literally states the numbers that are the series".
+    Builders keep tagging `recites` on a weaker basis -- a figure that RECONCILES with the series
+    once a unit scale is applied, or a percentage change COMPUTED from it. Both are good evidence
+    of alignment and neither is reciting:
+
+        63_eia  text "a new annual production record of 13.6 million b/d"
+                series us_crude_oil_production_thousand_bd = [..., 13235, 13586]
+
+    13.6 is not 13,586. Found on 2026-08-18 in five packages at once (63, 41, 57, 58, 59), which is
+    why the check lives here rather than in any one builder. Deliberately identical to the test in
+    the team's verify_cpt.py, so the two gates cannot disagree. A WARNING, not an error: the record
+    is fine, only the tag overclaims.
+    """
+    text = rec.get("text") or ""
+    tn = []
+    for m in _NUM_RE.finditer(text):
+        try:
+            tn.append(float(m.group(0).replace(",", "")))
+        except ValueError:
+            pass
+    if not tn:
+        return False
+    for ch in rec.get("timeseries") or []:
+        if not isinstance(ch, dict):
+            continue
+        for v in ch.get("values") or []:
+            if v is None or not isinstance(v, (int, float)):
+                continue
+            for cand in {v, round(v, 1), round(v, 2), round(v)}:
+                for t in tn:
+                    if cand and abs(t - cand) <= max(0.01 * abs(cand), 0.01):
+                        return True
+                    if cand == 0 and t == 0:
+                        return True
+    return False
+
 URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 TS_TOKEN = "<ts></ts>"
 
@@ -127,6 +169,10 @@ def validate_record(rec, min_text_chars: int):
             channel_len = next(iter(next(iter(len_by_freq.values()))))
 
     # --- required: task_type ---
+    if rec.get("alignment") == "recites" and not _recites_a_value(rec):
+        warns.append("alignment is 'recites' but no series value appears in the text "
+                     "(SCHEMA §7: recites means the text literally states the series numbers)")
+
     if rec.get("task_type") not in TASK_TYPES:
         errs.append(f"`task_type` must be 'world_knowledge', got {rec.get('task_type')!r}")
 

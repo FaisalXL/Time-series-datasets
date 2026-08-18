@@ -1,13 +1,13 @@
 {
   "stats": {
-    "articles_seen": 231,
-    "no_body": 0,
+    "articles_seen": 3569,
+    "no_body": 5,
     "no_date": 0,
-    "no_bundle": 191,
+    "no_bundle": 3076,
     "short_series": 0,
-    "no_evidence": 28,
+    "no_evidence": 356,
     "too_short": 0,
-    "emitted": 12
+    "emitted": 132
   },
   "n_bundles": 6,
   "config_snapshot": {
@@ -251,7 +251,7 @@
       "path": "output/eia_today_in_energy_cpt.jsonl",
       "run_report": "output/run_report.json",
       "samples_path": "samples/example_output.jsonl",
-      "max_records": 12
+      "max_records": null
     }
   },
   "dry_run": false
