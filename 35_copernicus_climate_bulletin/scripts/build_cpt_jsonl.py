@@ -372,7 +372,7 @@ def build(cfg) -> Tuple[List[dict], dict]:
                 continue
             chans = [(u, v[-n:], k[-n:], f, tb) for u, v, k, f, tb in chans]
 
-            freq = {"annual": "1y", "monthly": "1m", "daily": "1d"}[rule.stride]
+            freq = {"annual": "1y", "monthly": "1M", "daily": "1d"}[rule.stride]
             text = f"{sec.text}\n\n<ts></ts>"
             sid = (f"{d['series_id_prefix']}_{bul.theme}_{bul.ym}"
                    f"_{sec.topic}_{sec.period}_s{sec.ordinal}")

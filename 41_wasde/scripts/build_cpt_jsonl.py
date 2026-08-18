@@ -579,7 +579,7 @@ def build(cfg) -> Tuple[List[dict], Dict[str, Any]]:
                 vals = [points[pm].get(k, (None, None))[1] for pm in win_months]
                 if any(v is None for v in vals):
                     continue
-                ts.append({"values": [round(v, 3) for v in vals], "unit": ch["channel"], "freq": "1m"})
+                ts.append({"values": [round(v, 3) for v in vals], "unit": ch["channel"], "freq": "1M"})
                 used_humans.append(ch["human"])
                 if ch["xml_name"] == ANCHOR_ATTR:
                     anchor_ep = vals[-1]

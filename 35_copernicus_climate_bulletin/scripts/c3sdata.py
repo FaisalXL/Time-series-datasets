@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 import re
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
@@ -124,7 +125,16 @@ def parse(raw: bytes) -> Optional[Table]:
             name = header[idx] if idx < len(header) else f"col{idx}"
             c = cell.strip()
             try:
-                vals[name] = float(c)
+                f = float(c)
+                # `float("nan")` and `float("inf")` SUCCEED, so a literal `nan` cell -- which the
+                # C3S sea-ice and hydrological CSVs use for a missing month -- never reached the
+                # ValueError branch below and was stored as a float NaN. That NaN then bypassed
+                # every downstream gate here, all of which test `is None`: max_null_fraction
+                # counted it as present, and the trailing-point checks accepted it. It ended up in
+                # 508 values across 98 shipped records, where it serialises as the bare token
+                # `NaN` -- not valid JSON (RFC 8259) -- and crashed the team's verify_cpt.py.
+                # A non-finite cell means "no measurement", which is exactly None here.
+                vals[name] = f if math.isfinite(f) else None
             except ValueError:
                 vals[name] = None
         ncol = max(ncol, len(vals))

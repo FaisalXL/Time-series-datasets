@@ -31,6 +31,7 @@ import re
 import sys
 
 FREQ_RE = re.compile(r"^\d+(ms|m|h|d|w|W|M|q|y|over|play)$")
+INF = float("inf")
 URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 TS_TOKEN = "<ts></ts>"
 
@@ -79,6 +80,24 @@ def validate_record(rec, min_text_chars: int):
             else:
                 if not all(v is None or isinstance(v, (int, float)) for v in vals):
                     errs.append(f"timeseries[{i}].values has non-numeric entries")
+                # NaN / Infinity are floats, so the isinstance check above waves them through.
+                # They must be caught here for two independent reasons:
+                #   1. `json.dumps` serialises them as the bare tokens NaN / Infinity, which are
+                #      NOT valid JSON (RFC 8259). Python reads them back, so a Python-only
+                #      pipeline never notices; any strict parser rejects the line outright, and
+                #      the team's own verify_cpt.py CRASHED on one (`cannot convert float NaN to
+                #      integer`).
+                #   2. A non-finite value is not a measurement. `null` is this corpus's
+                #      established convention for a missing point -- 8 packages use it.
+                # Found 2026-08-18: 98 of 825 records in 35_copernicus_climate_bulletin carried
+                # 508 NaNs and passed this validator with 0 errors and 0 warnings, while sitting
+                # in the cleared-to-ship bucket. Root cause was `float("nan")` SUCCEEDING in the
+                # C3S CSV reader, so literal `nan` cells never reached its ValueError->None branch.
+                nonfinite = sum(1 for v in vals
+                                if isinstance(v, float) and (v != v or v in (INF, -INF)))
+                if nonfinite:
+                    errs.append(f"timeseries[{i}].values has {nonfinite} non-finite "
+                                f"(NaN/Infinity) entries -- not valid JSON; use null")
                 vlen = len(vals)
                 lengths.append(vlen)
             unit = ch.get("unit")

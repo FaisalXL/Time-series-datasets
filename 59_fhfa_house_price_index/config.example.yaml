@@ -29,7 +29,7 @@ data:
   cache_dir: ".cache"
 
 series:
-  freq: "1m"
+  freq: "1M"
   window: 24          # trailing months of context ending at the report month (WASDE precedent)
   min_points: 12
   # Places to ship as channels -- must match hpi_master.csv place_name exactly.
