@@ -25,7 +25,7 @@ import time
 import urllib.parse
 import warnings
 from collections import Counter, defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from pathlib import Path
 
 import yaml
@@ -40,175 +40,219 @@ import build_cpt_jsonl as B  # noqa: E402
 import pdfplumber  # noqa: E402
 
 
+def parse_report(job: tuple) -> dict:
+    """Download (cached) + parse ONE report in a worker PROCESS. Returns serializable pieces only.
+
+    WHY PROCESSES. The harvest is CPU-bound, not IO-bound: pdfplumber's per-page text extraction
+    dominates, and it holds the GIL, so raising the thread count from 8 to 24 changed nothing
+    (~2.5s/report either way, ~14h for the 2011+ scope). Prefiltering pages by marker text before
+    the expensive extract_tables() call was measured at 1.0x on table-bearing reports because
+    extract_text() is itself the cost. So the parse moves to processes; only the parse. Channel
+    building stays in the parent because it needs the ~300MB PSD group dict, which must not be
+    copied into every worker.
+
+    Both prose shapes are extracted here even though only one will be used, because deciding which
+    requires the PSD vocabulary that lives in the parent -- and re-opening the PDF later to fetch
+    the other shape would cost more than computing both now.
+    """
+    fn, url, cache_dir, tcfg = job
+    import pdfplumber as _pp
+    pdf_path = Path(cache_dir) / "reports" / fn
+    try:
+        B.fetch(url, pdf_path)
+    except Exception:                                            # noqa: BLE001
+        return {"error": "download_failed"}
+    # The download API answers HTTP 200 with a 10-byte '%PDF-1.4\r\n' STUB for reports whose file
+    # is gone -- 200 of 18,494, deterministic across retries, so it is the server's real answer and
+    # not a transient failure. A further 56 arrive truncated (valid header, no %%EOF). Both were
+    # landing in `parse_failed` as PdfminerException, which read as a parser problem rather than
+    # as missing source files. Counted separately instead.
+    try:
+        size = pdf_path.stat().st_size
+        with pdf_path.open("rb") as fh:
+            head = fh.read(5)
+            fh.seek(max(0, size - 2048))
+            tail = fh.read()
+    except OSError:
+        return {"error": "unreadable_cache"}
+    if head != b"%PDF" and not head.startswith(b"%PDF"):
+        return {"error": "not_a_pdf"}
+    if size <= 64:
+        return {"error": "empty_pdf_stub_from_api"}
+    if b"%%EOF" not in tail:
+        return {"error": "truncated_pdf"}
+
+    drop_res = [re.compile(x) for x in tcfg["drop_lines"]]
+    try:
+        with _pp.open(pdf_path) as pdf:
+            tables = B.find_tables(pdf)
+            if not tables:
+                return {"tables": []}
+            prose_by_page = {}
+            for tb in tables:
+                pg = tb["page"]
+                if pg not in prose_by_page:
+                    prose_by_page[pg] = B.prose_after_table(pdf, pg, tcfg, drop_res)
+            sect_text, sect_head = B.prose_after_any_heading(
+                pdf, tcfg["section_headings"], tcfg, drop_res)
+    except Exception as e:                                       # noqa: BLE001
+        return {"error": f"{type(e).__name__}: {str(e)[:120]}"}
+    return {"tables": tables, "prose_by_page": prose_by_page,
+            "section": [sect_text, sect_head]}
+
+
 def report_year(rep: dict) -> str:
     return (rep.get("publishDate") or rep.get("reportDate") or "")[:4]
 
 
-def build_one(rep: dict, group: str, psd_vals, psd_units, countries, latest, cfg, stats, lock):
-    """All records derivable from one report. Returns [] for every kind of miss, counting why."""
+def records_from(rep: dict, parsed: dict, group: str, psd_vals, psd_units, countries, latest,
+                 cfg: dict, stats) -> list[dict]:
+    """Turn one parsed report into records. Parent-process side: needs the PSD dicts."""
     tcfg, scfg = cfg["text"], cfg["series"]
-    drop_res = [re.compile(p) for p in tcfg["drop_lines"]]
     aliases = cfg.get("attribute_aliases", {})
     dedup = cfg.get("dedup", {})
+
+    if parsed.get("error"):
+        if parsed["error"] in ("download_failed", "empty_pdf_stub_from_api", "truncated_pdf",
+                               "not_a_pdf", "unreadable_cache"):
+            stats[parsed["error"]] += 1
+        else:
+            stats["parse_failed"] += 1
+            stats["parse_errors"][parsed["error"]] = \
+                stats["parse_errors"].get(parsed["error"], 0) + 1
+        return []
+    tables = parsed.get("tables") or []
+    stats["tables_found"] += len(tables)
+    for tb in tables:
+        stats["table_layout"][tb.get("found_by", "?")] = \
+            stats["table_layout"].get(tb.get("found_by", "?"), 0) + 1
+    if not tables:
+        stats["no_table"] += 1
+        return []
 
     country = B.resolve_country(rep.get("countryName", "").strip(), countries, latest,
                                cfg.get("country_aliases", {}))
     if country is None:
-        with lock:
-            stats["unresolved_country"] += 1
-            stats["unresolved_country_names"][rep.get("countryName", "?")] = \
-                stats["unresolved_country_names"].get(rep.get("countryName", "?"), 0) + 1
+        stats["unresolved_country"] += 1
+        nm = rep.get("countryName", "?")
+        stats["unresolved_country_names"][nm] = stats["unresolved_country_names"].get(nm, 0) + 1
         return []
 
-    fn = rep["fileName"] + ".pdf"
-    url = cfg["data"]["gain_download"].format(file_name=urllib.parse.quote_plus(fn))
-    pdf_path = PKG_ROOT / cfg["data"]["cache_dir"] / "reports" / fn
-    try:
-        B.fetch(url, pdf_path)
-    except Exception:                                            # noqa: BLE001
-        with lock:
-            stats["download_failed"] += 1
+    shape, specs = B.derive_specs(tables, country, psd_vals, tcfg)
+    stats["record_shape"][shape] = stats["record_shape"].get(shape, 0) + 1
+    if shape == "none":
+        stats["no_psd_commodity_match"] += 1
         return []
 
+    by_title = {}
+    for tb in tables:
+        by_title.setdefault(B.norm_label(tb["title"]), tb)
+
+    url = cfg["data"]["gain_download"].format(
+        file_name=urllib.parse.quote_plus(rep["fileName"] + ".pdf"))
     out = []
-    try:
-        with pdfplumber.open(pdf_path) as pdf:
-            tables = B.find_tables(pdf)
-            with lock:
-                stats["tables_found"] += len(tables)
-                for t in tables:
-                    stats["table_layout"][t.get("found_by", "?")] = \
-                        stats["table_layout"].get(t.get("found_by", "?"), 0) + 1
-            if not tables:
-                with lock:
-                    stats["no_table"] += 1
-                return []
-            shape, specs = B.derive_specs(tables, country, psd_vals, tcfg)
-            with lock:
-                stats["record_shape"][shape] = stats["record_shape"].get(shape, 0) + 1
-            if shape == "none":
-                with lock:
-                    stats["no_psd_commodity_match"] += 1
-                return []
+    for spec in specs:
+        stats["candidates"] += 1
+        commodities = spec["psd_commodities"]
+        if (country in dedup.get("wasde_countries", [])
+                and any(c in dedup.get("wasde_commodities", []) for c in commodities)):
+            stats["wasde_skipped"] += 1
+            continue
+        chans, tabs = [], []
+        for cm in commodities:
+            table = by_title.get(B.norm_label(cm))
+            if table is None:
+                continue
+            tabs.append(table)
+            chans.extend(B.build_channels(psd_vals, psd_units, country, cm, table,
+                                         aliases, scfg, stats))
+        if not tabs or not chans:
+            stats["no_channels"] += 1
+            continue
 
-            by_title = {}
-            for t in tables:
-                by_title.setdefault(B.norm_label(t["title"]), t)
+        if spec.get("page") is not None:
+            text = (parsed.get("prose_by_page") or {}).get(spec["page"], "")
+            heading = ""
+        else:
+            text, heading = parsed.get("section") or ["", ""]
+        if len(text) < tcfg["min_chars"]:
+            stats["no_prose"] += 1
+            continue
 
-            for spec in specs:
-                with lock:
-                    stats["candidates"] += 1
-                commodities = ([spec["psd_commodity"]] if shape == "per_commodity"
-                               else spec["psd_commodities"])
-                if (country in dedup.get("wasde_countries", [])
-                        and any(c in dedup.get("wasde_commodities", []) for c in commodities)):
-                    with lock:
-                        stats["wasde_skipped"] += 1
-                    continue
-                chans, tabs = [], []
-                for cm in commodities:
-                    table = by_title.get(B.norm_label(cm))
-                    if table is None:
-                        continue
-                    tabs.append(table)
-                    chans.extend(B.build_channels(psd_vals, psd_units, country, cm, table,
-                                                 aliases, scfg, stats))
-                if not tabs or not chans:
-                    with lock:
-                        stats["no_channels"] += 1
-                    continue
-
-                if shape == "per_commodity":
-                    text = B.prose_after_table(pdf, tabs[0]["page"], tcfg, drop_res)
-                    heading = ""
-                else:
-                    text, heading = B.prose_after_any_heading(
-                        pdf, spec["prose_headings"], tcfg, drop_res)
-                if len(text) < tcfg["min_chars"]:
-                    with lock:
-                        stats["no_prose"] += 1
-                    continue
-
-                chans_full = chans
-                chans, win = B.apply_window(chans, text, scfg)
-                alignment, evidence = B.detect_alignment(text, chans)
-                flags = B.check_superlatives(text, chans_full, evidence)
-                if flags and tcfg.get("drop_on_superlative_contradiction", True):
-                    with lock:
-                        stats["superlative_dropped"] += 1
-                    continue
-                years = sorted({y for c in chans for y in c["years"]})
-                text_years = sorted({int(y) for y in
-                                     re.findall(r"\b(19\d{2}|20[0-4]\d)\b", text)})
-                described = [y for y in text_years if years[0] <= y <= years[-1]]
-                ts = [{"values": c["values"], "unit": c["unit"], "freq": c["freq"]}
-                      for c in chans]
-                rec = B.emit_record(
-                    text=text.rstrip() + "\n\n<ts></ts>",
-                    timeseries=ts,
-                    alignment=alignment,
-                    license="public-domain-us-gov",
-                    source=url,
-                    series_id=f"fas_gain_{rep['reportNumber'].lower()}_{spec['slug']}",
-                    dataset="fas_gain_attache",
-                    domain="agriculture",
-                    region=B.region_for(country),
-                    period_start=f"{years[0]}-01-01",
-                    period_end=f"{years[-1]}-01-01",
-                    meta={
-                        "report_number": rep["reportNumber"],
-                        "report_name": rep.get("reportName"),
-                        "report_category": (rep.get("reportCategory") or "").strip(),
-                        "post": rep.get("postName"),
-                        "country_gain": rep.get("countryName"),
-                        "country_psd": country,
-                        "published": (rep.get("publishDate") or "")[:10],
-                        "psd_group": group,
-                        "record_shape": shape,
-                        "table_layout": tabs[0].get("found_by"),
-                        "prose_heading": heading,
-                        "commodities": commodities,
-                        "psd_attributes": [c["psd_attribute"] for c in chans],
-                        "psd_units": sorted({c["psd_unit"] for c in chans}),
-                        "n_channels": len(chans),
-                        "market_years": [years[0], years[-1]],
-                        "n_points": len(chans[0]["values"]),
-                        "splice_year": chans[0]["splice_year"],
-                        "report_table_years": tabs[0]["years"],
-                        "recite_evidence": evidence,
-                        "superlative_flags": flags,
-                        "text_years_named": text_years,
-                        "series_years_described_pct":
-                            round(100 * len(described) / len(years), 1) if years else 0,
-                        "window": win,
-                        "series_note": (
-                            "annual PSD balance sheet, vintage-spliced: PSD Online bulk for settled "
-                            f"market years (< {chans[0]['splice_year']}) + this report's OWN table "
-                            "values for its table years (the post's own revised column preferred "
-                            "over the previous official one). Live PSD has since revised the "
-                            "forecast year past both of the report's columns."),
-                        "forecast_caveat": (
-                            "terminal point(s) are Post's forecast for the coming marketing year, "
-                            "not measured history -- same convention as WASDE #41; the text is the "
-                            "contemporaneous first-party forecast, so no future-value leakage."),
-                        "wasde_overlap": (
-                            "WASDE #41 builds only U.S. tables; this is a foreign post, so the "
-                            "series are net-new rather than duplicated."),
-                    },
-                )
-                out.append(rec)
-                with lock:
-                    stats["emitted"] += 1
-                    stats[alignment] += 1
-                    stats["channels_emitted"] += len(chans)
-    except Exception as e:                                       # noqa: BLE001
-        with lock:
-            stats["parse_failed"] += 1
-            # keep the MESSAGE, not just the class: a bare 'ValueError: 2' in a shard report says
-            # nothing about which of emit_record's several guards tripped.
+        chans_full = chans
+        chans, win = B.apply_window(chans, text, scfg)
+        alignment, evidence = B.detect_alignment(text, chans)
+        flags = B.check_superlatives(text, chans_full, evidence)
+        if flags and tcfg.get("drop_on_superlative_contradiction", True):
+            stats["superlative_dropped"] += 1
+            continue
+        years = sorted({y for c in chans for y in c["years"]})
+        text_years = sorted({int(y) for y in re.findall(r"\b(19\d{2}|20[0-4]\d)\b", text)})
+        described = [y for y in text_years if years[0] <= y <= years[-1]]
+        ts = [{"values": c["values"], "unit": c["unit"], "freq": c["freq"]} for c in chans]
+        try:
+            rec = B.emit_record(
+                text=text.rstrip() + "\n\n<ts></ts>",
+                timeseries=ts,
+                alignment=alignment,
+                license="public-domain-us-gov",
+                source=url,
+                series_id=f"fas_gain_{rep['reportNumber'].lower()}_{spec['slug']}",
+                dataset="fas_gain_attache",
+                domain="agriculture",
+                region=B.region_for(country),
+                period_start=f"{years[0]}-01-01",
+                period_end=f"{years[-1]}-01-01",
+                meta={
+                    "report_number": rep["reportNumber"],
+                    "report_name": rep.get("reportName"),
+                    "report_category": (rep.get("reportCategory") or "").strip(),
+                    "post": rep.get("postName"),
+                    "country_gain": rep.get("countryName"),
+                    "country_psd": country,
+                    "published": (rep.get("publishDate") or "")[:10],
+                    "psd_group": group,
+                    "record_shape": shape,
+                    "table_layout": tabs[0].get("found_by"),
+                    "prose_heading": heading,
+                    "commodities": commodities,
+                    "psd_attributes": [c["psd_attribute"] for c in chans],
+                    "psd_units": sorted({c["psd_unit"] for c in chans}),
+                    "n_channels": len(chans),
+                    "market_years": [years[0], years[-1]],
+                    "n_points": len(chans[0]["values"]),
+                    "splice_year": chans[0]["splice_year"],
+                    "report_table_years": tabs[0]["years"],
+                    "recite_evidence": evidence,
+                    "superlative_flags": flags,
+                    "text_years_named": text_years,
+                    "series_years_described_pct":
+                        round(100 * len(described) / len(years), 1) if years else 0,
+                    "window": win,
+                    "series_note": (
+                        "annual PSD balance sheet, vintage-spliced: PSD Online bulk for settled "
+                        f"market years (< {chans[0]['splice_year']}) + this report's OWN table "
+                        "values for its table years (the post's own revised column preferred over "
+                        "the previous official one). Live PSD has since revised the forecast year "
+                        "past both of the report's columns."),
+                    "forecast_caveat": (
+                        "terminal point(s) are Post's forecast for the coming marketing year, not "
+                        "measured history -- same convention as WASDE #41; the text is the "
+                        "contemporaneous first-party forecast, so no future-value leakage."),
+                    "wasde_overlap": (
+                        "WASDE #41 builds only U.S. tables; this is a foreign post, so the series "
+                        "are net-new rather than duplicated."),
+                },
+            )
+        except Exception as e:                                   # noqa: BLE001
+            stats["emit_rejected"] += 1
             key = f"{type(e).__name__}: {str(e)[:120]}"
             stats["parse_errors"][key] = stats["parse_errors"].get(key, 0) + 1
-        return out
+            continue
+        out.append(rec)
+        stats["emitted"] += 1
+        stats[alignment] += 1
+        stats["channels_emitted"] += len(chans)
     return out
 
 
@@ -238,14 +282,17 @@ def run_shard(group: str, year: str, reps: list, cfg: dict, shard_dir: Path) -> 
                   "record_shape": {}, "table_layout": {}, "coverage_pct": [],
                   "reports": len(reps)})
     psd_vals, psd_units, countries, latest = psd_for(group, cfg)
-    lock = threading.Lock()
     t0 = time.time()
     records = []
-    with ThreadPoolExecutor(max_workers=cfg["harvest"]["workers"]) as ex:
-        futs = [ex.submit(build_one, r, group, psd_vals, psd_units, countries, latest,
-                          cfg, stats, lock) for r in reps]
-        for f in futs:
-            records.extend(f.result())
+    cache_dir = str(PKG_ROOT / cfg["data"]["cache_dir"])
+    jobs = [(r["fileName"] + ".pdf",
+             cfg["data"]["gain_download"].format(
+                 file_name=urllib.parse.quote_plus(r["fileName"] + ".pdf")),
+             cache_dir, cfg["text"]) for r in reps]
+    with ProcessPoolExecutor(max_workers=cfg["harvest"]["workers"]) as ex:
+        for rep, parsed in zip(reps, ex.map(parse_report, jobs, chunksize=1)):
+            records.extend(records_from(rep, parsed, group, psd_vals, psd_units,
+                                        countries, latest, cfg, stats))
 
     tmp = out_path.with_suffix(".jsonl.tmp")
     with tmp.open("w") as fh:

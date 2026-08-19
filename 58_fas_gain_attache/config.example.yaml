@@ -135,6 +135,10 @@ country_aliases:
   "Bahamas - The": "Bahamas, The"
   "Gambia - The": "Gambia, The"
   "Belgium": "Belgium-Luxembourg"
+  # ADDED 2026-08-19: 91 reports came back unresolved_country under this label, and where PSD does
+  # carry the literal spelling it is the FROZEN entry (ends MY2004); 'Russia' is the live one.
+  "Russian Federation": "Russia"
+  "Swaziland": "Eswatini"
   # deliberately NOT aliased (no PSD counterpart carries them): 'Caribbean Basin', 'Aruba',
   # 'British Virgin Islands', 'Cayman Islands', 'Turks and Caicos Islands', 'Poland EU-27',
   # the two 'Yugoslavia [GT. ...]' entries, 'Yemen [Sanaa]', 'Belgium [without Luxembourg]'.
@@ -142,12 +146,13 @@ country_aliases:
 
 harvest:
   shard_dir: "output/shards"
-  workers: 24
+  workers: 48
 
 output:
   path: "output/fas_gain_cpt.jsonl"
   run_report: "output/run_report.json"
   max_records: null
+  n_samples: 4        # samples/example_output.jsonl -- one per distinct (shape, layout, alignment)
 
 # ---------------------------------------------------------------------------------------------
 # Reports. The DEMO pins two reports that between them cover BOTH layout families and BOTH
@@ -207,6 +212,21 @@ attribute_aliases:
   "my exports": "Exports"
   "human dom consumption": "Human Dom. Consumption"
   "slaughter reference": "Slaughter (Reference)"
+  # ADDED 2026-08-19 from the full-archive run's own unmapped_labels report -- these were the top
+  # unmapped rows across 18,494 reports and each is GAIN's friendlier rendering of a PSD attribute
+  # whose real name was confirmed by reading the PSD bulk vocabulary for the commodity (not guessed):
+  #   Wheat/Corn/Barley/Sorghum expose 'Feed Dom. Consumption' and 'Domestic Consumption';
+  #   'Rice, Milled' exposes 'Production' (milled) alongside a separate 'Rough Production'.
+  "feed and residual": "Feed Dom. Consumption"        # 429 Wheat + 356 Corn + 224 Barley + 140 Sorghum
+  "total consumption": "Domestic Consumption"          # 376 Wheat + 324 Corn + 206 Barley
+  "milled production": "Production"                    # 350 Rice, Milled
+  "consumption and residual": "Domestic Consumption"   # 232 Rice, Milled
+  "total dom cons": "Domestic Consumption"             # 126 Oilseed/Meal/Oil Soybean
+  # deliberately NOT aliased: 'Area Planted' (126) has no PSD counterpart at all -- PSD carries only
+  # Area Harvested -- so mapping it would attach the wrong series. Sugar's 'Total Use' and 'Total
+  # Sugar Production' are left unmapped pending the value-level check in
+  # scratchpad/verify_sugar.py; a plausible-looking guess here is exactly how a channel gets
+  # silently mislabelled.
 
 # --- window policy (added 2026-07-30 after a coverage audit) -----------------------------------
 # Full PSD history left text and series badly incommensurate: the prose names only 1-6 market

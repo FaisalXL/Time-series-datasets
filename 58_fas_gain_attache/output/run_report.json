@@ -1,169 +1,107 @@
 {
   "dataset": "fas_gain_attache",
   "stats": {
-    "reports": 2,
-    "tables_found": 12,
-    "candidates": 5,
-    "emitted": 5,
-    "recites": 4,
-    "describes": 1,
-    "channels_emitted": 56,
-    "no_prose": 0,
-    "short_series": 0,
-    "no_psd_series": 2,
-    "no_table": 0,
-    "wasde_skipped": 0,
-    "official_fallbacks": 0,
-    "unmapped_labels": {
-      "Animal Numbers, Cattle :: Other Slaughter (1000 HEAD)": 1,
-      "Meat, Beef and Veal :: Slaughter (Reference) (1000 HEAD)": 1,
-      "Meat, Beef and Veal :: Other Use, Losses (1000 MT CWE)": 1,
-      "Meat, Beef and Veal :: Total Dom. Consumption (1000 MT CWE)": 1,
-      "Animal Numbers, Swine :: Other Slaughter (1000 HEAD)": 1,
-      "Meat, Swine :: Slaughter (Reference) (1000 HEAD)": 1,
-      "Meat, Swine :: Other Use, Losses (1000 MT CWE)": 1,
-      "Meat, Swine :: Total Dom. Consumption (1000 MT CWE)": 1,
-      "Oilseed, Sunflowerseed :: Area Planted (1000 HA)": 1,
-      "Oilseed, Sunflowerseed :: Feed Waste Dom.": 1,
-      "Oilseed, Sunflowerseed :: Total Dom. Cons. (1000 MT)": 1,
-      "Oilseed, Soybean :: Area Planted (1000 HA)": 1,
-      "Oilseed, Soybean :: Feed Waste Dom.": 1,
-      "Oilseed, Soybean :: Total Dom. Cons. (1000 MT)": 1,
-      "Oilseed, Rapeseed :: Area Planted (1000 HA)": 1,
-      "Oilseed, Rapeseed :: Feed Waste Dom.": 1,
-      "Oilseed, Rapeseed :: Total Dom. Cons. (1000 MT)": 1
+    "records": 1523,
+    "shards_completed": 233,
+    "duplicate_series_ids_dropped": 1,
+    "reports_seen": 18494,
+    "reports_with_no_table": 13557,
+    "alignment": {
+      "recites": 145,
+      "describes": 1378
     },
-    "coverage_pct": [
-      66.7,
-      50.0,
-      66.7,
-      42.9,
-      33.3
-    ],
-    "superlative_contradictions": 1,
-    "superlative_dropped": 0
-  },
-  "config_snapshot": {
-    "data": {
-      "gain_download": "https://apps.fas.usda.gov/newgainapi/api/Report/DownloadReportByFileName?fileName={file_name}",
-      "psd_zip": "https://apps.fas.usda.gov/psdonline/downloads/psd_{group}_csv.zip",
-      "cache_dir": ".cache"
+    "record_shape": {
+      "none": 987,
+      "per_commodity": 1740,
+      "multi_commodity": 912
     },
-    "dedup": {
-      "wasde_countries": [
-        "United States"
-      ],
-      "wasde_commodities": [
-        "Wheat",
-        "Corn",
-        "Oilseed, Soybean",
-        "Rice, Milled",
-        "Cotton",
-        "Sugar, Centrifugal"
-      ]
+    "table_layout": {
+      "bordered": 7858,
+      "text": 3511,
+      "legacy": 123
     },
-    "text": {
-      "min_chars": 350,
-      "max_chars": 5000,
-      "drop_on_superlative_contradiction": false,
-      "drop_lines": [
-        "^THIS REPORT CONTAINS ASSESSMENTS",
-        "^STATEMENTS OF OFFICIAL U\\.S\\.",
-        "^OFFICIAL DATA CAN BE ACCESSED AT",
-        "^Not official USDA data",
-        "^Source:",
-        "^Figure \\d",
-        "^Table \\d",
-        "^\\(1000\\b",
-        "^(HEAD|MT|MT CWE|CWE|HA|MT/HA)\\)$"
-      ]
+    "per_psd_group": {
+      "grains_pulses": 411,
+      "livestock": 386,
+      "dairy": 359,
+      "oilseeds": 146,
+      "sugar": 92,
+      "cotton": 85,
+      "coffee": 32,
+      "tree_nuts": 12
     },
-    "series": {
-      "freq": "1y",
-      "window_mode": "text_span",
-      "context_years": 2,
-      "min_points": 3
+    "per_year": {
+      "2000": 1,
+      "2001": 5,
+      "2002": 20,
+      "2008": 2,
+      "2009": 8,
+      "2010": 20,
+      "2011": 6,
+      "2012": 19,
+      "2013": 5,
+      "2014": 9,
+      "2015": 69,
+      "2016": 65,
+      "2017": 62,
+      "2018": 52,
+      "2019": 72,
+      "2020": 150,
+      "2021": 186,
+      "2022": 165,
+      "2023": 153,
+      "2024": 174,
+      "2025": 186,
+      "2026": 94
     },
-    "output": {
-      "path": "output/_flagmode.jsonl",
-      "run_report": "output/run_report.json",
-      "max_records": null
+    "skips": {
+      "download_failed": 1041,
+      "no_channels": 3400,
+      "no_prose": 336,
+      "no_psd_commodity_match": 987,
+      "no_psd_series": 607,
+      "no_table": 13557,
+      "superlative_dropped": 24,
+      "unresolved_country": 1
     },
-    "reports": [
-      {
-        "file_name": "Livestock and Products Semi-annual_Mexico City_Mexico_MX2026-0012.pdf",
-        "report_number": "MX2026-0012",
-        "country": "Mexico",
-        "post": "Mexico City",
-        "psd_group": "livestock",
-        "published": "2026-02-26",
-        "region": "MX",
-        "record_shape": "per_commodity",
-        "commodities": [
-          {
-            "slug": "cattle",
-            "table_title": "Animal Numbers, Cattle",
-            "psd_commodity": "Animal Numbers, Cattle"
-          },
-          {
-            "slug": "beef",
-            "table_title": "Meat, Beef and Veal",
-            "psd_commodity": "Meat, Beef and Veal"
-          },
-          {
-            "slug": "swine",
-            "table_title": "Animal Numbers, Swine",
-            "psd_commodity": "Animal Numbers, Swine"
-          },
-          {
-            "slug": "pork",
-            "table_title": "Meat, Swine",
-            "psd_commodity": "Meat, Swine"
-          }
-        ]
-      },
-      {
-        "file_name": "Oilseeds and Products Annual_Kyiv_Ukraine_UP2026-0011.pdf",
-        "report_number": "UP2026-0011",
-        "country": "Ukraine",
-        "post": "Kyiv",
-        "psd_group": "oilseeds",
-        "published": "2026-04-01",
-        "region": "UA",
-        "record_shape": "multi_commodity",
-        "sections": [
-          {
-            "slug": "oilseed_production",
-            "prose_heading": "^Production$",
-            "psd_commodities": [
-              "Oilseed, Sunflowerseed",
-              "Oilseed, Soybean",
-              "Oilseed, Rapeseed"
-            ],
-            "attributes": [
-              "Area Harvested",
-              "Production",
-              "Yield",
-              "Crush",
-              "Exports",
-              "Ending Stocks"
-            ]
-          }
-        ]
-      }
-    ],
-    "attribute_aliases": {
-      "total cattle beg stocks": "Beginning Stocks",
-      "total beginning stocks": "Beginning Stocks",
-      "production calf crop": "Production",
-      "production pig crop": "Production",
-      "ending inventories": "Ending Stocks",
-      "total imports": "Imports",
-      "total exports": "Exports",
-      "my imports": "Imports",
-      "my exports": "Exports",
-      "human dom consumption": "Human Dom. Consumption",
-      "slaughter reference": "Slaughter (Reference)"
+    "channels_emitted": 32071,
+    "top_unmapped_labels": {
+      "Sugar, Centrifugal :: Total Use (1000 MT)": 137,
+      "Sugar, Centrifugal :: Total Sugar Production (1000 MT)": 134,
+      "Sugar, Centrifugal :: Total Sugar Production": 116,
+      "Oilseed, Soybean :: Area Planted (1000 HA)": 111,
+      "Oilseed, Soybean :: Area Planted": 110,
+      "Sugar, Centrifugal :: Total Use": 107,
+      "Cotton :: Use": 89,
+      "Cotton :: Area Planted": 83,
+      "Meat, Beef and Veal :: Other Use, Losses": 81,
+      "Oil, Palm :: Area Planted (1000 HA)": 80,
+      "Meat, Beef and Veal :: Slaughter (Reference)": 79,
+      "Oil, Palm :: Trees (1000 TREES)": 79,
+      "Dairy, Milk, Fluid :: Total Production": 76,
+      "Dairy, Milk, Nonfat Dry :: Other Imports": 75,
+      "Dairy, Milk, Fluid :: Other Imports": 74,
+      "Dairy, Milk, Fluid :: Other Exports": 74,
+      "Oil, Palm :: Area Planted": 73,
+      "Dairy, Butter :: Other Imports": 72,
+      "Dairy, Butter :: Other Exports": 71,
+      "Dairy, Milk, Nonfat Dry :: Other Exports": 71,
+      "Dairy, Milk, Nonfat Dry :: Other Use, Losses": 71,
+      "Animal Numbers, Cattle :: Other Slaughter": 71,
+      "Meat, Beef and Veal :: Slaughter (Reference) (1000 HEAD)": 71,
+      "Meal, Soybean :: MY Imp. from U.S.": 69,
+      "Animal Numbers, Cattle :: Other Slaughter (1000 HEAD)": 67,
+      "Meat, Beef and Veal :: Other Use, Losses (1000 MT CWE)": 67,
+      "Meal, Soybean :: MY Imp. from EU": 67,
+      "Meal, Soybean :: MY Exp. to EU": 67,
+      "Animal Numbers, Cattle :: Total Cattle Beg. Stks": 66,
+      "Oil, Palm :: Trees": 66
+    },
+    "unresolved_countries": {
+      "Poland EU-27": 1
+    },
+    "parse_errors": {
+      "ValueError: emit_record built a record that fails validate.py --strict:\n  - alignment is 'recites' but no series value appears in th": 1
     }
   }
 }

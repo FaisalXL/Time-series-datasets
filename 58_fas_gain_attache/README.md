@@ -1,221 +1,274 @@
 # 58 — USDA FAS GAIN attaché reports → CPT world-knowledge records
 
-**Status: DEMO BUILT + VERIFIED (2026-07-30, revised same day after a commensurability audit).
-4 records, 43 channels, 4/4 pass `validate.py --strict`.**
-Awaiting Faisal's clear → then the server does the full archive run.
+**Status: FULL ARCHIVE BUILT + VERIFIED (2026-08-19). 1,523 records from 18,494 candidate reports,
+1,523/1,523 pass `validate.py --strict` with 0 warnings.** `public-domain-us-gov` (17 U.S.C. §105),
+so this ships rather than being held.
 
 One record = a GAIN report's own **verbatim narrative** paired with the **multi-channel PSD balance
-sheet** that narrative discusses. GAIN is the *country-granular* sibling of built **WASDE #41**:
-same PSD backbone, but #41 builds only `U.S. ...` tables, so foreign-post series here are
+sheet(s)** that narrative discusses. GAIN is the country-granular sibling of built **WASDE #41**:
+same PSD backbone, but #41 builds only `U.S. …` tables, so these foreign-post series are
 structurally net-new.
 
-> **Correction to the original pass:** the initial demo shipped 5 records at full PSD depth
-> (40–67 points) and described that as a strength. A commensurability audit (prompted by a direct
-> question: *does the text strongly align with the series, and is the series longer than what the
-> text describes?*) found the answer was no — mean coverage was **13%**, and one record paired a
-> verbatim "highest on record" claim with data that contradicted it. Both are fixed below. **GAIN's
-> honest profile is WIDE, not deep: 13–18 channels × ~3–14 commensurate years**, not 40–67-point
-> depth. See "Commensurability" and "Superlative guard".
+> ### Retractions from the demo pass
+> The demo shipped **4 records from 2 hand-pinned reports** and made three claims that the full
+> archive disproves. All three are corrected below rather than quietly dropped.
+>
+> 1. **"Report enumeration is unsolved."** It is solved — the GAIN SPA's own search service is a
+>    public API. See "Enumeration".
+> 2. **"`recites` 3/4."** Wrong, and it was crashing the schema gate. GAIN is a **`describes`**
+>    package: 145 of 1,523 records recite. See "Alignment retraction".
+> 3. **">10k records realistic"** (from reports × commodities). Measured: **1,523**. See
+>    "Why 1,523 and not 10,000".
 
 | | |
 |---|---|
-| Text | USDA FAS GAIN attaché reports (PDF, digital/text-extractable — no OCR) |
-| Series | PSD Online bulk CSV (`apps.fas.usda.gov/psdonline/downloads/psd_<group>_csv.zip`) |
-| License | `public-domain-us-gov` — US-federal work product, 17 U.S.C. §105 |
-| Alignment | `recites` 3/4 · `describes` 1/4 (demo, post-guard) |
-| Freq | `1y` (PSD market years) |
-| Depth | **3–14 points per channel**, windowed to the years the text actually names (+2 yrs context) |
-| Coverage | mean **48%** of shipped series-years are named in the text (was 13% at full depth) |
-| Demo | 2 reports → 4 records (1 dropped by the superlative guard), 4–14 channels each |
+| Text | GAIN attaché reports (PDF, digital — no OCR needed) |
+| Series | PSD Online bulk CSV, 9 groups (`psd_<group>_csv.zip`) |
+| Licence | `public-domain-us-gov` |
+| Records | **1,523** from 18,494 candidate reports |
+| Span | published **2000 … 2026** |
+| Channels | **32,071** total; median **11** per record (p90 45, p99 130, max 247) |
+| Depth | mean **7.2** points per channel (annual market years) |
+| Coverage | mean **50%** of shipped series-years are named in the paired text |
+| Alignment | `describes` **1,378** · `recites` **145** |
+| Text | mean 3,012 chars, verbatim + one bare `<ts></ts>` |
+| Duplicates | **0** duplicate texts; 1 duplicate `series_id` dropped at aggregate |
+| Regions | 66 distinct, all valid ISO-2 |
 
 ## Quickstart
 
 ```bash
 pip install -r requirements.txt
-python scripts/build_cpt_jsonl.py --config config.example.yaml
+python scripts/census.py    --config config.example.yaml   # enumerate the archive
+python scripts/harvest.py   --config config.example.yaml   # sharded, resumable
+python scripts/aggregate.py --config config.example.yaml   # merge + samples + run report
 python ../schema/validate.py output/fas_gain_cpt.jsonl --strict
 ```
 
-Downloads are cached under `.cache/` (git-ignored): GAIN PDFs and the PSD bulk zips.
+`.cache/` holds PDFs (~1.8 GB for the full archive) and the PSD zips. `output/report_index.json`,
+`output/shards/` and the merged JSONL are git-ignored; all three regenerate.
 
 ---
 
-## Commensurability (window policy — decided 2026-07-30)
+## Enumeration
 
-At annual frequency, GAIN prose only ever discusses the last 1–6 market years — so a full
-40–67-point PSD history is mostly context the text never touches. Measured before the fix: mean
-**13%** of a shipped series' years were named in the paired text (min 3.3%); the rest was real but
-unreferenced history.
-
-`config.series.window_mode: text_span` bounds each record's series to the years the text actually
-names (`+ context_years: 2`), and separately trims PSD's missing-as-zero prefix (PSD encodes
-pre-coverage years as a literal `0.0000` — Mexico cattle `Production` is `0.0` for MY1960–1971;
-that is not a real observation of zero calves, so it's dropped, not shipped). Result: mean
-coverage **48%**, depth 3–14 points/channel.
-
-This was a genuine trade-off, not a free win — GAIN **cannot be both commensurate and deep** at
-annual frequency with a 3-year narrative horizon. The corpus accepts GAIN as **wide** (13–18
-channels/record) rather than **deep**, which is a real downgrade from how this package was
-originally pitched (see status note above). `min_points: 3` is the floor the window backs off to
-rather than emit a shorter stub.
-
-## Superlative guard (a correctness defect, not a coverage one)
-
-Windowing fixed *unreferenced* depth, but tracing one claim exposed something the window can't
-fix: **`MX2026-0012` states "Mexico exported approximately 1.25 million head to the United States
-in 2024, the highest level on record."** The paired channel is the *same* `Exports` attribute the
-report's own table uses (no scope mismatch) — and its real MY2023 value is **1,295**, exceeding
-the claimed 2024 "record" of 1,250; the true all-time max in the spliced history is **1,658
-(1995)**. This can't be windowed away, because 2023 is independently named in the same paragraph
-(the drought-date range "2023–2024"), so any window containing that sentence also contains the
-contradicting year.
-
-Root cause is unresolved — plausibly a scope difference Post didn't make explicit (e.g. "to the
-United States" vs. PSD's broader `Total Exports`), or a revision of MY2023 after the report shipped
-(the vintage-drift risk isn't only in the *forecast* year — see below — it can, apparently, still
-touch a year we'd otherwise call "settled"). Either way, shipping a verbatim superlative next to
-data that refutes it is a self-contradicting record, the same class of failure this corpus already
-kills other candidates for (openFDA/NHTSA/CFPB/WHO Cholera).
-
-`check_superlatives()` matches `highest/largest/record-high` and `lowest/smallest/record-low`
-language around an already-verified recited value, then checks it against the **full** spliced
-history (not just the shipped window, since a "record" claim is about all history). A hit is
-recorded in `meta.superlative_flags` (channel, claimed year/value, actual extreme year/value) and,
-by default (`text.drop_on_superlative_contradiction: true`), **the record is dropped** —
-conservative on purpose. Set it `false` to ship + inspect flagged records instead, e.g. while
-investigating whether it's a scope artifact. 1/5 demo records were dropped this way.
-
-## The vintage splice (the core design — do not simplify this away)
-
-PSD Online carries decades of annual history, but it always serves the **current** vintage, and
-USDA keeps revising the recent/forecast years *after* a report ships. Measured on `MX2026-0012`:
-
-| attribute | MY | report "USDA Official" | report "New Post" | live PSD today |
-|---|---|---|---|---|
-| Beginning Stocks | 2024 | 17,840 | 17,840 | 17,840 ✅ settled |
-| Total Slaughter | 2024 | 7,050 | 7,050 | 7,050 ✅ settled |
-| Total Slaughter | 2025 | 6,875 | 6,860 | 6,860 → Post's revision **adopted** |
-| Total Slaughter | 2026 | 7,200 | 7,225 | **7,550** → drifted past *both* |
-| Ending Stocks | 2026 | 19,740 | 19,835 | **19,510** → drifted past *both* |
-
-Settled years matched **8/8**; the forecast year — *the year the prose is actually about* — had
-drifted past both of the report's own columns. So:
-
-> **series = PSD bulk for settled market years + the report's OWN table values for its table years.**
-
-Naively pairing live PSD would have silently mismatched exactly the values the narrative recites.
-Same class of trap as `ons_awe` / `ny_empire` vintage drift, but here it bites the *headline* number.
-
-Column choice: prefer **New Post** (Post's own view, which is what the narrative argues); fall back
-to *USDA Official* when New Post is a not-yet-published `0`. Ukraine `MY2026/27` sunflower area
-shows why: Official `0`, New Post `5,450`. Fallbacks are counted in `run_report.official_fallbacks`.
-
-## Forecast-not-measured (inherited from WASDE #41)
-
-GAIN prose is **forecast-dominant**, not merely forecast-heavy — every Report Highlights and
-Executive Summary leads with the coming marketing year (`UP2026-0011`: "forecast" ×15,
-"projected" ×0). The deep-research pass that surfaced GAIN proposed *stripping* the forecast to stay
-leakage-safe; that would **break** text↔series alignment rather than clean it, because the prose
-describes the forecast year. Handled exactly as #41 does: the forecast year is the series'
-**terminal point**, and the text is the *contemporaneous first-party forecast*, so there is no
-future-value leakage. Recorded per record in `meta.forecast_caveat`.
-
-## Two record shapes (per-post layout variance is the main engineering risk)
-
-| shape | layout | example | records |
-|---|---|---|---|
-| `per_commodity` | prose **interleaved** after each commodity's table; bordered tables; **calendar**-year columns | livestock (`MX2026-0012`) | 1 per commodity (4, 1 dropped by the superlative guard → 3 shipped) |
-| `multi_commodity` | prose organized **by topic** (Production/Trade/Exports) discussing all commodities together; every PSD table grouped at the end under "PSD Data Statistics"; borderless tables; **marketing**-year columns (`2026/2027`) | oilseeds (`UP2026-0011`) | 1 per section, channels = union (18 ch pre-window) |
-
-The second shape is a deliberate **anti-fake-scale** choice. Pairing that topical prose per
-commodity would re-ship one paragraph under three labels — the boilerplate-reuse ban in
-`SCHEMA.md`, and the same reason WASDE #41 refused to split sorghum/barley/oats out of its shared
-`COARSE GRAINS` paragraph. It also means **records ≠ reports × commodities** for that family:
-see "Scale" below.
-
-## WASDE #41 de-duplication
-
-The build was approved on condition of a dedup pass. Measured: **WASDE #41's six commodities are
-all `U.S. ...` tables** and its world tables were deliberately not built, so foreign-post GAIN
-series do not collide with it — overlap is near-zero *by construction*, not by filtering.
-`config.dedup` keeps an explicit guard (US country × the six WASDE commodities) so a full run cannot
-silently re-ship a #41 cell; hits are counted in `run_report.wasde_skipped`.
-
-What is genuinely net-new: the **country-granular long tail** (full Mexican cattle balance sheet —
-beg. stocks / dairy+beef cows / calf crop / cow+calf slaughter / loss and residual / ending
-inventories; Ukrainian sunflowerseed × soybean × rapeseed) plus **country-specific narrative** that
-has no WASDE analogue (New World Screwworm border closure, Bluetongue/EHD, Canadian canola
-anti-dumping tariffs, refugee-driven demand).
-
-## Alignment is auditable, not asserted
-
-`meta.recite_evidence` records the channel, market year, value and **surface form** for every
-recite, so a reviewer can grep the quoted form in the text:
+The demo pinned filenames because no report-list endpoint was known. The GAIN SPA's own search
+service is a public POST API, reachable with the **anonymous** bearer token the SPA itself mints:
 
 ```
-animal_numbers_cattle_total_slaughter_1000_head  MY2025 = 6860  as '6.86'
-   "...Slaughter is estimated to decline 3 percent in 2025 to 6.86 million heads..."
-meat_beef_and_veal_production_1000_mt_cwe        MY2025 = 2170  as '2.17'
-   "...beef production is estimated to decrease 4 percent in 2025 to 2.17 MMT CWE..."
+POST /newgainapi/token               client_id=eAuthClient&client_secret=<fixed anon secret>
+                                     &grant_type=client_credentials
+POST /newgainapi/api/Search/GetSearchResults    body: SearchFilter {fromDate,toDate,...}
 ```
 
-The matcher is deliberately **strict**, because a loose one manufactures the fake alignment that got
-openFDA/NHTSA/CFPB killed from this corpus:
-* **exact** surface forms only, no rounding — `2,865` may not claim the prose's "2.9 MMT", and
-  `1,259` may not claim "1.3 million";
-* a **compatible unit word** must follow the number, so an MT channel cannot claim a "… ha" figure
-  (an oilseed *crush* of 1,800 was being credited to a "1.8 million **ha**" *area* before this rule);
-* numeric boundaries, so `2000` cannot match inside "20,000".
+Both were read out of the SPA's own bundle (`gain.fas.usda.gov/main-es2018.js`), whose
+`getFixedToken()` returns a hardcoded all-zeroes *"anonymous user token"*. This is the site's
+unauthenticated read path — without the bearer the same endpoint answers
+`401 {"message":"Token has expired"}`.
 
-Consequence, stated honestly: reports that **round** in prose land as `describes`, not `recites`.
-Ukraine writes "5.4 million ha" for a New Post `5,450` → no exact match → `describes`. A tolerant
-tier would reclassify these but reinvites fake alignment; not worth it.
+**Measured: 48,758 published reports, 1998–2026**, of which **18,494** sit in the 10 categories that
+carry PSD balance sheets (Grain and Feed 7,566 · Oilseeds 2,726 · Livestock 2,026 · Sugar 1,500 ·
+Cotton 1,335 · Poultry 1,190 · Dairy 1,134 · Coffee 654 · Tree Nuts 363).
 
-## Scale
+**No silent cap.** A single `2025-01-01..2025-12-31` call returns 1,372 rows and the sum of that
+year's twelve monthly calls is also **1,372**, all `reportId`s distinct — so the API is not
+truncating a year window. `2025-10` legitimately returns **0** rows (the Oct-2025 US federal
+shutdown), corroborated by the year total rather than assumed.
 
-FAS publishes **2,000–3,000 GAIN reports/yr, roughly half scheduled periodic** (the commodity
-annual/semi-annual reports that carry PSD tables), across ~90 overseas posts. A single oilseeds
-annual carries ~10 PSD balance sheets.
+## Why 1,523 and not 10,000
 
-**Honest correction to the pre-build estimate:** density is **layout-dependent**, and the
-`multi_commodity` family collapses toward 1–3 records/report (not 1/commodity) to avoid prose
-reuse. So "reports × commodities" overstates the ceiling. `per_commodity` families (livestock and
-similar) are the density carriers at ~4 records/report. >10k remains realistic across a 10–15-year
-archive, but the mix of layout families — which the server must measure over the real archive —
-sets the true number. Server must also confirm current-template depth (how far back the
-`USDA Official / New Post` rendering is consistent).
+The demo's ">10k realistic" came from multiplying reports by commodities. The honest figure is
+**1,523**, and the losses are measured, not estimated:
 
-## Known gaps / server to-dos
+| stage | n | note |
+|---|--:|---|
+| candidate reports | 18,494 | PSD-bearing categories |
+| `no_table` | 13,557 | **73%** — no extractable PSD table (see "Template depth") |
+| `download_failed` | 1,041 | |
+| `empty_pdf_stub_from_api` | 200 | API returns HTTP 200 + a **10-byte** `%PDF-1.4\r\n` stub |
+| `truncated_pdf` | 56 | valid header, no `%%EOF` |
+| tables found | 11,492 | across the surviving reports |
+| specs (candidate records) | 5,285 | |
+| `no_channels` | 3,400 | tables matched but no channel survived splice/`min_points` |
+| `no_psd_commodity_match` | 987 | table title is not a PSD commodity for that country |
+| `no_psd_series` | 607 | attribute absent from PSD for that country/commodity |
+| `no_prose` | 336 | prose after the table below `min_chars` |
+| `superlative_dropped` | 24 | verbatim "highest/lowest" claim the series contradicts |
+| `unresolved_country` | 1 | `Poland EU-27` — deliberately not forced onto a neighbour |
+| **records** | **1,523** | |
 
-* **Report enumeration is unsolved.** The download API
-  (`newgainapi/api/Report/DownloadReportByFileName?fileName=…`) works and is what this build uses,
-  but no working *list* endpoint was found (`gain.fas.usda.gov` is a JS SPA; two candidate list
-  paths 404). The demo pins filenames in config. The server needs a real enumerator (SPA XHR
-  inspection, or the published GAIN report-schedule PDF) before a full run.
-* **`CH2026-0032` (China oilseeds) has no extractable PSD table** — 0 pages matched either table
-  strategy despite 50 pages of narrative. Some posts ship tables as images or in a third layout;
-  such reports must be counted and skipped, not silently dropped.
-* **Unmapped table labels** are reported in `run_report.unmapped_labels` rather than dropped
-  silently. Currently unmapped and genuinely absent from PSD: `Area Planted` (oilseeds),
-  `Other Slaughter`, `Total Dom. Consumption` vs PSD's `Domestic Consumption`. Extend
-  `attribute_aliases` as coverage grows.
-* **Prose anchors are per-family config** (`prose_heading`, or prose-after-table). A 2–3k
-  reports/yr run needs a generalized section locator; layout variance across ~90 posts is the
-  single biggest unknown in this package.
-* **The MX2026-0012 "highest on record" contradiction's root cause is unresolved** (scope artifact
-  vs. a settled-year revision — see "Superlative guard"). Worth a small follow-up: pull an older
-  archived vintage of the Mexico cattle PSD table (e.g. via Wayback) to see whether MY2023 exports
-  read lower at the time the report was written, which would confirm settled-year vintage drift
-  rather than a Post reporting error.
-* `datasets/README.md` still needs a row for this package (shared file — flagged separately, not
-  edited here).
+The record rate is **~0.08 per candidate report** and varies enormously by group — livestock ≈0.9
+records/report in recent years, coffee ≈0. Extrapolating from *tables per report* (as the demo did)
+overstates it by roughly 8× because most tables lose their channels downstream.
+
+## Template depth — the 73% `no_table`, measured
+
+A stratified probe (349 reports, ~12/year) shows extraction yield is **strongly era-dependent**:
+
+| era | reports with an extractable PSD table |
+|---|--:|
+| 1997–2001 | **0%** |
+| 2002–2010 | 8–17% |
+| 2011–2019 | 17–58% |
+| 2020–2026 | 58–100% |
+
+**A third table layout was found because of that 0%.** It looked like "the old template has no
+balance sheets". It is a parser gap: pre-2004 reports (`Template Version 2.09`) carry full PSD
+tables containing **none** of the three marker strings the other parsers key on. They use
+`Revised 2001 / Preliminary 2002 / Forecast 2003` year columns with `Old`/`New` vintage pairs
+instead of `USDA Official`/`New Post` — the same semantics, so `pick_value()`'s prefer-New logic
+applies unchanged. `parse_tables_psd_legacy()` recovers them (123 tables in the final run).
+
+Most of 1998–2001 nonetheless stays empty, and that is **real**: those years are dominated by short
+one-off voluntary reports ("Spring Drought in Korea", "Grain Harvest Update") that carry no balance
+sheet at all. Only ~40% of the pool is a periodic Annual/Semi-annual report.
+
+## No hand-listing — specs are derived from the PDF
+
+The config used to pin every report's commodities and table titles, which is why the build could
+only cover the two reports someone had typed out. No hand-listing is needed: **a PSD table's title
+IS its PSD `Commodity_Description`** (identical strings on all five pinned demo entries), so
+`derive_specs()` reads the commodity set off the tables and confirms it against PSD's own vocabulary
+for the resolved country. Two rules stop that from manufacturing duplicates, both found by auditing
+the first 465 harvested records:
+
+* **one spec per commodity** — a report can render the same commodity's table twice
+  (`KS2016-2381` has two `Dairy, Cheese` tables), which produced two specs with the same
+  `series_id`;
+* **commodities sharing a page share their prose** — `prose_after_table()` keys on the page, so two
+  commodities whose tables sit on one page got **byte-identical** text (`JA2016-1154` shipped one
+  paragraph as both `Dairy, Cheese` and `Dairy, Milk, Nonfat Dry`). Re-shipping one paragraph under
+  N labels is the "no fake scale" ban in SCHEMA.md, so those commodities are merged into **one**
+  record whose channels are their union.
+
+Final result: **0 duplicate texts** across 1,523 records.
+
+Layouts in the final run: `bordered` 7,858 tables · `text` 3,511 · `legacy` 123. Shapes:
+`per_commodity` 1,740 specs · `multi_commodity` 912.
+
+## Alignment retraction
+
+`detect_alignment()` counted an **exact unit-scale conversion** as reciting — "8.4 million hectares"
+for a value of `8400` in `1000 HA`. SCHEMA §7 requires the text to state the series numbers
+*literally*, and the shared gate in `schema/validate.py` (which mirrors the team's `verify_cpt.py`)
+rejects it — it was raising inside `emit_record` on 2 of 24 records in the first shard. GAIN was one
+of the five packages caught overclaiming this way on 2026-08-18.
+
+`recites` now requires an **exact** surface match. The scaled hit is still recorded as auditable
+evidence with an `exact: false` flag, so the alignment reasoning is inspectable rather than
+discarded. Result: **145 recites, 1,378 describes** — where the demo claimed 3 of 4 reciting.
+
+## Country join — hand-verified, because a fuzzy match is dangerous here
+
+Three traps, all measured:
+
+* PSD keeps **both** a legacy and a current spelling for many countries, and the legacy one is
+  **frozen**: `Korea, Republic of` stops at MY2004 with 1,079 rows; `Korea, South` runs to MY2026
+  with 25,796. Every candidate — *including an exact name match* — is therefore ranked by latest
+  market year. An earlier version returned the exact match immediately, which made GAIN's
+  `Russian Federation` resolve to PSD's frozen `Russian Federation` and silently pair recent reports
+  with a series ending in 2004.
+* The same label is unresolvable in one PSD group and present in another, so the alias is consulted
+  even when the literal name is missing (this alone recovered 91 reports).
+* A substring match would map **`Korea - Republic of` → `Korea, Democratic Peoples Rep`** before it
+  matches South Korea. The fallback only strips GAIN's own ` - <qualifier>` suffix and requires a
+  word-boundary match; anything still ambiguous is left **unresolved and counted** (final run: 1).
+
+`region` is ISO-2 via a hand-verified alias table plus `pycountry`, falling back to the country name
+verbatim rather than coercing two letters. An earlier pass derived it as `countryName[:2].upper()`,
+which emitted `CH` for China, `ME` for Mexico, `NE` for New Zealand and `JA` for Japan — real ISO
+codes for the **wrong countries**. Historical entities with no current ISO-2 (`Former Yugoslavia`,
+`Union of Soviet Socialist Repu`, …) keep their names deliberately. Final run: 66 regions, all valid.
+
+## Attribute mapping — and two aliases deliberately refused
+
+Report row labels are GAIN's friendlier rendering of PSD attributes. Five aliases were added from
+the full run's own `unmapped_labels`, each confirmed against PSD's actual vocabulary for the
+commodity: `Feed and Residual` → `Feed Dom. Consumption` (1,149 rows), `Total Consumption` →
+`Domestic Consumption` (906), `Milled Production` → `Production`, `Consumption and Residual` →
+`Domestic Consumption`, `Total Dom. Cons.` → `Domestic Consumption`.
+
+An **appended-unit fallback** handles rows where the unit follows the attribute with no parentheses
+(`Production 1000 480 lb. Bales`), which `norm_label` cannot strip — the top of `unmapped_labels`
+was ~300 cotton and dairy rows of exactly that shape. It matches on the label's **prefix** and takes
+the longest attribute that is a prefix, which is deterministic and cannot invent a mapping:
+`Other Imports` still does **not** match `Imports` and stays counted.
+
+**Two plausible aliases were refused, and verification says that was right.** Checking report values
+against PSD for settled years:
+
+* `Total Use` (sugar) → matched `Total Disappearance` 3× and **mismatched 3×**; same for
+  `Human Dom. Consumption`. There is no consistent mapping.
+* `Total Sugar Production` → `Production` was **8/8 mismatch**.
+* `Area Planted` has no PSD counterpart at all — PSD carries only `Area Harvested`.
+
+All three stay unmapped and counted. Guessing any of them would have mislabelled channels.
+
+## The vintage splice
+
+PSD Online bulk carries decades of history but always reflects the **current** vintage, and USDA
+keeps revising recent/forecast years after a report ships. Measured on `MX2026-0012`: settled years
+matched the report exactly (8/8 for 2024), but the forecast year had drifted past **both** of the
+report's own columns (Total Slaughter 2026: report 7,200 official / 7,225 New Post → PSD now 7,550).
+So each series is **PSD bulk for settled market years + the report's own table values for its table
+years**, with the post's revised column preferred over the previous official one (617 official
+fallbacks in the final run, where New Post is a not-yet-published 0). Pairing live PSD naively would
+mismatch exactly the years the prose is about.
+
+**Forecast-not-measured:** GAIN prose is forecast-dominant, so the forecast year is the series'
+terminal point. The text is the contemporaneous first-party forecast, so there is no future-value
+leakage — same convention as WASDE #41. Stripping the forecast would *break* alignment, not clean it.
+
+## Commensurability — wide, not deep
+
+`window_mode: text_span` bounds each series to the market years the prose actually names (+2 years of
+context) and drops PSD's missing-as-zero prefix. Mean coverage is **50%** of shipped series-years,
+against 13% at full PSD depth. The trade-off is real: GAIN **cannot be both commensurate and deep**
+at annual frequency with a 3-year narrative horizon.
+
+The profile is genuinely **wide**: median 11 channels/record but p99 **130** and max **247** — the
+tail is India oilseeds annuals whose Report Highlights paragraph pairs with 19 commodities' balance
+sheets (73 records carry >60 channels). Those are one text against many series at ~4 points each;
+legitimate under the schema and not text reuse, but shallow, and worth knowing before training on
+them.
+
+## Engineering notes
+
+* **`harvest.py` shards by (PSD group, year).** Sharding on the *group* keeps exactly one PSD group
+  resident — all nine together is ~1 GB of dicts. Each shard's `.report.json` is written **last**, so
+  it is the completion marker: an interrupted shard is redone rather than mistaken for finished.
+* **The parse runs in processes, not threads.** The work is CPU-bound in pdfplumber, which holds the
+  GIL: raising threads 8 → 24 changed nothing (~2.5 s/report either way, ~14 h for a partial scope).
+  Prefiltering pages by marker text before `extract_tables()` measured **1.0×**, because
+  `extract_text()` is itself the cost. Moving the parse to a process pool took it to **0.18
+  s/report** (~14×), which is why the full 18,494-report archive is built rather than a recent slice.
+* **`aggregate.py` streams shards** rather than accumulating records in memory, and drops duplicate
+  `series_id`s (1 in the final run).
+* **Chart furniture is stripped.** pdfplumber reads a rotated axis label one glyph at a time, so a
+  "Pesos/Kilogram" y-axis arrived as `115.00 / m / a105.00 / r / g / o 95.00 / l / i / K` and
+  `join_prose` made each fragment its own paragraph — present in **5 of 18** records in the first
+  shard, now 0. Bare page numbers are trimmed at prose edges.
+* **`samples/example_output.jsonl` is true JSONL**, written by `aggregate.py`, one record per line
+  across distinct (shape, layout, alignment) combinations. The file committed with the demo was a
+  pretty-printed JSON **array**, so `json.loads` failed on line 2 and no per-line consumer could
+  read it.
+
+## Headroom (measured, not taken)
+
+* **`no_channels` (3,400 specs)** is the largest remaining lever — tables matched but every channel
+  died in the splice or under `min_points`. Worth a per-attribute autopsy.
+* **Remaining `unmapped_labels`** are dominated by attributes PSD genuinely lacks for that commodity
+  (`Slaughter (Reference)`, `Trees`, `Other Slaughter`, `MY Imp. from U.S.`). Some may be real
+  aliases; each needs the same value-level check the sugar labels got.
+* **`download_failed` (1,041)** were not retried in a second pass.
+* **`CH2026-0032`-class reports** ship tables as images; they are counted in `no_table`, not
+  silently dropped.
 
 ## Provenance
 
-* Reports: `https://apps.fas.usda.gov/newgainapi/api/Report/DownloadReportByFileName?fileName=<file>`
-  (the `www.fas.usda.gov/data/gain-report/...` direct PDF path **403s**).
-* Series: `https://apps.fas.usda.gov/psdonline/downloads/psd_{livestock,oilseeds,grains_pulses,cotton,sugar,coffee,dairy}_csv.zip`
-  — keyless bulk download, `Country_Name × Commodity_Description × Attribute_Description ×
-  Market_Year → Value` + `Unit_Description`.
-* Demo reports: `MX2026-0012` (Livestock and Products Semi-annual, Mexico City, 2026-02-26) and
-  `UP2026-0011` (Oilseeds and Products Annual, Kyiv, 2026-04).
+* Reports: `apps.fas.usda.gov/newgainapi/api/Report/DownloadReportByFileName?fileName=…`
+  (`meta.report_number`, `meta.post`, `meta.country_gain`, `meta.published`).
+* Series: PSD Online bulk `psd_<group>_csv.zip`; `meta.psd_group`, `meta.country_psd`,
+  `meta.psd_attributes`, `meta.splice_year`, `meta.report_table_years`.
+* WASDE #41 de-duplication: #41 builds only `United States` tables for six commodities; the
+  `dedup` guard refuses those cells so a US-country PSD series can never be re-shipped.

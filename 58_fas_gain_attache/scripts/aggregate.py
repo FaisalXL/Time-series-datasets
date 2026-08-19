@@ -95,6 +95,30 @@ def main() -> int:
              "top_unmapped_labels": dict(unmapped.most_common(30)),
              "unresolved_countries": dict(unresolved.most_common(30)),
              "parse_errors": dict(errors.most_common(15))}
+    # samples/ must be TRUE JSONL. The file committed with the demo was a pretty-printed JSON
+    # ARRAY, so `json.loads` on line 2 raised and any per-line consumer (including the corpus's own
+    # --strict pass) could not read it. Written here, from the shipped dataset, one record per line.
+    n_samp = int(cfg["output"].get("n_samples", 3))
+    picked, seen_shapes = [], set()
+    with out.open() as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            key = (rec.get("meta", {}).get("record_shape"),
+                   rec.get("meta", {}).get("table_layout"), rec.get("alignment"))
+            if key in seen_shapes:
+                continue
+            seen_shapes.add(key)
+            picked.append(line if line.endswith("\n") else line + "\n")
+            if len(picked) >= n_samp:
+                break
+    if picked:
+        sp = PKG_ROOT / "samples" / "example_output.jsonl"
+        sp.parent.mkdir(parents=True, exist_ok=True)
+        sp.write_text("".join(picked))
+        print(f"wrote {len(picked)} samples -> {sp}")
+
     rr = PKG_ROOT / cfg["output"]["run_report"]
     rr.write_text(json.dumps({"dataset": "fas_gain_attache", "stats": stats}, indent=2,
                              ensure_ascii=False))

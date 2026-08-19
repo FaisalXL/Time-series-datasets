@@ -244,6 +244,14 @@ def find_tables(pdf) -> list[dict]:
     borderless text tables are the oilseeds-style grouped-at-the-end layout."""
     tables = []
     for i, page in enumerate(pdf.pages):
+        # CHEAP PREFILTER. extract_tables() is the expensive call and most GAIN pages are prose, so
+        # running it on every page of every report dominated the harvest (CPU-bound, which is also
+        # why thread workers stopped helping). Every one of the three parsers already requires one
+        # of these marker strings to be present, so a page without any of them cannot yield a table
+        # and does not need the table machinery run over it.
+        txt = page.extract_text() or ""
+        if not (any(m in txt for m in TABLE_MARKERS) or "PSD Table" in txt):
+            continue
         found = [(t, "bordered") for t in parse_tables_bordered(page)]
         if not found:
             found = [(t, "text") for t in parse_tables_text(page)]
@@ -272,27 +280,34 @@ def psd_country_index(psd_vals: dict) -> tuple[set, dict]:
 def resolve_country(gain_name: str, countries: set, latest: dict, aliases: dict) -> str | None:
     """GAIN's country label -> the PSD Country_Name that actually carries data.
 
-    Two traps, both measured 2026-08-19:
+    Three traps, all measured 2026-08-19:
       * PSD keeps BOTH a legacy and a current spelling for many countries, and the legacy one is
-        frozen ('Korea, Republic of' stops at MY2004 with 1,079 rows; 'Korea, South' runs to
-        MY2026 with 25,796). Resolving to the first candidate found would silently pick the dead
-        one, so candidates are ranked by their LATEST market year.
-      * a substring match is actively dangerous here: 'Korea - Republic of' fuzzy-matches
-        'Korea, Democratic Peoples Rep' before it matches South Korea. So the fallback only
-        strips GAIN's own ' - <qualifier>' suffix and requires the remainder to match a PSD name
-        at a word boundary; anything still ambiguous is left unresolved and counted.
+        FROZEN ('Korea, Republic of' stops at MY2004 with 1,079 rows; 'Korea, South' runs to MY2026
+        with 25,796). So every candidate -- including an exact name match -- is ranked by its LATEST
+        market year. An earlier version returned the exact match immediately, which meant GAIN's
+        'Russian Federation' resolved to PSD's frozen 'Russian Federation' (ends MY2004) instead of
+        the live 'Russia', silently pairing recent reports with a series that stops in 2004.
+      * the same label is unresolvable in one PSD group and present in another (91 'Russian
+        Federation' reports came back unresolved because that spelling is absent from those groups'
+        country lists), so the alias is consulted even when the literal name is missing.
+      * a substring match is actively dangerous: 'Korea - Republic of' fuzzy-matches 'Korea,
+        Democratic Peoples Rep' before it matches South Korea. The fallback therefore only strips
+        GAIN's own ' - <qualifier>' suffix and requires a word-boundary match; anything still
+        ambiguous is left unresolved and counted rather than forced onto a near-neighbour.
     """
+    cands: list[str] = []
     if gain_name in countries:
-        return gain_name
+        cands.append(gain_name)
     alias = aliases.get(gain_name)
-    if alias:
-        return alias if alias in countries else None
-    base = re.split(r"\s+-\s+", gain_name)[0].strip()
-    cands = [c for c in countries
-             if c.lower() == base.lower() or re.match(rf"^{re.escape(base)}\b", c, re.I)]
+    if alias and alias in countries:
+        cands.append(alias)
+    if not cands:
+        base = re.split(r"\s+-\s+", gain_name)[0].strip()
+        cands = [c for c in countries
+                 if c.lower() == base.lower() or re.match(rf"^{re.escape(base)}\b", c, re.I)]
     if not cands:
         return None
-    return max(cands, key=lambda c: (latest.get(c, 0), c))
+    return max(dict.fromkeys(cands), key=lambda c: (latest.get(c, 0), c))
 
 
 # ISO-2 for the PSD country names pycountry cannot resolve. HAND-VERIFIED 2026-08-19 -- the point
@@ -310,9 +325,27 @@ _REGION_ALIASES = {
     "North Macedonia": "MK", "Russian Federation": "RU", "Vietnam": "VN", "Laos": "LA",
     "Syria": "SY", "Tanzania": "TZ", "Bolivia": "BO", "Moldova": "MD", "Kyrgyzstan": "KG",
     "Yemen": "YE", "Iran": "IR", "Venezuela": "VE",
+    # live countries pycountry cannot look up under PSD's spelling (renames, "X, Republic of"
+    # forms, saint abbreviations). Turkey is the one that showed up in real output as a bare
+    # "Turkey" region, because pycountry now indexes it as Türkiye only.
+    "Turkey": "TR", "Russia": "RU", "Georgia, Republic of": "GE",
+    "Kazakhstan, Republic of": "KZ", "Kyrgyzstan, Republic of": "KG",
+    "Tajikistan, Republic of": "TJ", "Uzbekistan, Republic of": "UZ",
+    "South Africa, Republic of": "ZA", "Swaziland": "SZ", "Eswatini": "SZ",
+    "Kosovo": "XK", "Macau": "MO", "Reunion": "RE", "Vanuatu/New Hebrides": "VU",
+    "Western Samoa": "WS", "St. Kitts and Nevis": "KN", "St. Lucia": "LC",
+    "St. Vincent and the Grenadines": "VC", "Virgin Islands of the U.S.": "VI",
+    "Yemen (Sanaa)": "YE", "Yemen (Aden)": "YE",
+    "Germany, Federal Republic of": "DE", "Netherlands Antilles": "AN",
     # deliberately NOT countries -- PSD aggregates. Kept as-is so they cannot masquerade as one.
     "European Union": "EU", "EU-15": "EU", "EU-25": "EU", "EU-27": "EU", "EU-28": "EU",
     "Belgium-Luxembourg": "BE",
+    # deliberately left as verbatim names: historical entities with no current ISO-2, so coercing
+    # them to a modern code would assert a country that did not exist for that data --
+    # 'Former Czechoslovakia', 'Former Yugoslavia', 'Yugoslavia (>05/92)', 'Serbia and Montenegro',
+    # 'German Democratic Republic', 'Union of Soviet Socialist Repu', 'Djibouti Afars-Issas',
+    # 'Fr.Ter.Africa-Issas', 'Gilbert and Ellice Islands', 'Jamaica & Dep', 'French West Indies',
+    # and the aggregate bucket 'Other'.
 }
 
 
@@ -332,45 +365,56 @@ def derive_specs(tables: list[dict], country: str, psd_vals: dict, tcfg: dict) -
     """(record_shape, specs) derived from the PDF itself -- no per-report hand-listing.
 
     The config used to pin every report's commodities and table titles by hand, which is why the
-    build could only ever cover the two reports someone had typed out. It turns out no hand-listing
-    is needed: a PSD table's TITLE IS its PSD Commodity_Description (verified against the pinned
-    demo, where table_title and psd_commodity were identical strings on all five entries), so the
-    commodity set can be read off the tables and confirmed against PSD's own vocabulary for this
-    country.
+    build could only ever cover the two reports someone had typed out. No hand-listing is needed: a
+    PSD table's TITLE IS its PSD Commodity_Description (verified against the pinned demo, where
+    table_title and psd_commodity were identical strings on all five entries), so the commodity set
+    is read off the tables and confirmed against PSD's own vocabulary for this country.
 
-    Shapes, following the layouts the config documents:
-      per_commodity   (bordered/interleaved) one record per commodity table -- prose follows each
-                      table, so each record gets distinct text AND distinct series.
-      multi_commodity (borderless/grouped)   ONE record for the report -- prose is organised by
-                      topic across all commodities. Emitting one record per topic section would
-                      re-ship the SAME channel union under several texts; one record per report
-                      keeps text and series both unduplicated, which is the conservative reading
-                      of SCHEMA.md's no-fake-scale rule.
+    Every spec carries `psd_commodities` (a list) and either a `page` -- meaning "the prose that
+    follows the table on this page" -- or `prose_headings`, meaning "the report's own summary
+    section". Two rules keep this from manufacturing duplicate records, both found by auditing the
+    first 465 harvested records:
+
+      * ONE SPEC PER COMMODITY. A report can render the same commodity's table twice (KS2016-2381
+        has two 'Dairy, Cheese' tables), which produced two specs with the same slug and therefore
+        the same series_id.
+      * COMMODITIES SHARING A PAGE SHARE THEIR PROSE. prose_after_table() keys on the page, so two
+        commodities whose tables sit on one page get BYTE-IDENTICAL text (JA2016-1154 shipped the
+        same paragraph as both 'Dairy, Cheese' and 'Dairy, Milk, Nonfat Dry'). Re-shipping one
+        paragraph under N labels is the "no fake scale" ban in SCHEMA.md, so those commodities are
+        merged into ONE record whose channels are their union -- distinct text, distinct series.
     """
     known = {cm for (c, cm, _a) in psd_vals if c == country}
-    resolved = []
+    resolved: dict[str, dict] = {}
     for t in tables:
         title = (t.get("title") or "").strip()
         if not title:
             continue
         match = next((cm for cm in known if norm_label(cm) == norm_label(title)), None)
-        if match:
-            resolved.append((match, t))
+        if match and match not in resolved:
+            resolved[match] = t
     if not resolved:
         return "none", []
-    borderless = sum(1 for _cm, t in resolved if t.get("found_by") == "text")
+
+    borderless = sum(1 for t in resolved.values() if t.get("found_by") == "text")
     if borderless > len(resolved) / 2:
-        commodities = sorted({cm for cm, _t in resolved})
-        slug = re.sub(r"[^a-z0-9]+", "_", "_".join(c.split(",")[0] for c in commodities).lower())
+        commodities = sorted(resolved)
+        slug = re.sub(r"[^a-z0-9]+", "_",
+                      "_".join(c.split(",")[0] for c in commodities).lower())
         return "multi_commodity", [{
             "slug": (slug[:60].strip("_") or "report"),
             "psd_commodities": commodities,
             "prose_headings": tcfg["section_headings"],
         }]
+
+    by_page: dict[int, list[str]] = {}
+    for cm, t in resolved.items():
+        by_page.setdefault(t["page"], []).append(cm)
     specs = []
-    for cm, t in resolved:
-        specs.append({"slug": re.sub(r"[^a-z0-9]+", "_", cm.lower()).strip("_"),
-                      "psd_commodity": cm, "table_title": cm, "page": t["page"]})
+    for page, cms in sorted(by_page.items()):
+        cms = sorted(cms)
+        slug = re.sub(r"[^a-z0-9]+", "_", "_".join(cms).lower()).strip("_")
+        specs.append({"slug": slug[:80] or f"page{page}", "psd_commodities": cms, "page": page})
     return "per_commodity", specs
 
 
@@ -682,12 +726,26 @@ def build_channels(psd_vals, psd_units, country, commodity, table, aliases, scfg
     for label, nums in table["rows"].items():
         key_norm = norm_label(label)
         attr = aliases.get(key_norm)
+        vocab = [a for (c, cm, a) in psd_vals if c == country and cm == commodity]
         if attr is None:
-            # exact/loose match against this commodity's real PSD attribute vocabulary
-            for (c, cm, a) in psd_vals:
-                if c == country and cm == commodity and norm_label(a) == key_norm:
-                    attr = a
-                    break
+            # exact match against this commodity's real PSD attribute vocabulary
+            attr = next((a for a in vocab if norm_label(a) == key_norm), None)
+        if attr is None:
+            # APPENDED-UNIT FALLBACK. Some tables put the unit after the attribute with NO
+            # parentheses -- 'Production 1000 480 lb. Bales', 'Total Supply 1000 480 lb. Bales' --
+            # which norm_label cannot strip because it only removes parenthesised units. Those rows
+            # went unmapped in the first full archive run (the top of unmapped_labels was ~300
+            # cotton and dairy rows of exactly this shape). Match on the label's PREFIX and take the
+            # LONGEST attribute that is a prefix, which is deterministic and cannot invent a
+            # mapping: an attribute must literally begin the row label, so 'Other Imports' still
+            # does NOT match 'Imports' and stays counted as unmapped.
+            best = None
+            for a in vocab:
+                an = norm_label(a)
+                if an and (key_norm == an or key_norm.startswith(an + " ")):
+                    if best is None or len(an) > len(norm_label(best)):
+                        best = a
+            attr = best
         if attr is None:
             stats["unmapped_labels"].setdefault(f"{commodity} :: {label}", 0)
             stats["unmapped_labels"][f"{commodity} :: {label}"] += 1
@@ -714,6 +772,15 @@ def build_channels(psd_vals, psd_units, country, commodity, table, aliases, scfg
         unit = psd_units.get(key, "")
         slug = re.sub(r"[^a-z0-9]+", "_",
                       f"{commodity} {attr} {unit}".lower()).strip("_")
+        # A channel `unit` must be unique inside a record (schema rejects repeats). Two commodities
+        # in a multi-commodity union can normalise to the same slug -- caught on a cotton record
+        # whose 12th channel repeated 'cotton_area_harvested_1000_...'. Disambiguate rather than
+        # drop, so no channel is silently lost.
+        if any(c["unit"] == slug for c in channels):
+            n = 2
+            while any(c["unit"] == f"{slug}_{n}" for c in channels):
+                n += 1
+            slug = f"{slug}_{n}"
         channels.append({"values": vals, "unit": slug, "freq": scfg["freq"],
                          "psd_attribute": attr, "psd_unit": unit,
                          "years": years, "splice_year": first_tail})
