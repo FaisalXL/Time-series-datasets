@@ -50,6 +50,14 @@ text:
   # fake-alignment kills (openFDA/NHTSA/CFPB/WHO Cholera). Set false to ship + inspect
   # `meta.superlative_flags` instead (e.g. while investigating a scope/vintage explanation).
   drop_on_superlative_contradiction: true
+  # Family B (grouped-tables layout): the report's own summary section, tried in order. One
+  # record per report -- see derive_specs() for why this does NOT fan out per topic section.
+  section_headings:
+    - "^Report Highlights"
+    - "^Executive Summary"
+    - "^Summary"
+    - "^Overview"
+    - "^General Information"
   drop_lines:             # first-party boilerplate, not narrative
     - "^THIS REPORT CONTAINS ASSESSMENTS"
     - "^STATEMENTS OF OFFICIAL U\\.S\\."
@@ -72,6 +80,69 @@ series:
   window_mode: "text_span"   # bound the series to the years the prose actually names
   context_years: 2           # + this many years of surrounding context
   min_points: 3            # back off to this floor rather than emit a stub (was 12 pre-audit)
+
+# --- census / full-archive mode (added 2026-08-19) -------------------------------------------
+# Report enumeration WAS the blocker ("Report enumeration is unsolved", README). It is solved:
+# the GAIN SPA's own search service is a public POST API reachable with the anonymous bearer token
+# the SPA itself mints. scripts/census.py has the details and the no-silent-cap measurement.
+# Measured 2026-08-19: 48,758 published reports, 1998-2026, of which 18,494 sit in the categories
+# below. That is a SOURCE-side count -- the buildable count is far smaller and is measured
+# separately (see README "Template depth"), because PSD-table extraction only works on the modern
+# report template.
+census:
+  index_path: "output/report_index.json"
+  year_from: 1995
+  year_to: 2026
+  # GAIN report category -> PSD bulk group. Only these categories carry PSD balance sheets.
+  # Sharding by group keeps ONE PSD group in memory at a time (all nine together is ~1GB of dicts).
+  # Poultry lives inside the livestock group ("Meat, Chicken"), not its own download.
+  psd_categories:
+    "Grain and Feed": "grains_pulses"
+    "Oilseeds and Products": "oilseeds"
+    "Livestock and Products": "livestock"
+    "Poultry and Products": "livestock"
+    "Dairy and Products": "dairy"
+    "Sugar": "sugar"
+    "Cotton and Products": "cotton"
+    "Coffee": "coffee"
+    "Tobacco": "tobacco"
+    "Tree Nuts": "tree_nuts"
+
+# GAIN country label -> PSD Country_Name, for the cases a safe automatic match cannot reach.
+# HAND-VERIFIED 2026-08-19 against the PSD bulk files, because this is the one place a fuzzy match
+# is genuinely dangerous: 'Korea - Republic of' fuzzy-matches 'Korea, Democratic Peoples Rep'
+# before it matches South Korea. PSD also keeps a FROZEN legacy spelling beside each live one
+# (e.g. 'Korea, Republic of' ends at MY2004; 'Korea, South' runs to MY2026), so each target below
+# is the spelling that actually carries current data.
+country_aliases:
+  "China - People's Republic of": "China"
+  "Korea - Republic of": "Korea, South"
+  "Korea - Democratic Peoples Republic": "Korea, North"
+  "Turkiye": "Turkey"
+  "South Africa - Republic of": "South Africa"
+  "Burma - Union of": "Burma"
+  "Czechia": "Czech Republic"
+  "Kazakhstan - Republic of": "Kazakhstan"
+  "Uzbekistan - Republic of": "Uzbekistan"
+  "Azerbaijan - Republic of": "Azerbaijan"
+  "Moldova - Republic of": "Moldova"
+  "Tajikistan - Republic of": "Tajikistan"
+  "Armenia - Republic of": "Armenia"
+  "Kyrgyzstan - Republic of": "Kyrgyzstan"
+  "Tanzania - United Republic of": "Tanzania"
+  "North Macedonia - Republic of": "North Macedonia"
+  "Congo - Democratic Rep of the": "Congo (Kinshasa)"
+  "Bahamas - The": "Bahamas, The"
+  "Gambia - The": "Gambia, The"
+  "Belgium": "Belgium-Luxembourg"
+  # deliberately NOT aliased (no PSD counterpart carries them): 'Caribbean Basin', 'Aruba',
+  # 'British Virgin Islands', 'Cayman Islands', 'Turks and Caicos Islands', 'Poland EU-27',
+  # the two 'Yugoslavia [GT. ...]' entries, 'Yemen [Sanaa]', 'Belgium [without Luxembourg]'.
+  # These are counted as unresolved_country rather than forced onto a near-neighbour.
+
+harvest:
+  shard_dir: "output/shards"
+  workers: 10
 
 output:
   path: "output/fas_gain_cpt.jsonl"

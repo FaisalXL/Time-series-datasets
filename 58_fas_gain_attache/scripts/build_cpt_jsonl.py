@@ -161,14 +161,193 @@ def parse_tables_text(page) -> list[dict]:
     return [t for t in out if t["rows"]]
 
 
+LEGACY_YEARS_RE = re.compile(
+    r"^\s*(?:Revised\s+(\d{4}))?\s*(?:Preliminary\s+(\d{4}))?\s*(?:Estimate\s+(\d{4}))?"
+    r"\s*(?:Forecast\s+(\d{4}))?\s*$")
+LEGACY_TITLE_RE = re.compile(r"^PSD\s+Table\s+(.+?)\s*$", re.I)
+
+
+def parse_tables_psd_legacy(page) -> list[dict]:
+    """Family C: the pre-2004 GAIN template ("Template Version 2.09").
+
+    FOUND 2026-08-19, and it is the reason the archive looked shallow. A yield probe over 349
+    reports showed 0% table extraction for every year 1997-2003 -- 6,400 reports of the PSD-category
+    pool. That read like "the old template has no balance sheets", but it is a PARSER gap, not an
+    absence: the old reports carry full PSD tables under different furniture. None of the three
+    strings the other two parsers key on ("USDA Official", "New Post", "Market Year Begins") appear
+    anywhere in them. Instead:
+
+        PSD Table Animal Numbers, Swine          <- title line
+        PSD Table
+        Country Romania
+        Commodity Animal (1000 Numbers, HEAD) Swine   <- wrapped, unusable; title line is used
+        Revised 2001 Preliminary 2002 Forecast 2003   <- the year columns
+        Old New Old New Old New                       <- two vintages per year
+        Market Year Begin 01/2001 01/2002 01/2003     <- note: no trailing 's' on "Begin"
+        TOTAL Beginning Stocks 6400 4797 6200 4477 6150 4650
+
+    'Old'/'New' is the same distinction as 'USDA Official'/'New Post' -- previous official vs the
+    post's own revised estimate -- so pick_value()'s existing prefer-New logic applies unchanged.
+
+    Row labels wrap onto a following line ('Human Dom.' / 'Consumption', 'Dairy Cows Beg.' /
+    'Stocks'), with the numbers all on the first line, so a bare line-regex would keep the truncated
+    label and then fail to map it. A wrapped continuation is folded back into the label.
+    """
+    txt = page.extract_text() or ""
+    if "PSD Table" not in txt:
+        return []
+    lines = txt.split("\n")
+    out, cur, pending, pending_i = [], None, None, -99
+    for i, raw in enumerate(lines):
+        ln = raw.strip()
+        m = LEGACY_TITLE_RE.match(ln)
+        if m and m.group(1) and not re.match(r"^(Country|Commodity)\b", m.group(1)):
+            if cur and cur["rows"]:
+                out.append(cur)
+            cur = {"title": m.group(1).strip(), "years": [], "rows": {}}
+            pending = None
+            continue
+        if cur is None:
+            continue
+        ym = LEGACY_YEARS_RE.match(ln)
+        if ym and any(ym.groups()):
+            ys = [int(g) for g in ym.groups() if g]
+            if len(ys) >= 2:
+                cur["years"] = ys
+            continue
+        rm = re.match(rf"^(?P<label>.*?[A-Za-z].*?)\s+(?P<nums>(?:{NUM}\s+){{5}}{NUM})\s*$", ln)
+        if rm:
+            nums = [_to_float(x) for x in rm.group("nums").split()]
+            if all(n is not None for n in nums):
+                pending = rm.group("label").strip()
+                pending_i = i
+                cur["rows"][pending] = nums
+            continue
+        # A short alphabetic-only line IMMEDIATELY after a numeric row is that row's wrapped label
+        # tail. The adjacency test matters: 'Total Cattle Beg. Stks' is complete on its own line,
+        # and the next row ('Dairy Cows Beg. 930 920 0 0 0') carries only 5 numbers so it fails the
+        # row regex -- without requiring i == pending_i + 1, that row's orphaned 'Stocks' line got
+        # folded onto 'Total Cattle Beg. Stks' instead, producing a label that maps to nothing.
+        if (pending and i == pending_i + 1 and ln and not re.search(r"\d", ln)
+                and len(ln) <= 24 and cur["rows"]):
+            nums = cur["rows"].pop(pending)
+            cur["rows"][f"{pending} {ln}"] = nums
+        pending = None
+    if cur and cur["rows"]:
+        out.append(cur)
+    return [t for t in out if t["rows"] and len(t["years"]) >= 2]
+
+
 def find_tables(pdf) -> list[dict]:
+    """Tables, each tagged with the strategy that found it. The strategy IS the layout-family
+    signal used by derive_specs(): bordered tables are the livestock-style interleaved layout,
+    borderless text tables are the oilseeds-style grouped-at-the-end layout."""
     tables = []
     for i, page in enumerate(pdf.pages):
-        found = parse_tables_bordered(page) or parse_tables_text(page)
-        for t in found:
+        found = [(t, "bordered") for t in parse_tables_bordered(page)]
+        if not found:
+            found = [(t, "text") for t in parse_tables_text(page)]
+        if not found:
+            found = [(t, "legacy") for t in parse_tables_psd_legacy(page)]
+        for t, how in found:
             t["page"] = i
+            t["found_by"] = how
             tables.append(t)
     return tables
+
+
+# ------------------------------------------------------- auto-spec derivation (full-archive mode)
+def psd_country_index(psd_vals: dict) -> tuple[set, dict]:
+    """(countries present, country -> latest market year) for country-name resolution."""
+    countries, latest = set(), {}
+    for (c, _cm, _a), series in psd_vals.items():
+        countries.add(c)
+        if series:
+            m = max(series)
+            if m > latest.get(c, 0):
+                latest[c] = m
+    return countries, latest
+
+
+def resolve_country(gain_name: str, countries: set, latest: dict, aliases: dict) -> str | None:
+    """GAIN's country label -> the PSD Country_Name that actually carries data.
+
+    Two traps, both measured 2026-08-19:
+      * PSD keeps BOTH a legacy and a current spelling for many countries, and the legacy one is
+        frozen ('Korea, Republic of' stops at MY2004 with 1,079 rows; 'Korea, South' runs to
+        MY2026 with 25,796). Resolving to the first candidate found would silently pick the dead
+        one, so candidates are ranked by their LATEST market year.
+      * a substring match is actively dangerous here: 'Korea - Republic of' fuzzy-matches
+        'Korea, Democratic Peoples Rep' before it matches South Korea. So the fallback only
+        strips GAIN's own ' - <qualifier>' suffix and requires the remainder to match a PSD name
+        at a word boundary; anything still ambiguous is left unresolved and counted.
+    """
+    if gain_name in countries:
+        return gain_name
+    alias = aliases.get(gain_name)
+    if alias:
+        return alias if alias in countries else None
+    base = re.split(r"\s+-\s+", gain_name)[0].strip()
+    cands = [c for c in countries
+             if c.lower() == base.lower() or re.match(rf"^{re.escape(base)}\b", c, re.I)]
+    if not cands:
+        return None
+    return max(cands, key=lambda c: (latest.get(c, 0), c))
+
+
+def derive_specs(tables: list[dict], country: str, psd_vals: dict, tcfg: dict) -> tuple[str, list]:
+    """(record_shape, specs) derived from the PDF itself -- no per-report hand-listing.
+
+    The config used to pin every report's commodities and table titles by hand, which is why the
+    build could only ever cover the two reports someone had typed out. It turns out no hand-listing
+    is needed: a PSD table's TITLE IS its PSD Commodity_Description (verified against the pinned
+    demo, where table_title and psd_commodity were identical strings on all five entries), so the
+    commodity set can be read off the tables and confirmed against PSD's own vocabulary for this
+    country.
+
+    Shapes, following the layouts the config documents:
+      per_commodity   (bordered/interleaved) one record per commodity table -- prose follows each
+                      table, so each record gets distinct text AND distinct series.
+      multi_commodity (borderless/grouped)   ONE record for the report -- prose is organised by
+                      topic across all commodities. Emitting one record per topic section would
+                      re-ship the SAME channel union under several texts; one record per report
+                      keeps text and series both unduplicated, which is the conservative reading
+                      of SCHEMA.md's no-fake-scale rule.
+    """
+    known = {cm for (c, cm, _a) in psd_vals if c == country}
+    resolved = []
+    for t in tables:
+        title = (t.get("title") or "").strip()
+        if not title:
+            continue
+        match = next((cm for cm in known if norm_label(cm) == norm_label(title)), None)
+        if match:
+            resolved.append((match, t))
+    if not resolved:
+        return "none", []
+    borderless = sum(1 for _cm, t in resolved if t.get("found_by") == "text")
+    if borderless > len(resolved) / 2:
+        commodities = sorted({cm for cm, _t in resolved})
+        slug = re.sub(r"[^a-z0-9]+", "_", "_".join(c.split(",")[0] for c in commodities).lower())
+        return "multi_commodity", [{
+            "slug": (slug[:60].strip("_") or "report"),
+            "psd_commodities": commodities,
+            "prose_headings": tcfg["section_headings"],
+        }]
+    specs = []
+    for cm, t in resolved:
+        specs.append({"slug": re.sub(r"[^a-z0-9]+", "_", cm.lower()).strip("_"),
+                      "psd_commodity": cm, "table_title": cm, "page": t["page"]})
+    return "per_commodity", specs
+
+
+def prose_after_any_heading(pdf, headings: list[str], tcfg: dict, drop_res) -> tuple[str, str]:
+    """First configured heading that yields real prose, with which one it was."""
+    for h in headings:
+        txt = prose_after_heading(pdf, h, tcfg, drop_res)
+        if len(txt) >= tcfg["min_chars"]:
+            return txt, h
+    return "", ""
 
 
 def pick_value(nums: list[float], n_years: int, yi: int):
@@ -216,9 +395,31 @@ def clean_lines(lines: list[str], drop_res: list[re.Pattern]) -> list[str]:
     return [ln for ln in lines if not any(p.search(ln.strip()) for p in drop_res)]
 
 
-# a paragraph that is really a stray table unit fragment ('(1000 HEAD)', 'HEAD)') or a bare
-# subsection year heading ('2025') -- verbatim source, but noise at the edges of a prose run
-_EDGE_NOISE = re.compile(r"^(?:\(?\s*\d{0,4}\s*(?:HEAD|MT|MT CWE|CWE|HA|MT/HA)\s*\)?|\d{4})$")
+# a paragraph that is really a stray table unit fragment ('(1000 HEAD)', 'HEAD)'), a bare
+# subsection year heading ('2025') or a page number -- verbatim source, but noise at a prose edge
+_EDGE_NOISE = re.compile(
+    r"^(?:\(?\s*\d{0,4}\s*(?:HEAD|MT|MT CWE|CWE|HA|MT/HA)\s*\)?|\d{1,4}|Page \d+(?: of \d+)?)$",
+    re.I)
+
+# CHART FURNITURE. pdfplumber reads a rotated axis label one glyph at a time, so a y-axis reading
+# "Pesos/Kilogram" with tick labels comes out of extract_text() as a column of fragments:
+#     115.00 / m / a105.00 / r / g / o 95.00 / l / i / K / / s 85.00 / o / s / e / P 75.00
+# Every fragment is short, none ends in sentence punctuation, so join_prose's heading rule made
+# each its own paragraph and they were shipped as narrative -- present in 5 of 18 records in the
+# first full shard. The test is deliberately narrow (very short line, little alphabetic content)
+# so it cannot reach real prose, which is long and mostly letters.
+def _is_chart_furniture(s: str) -> bool:
+    s = s.strip()
+    if not s:
+        return True
+    if len(s) <= 2 and not s.isdigit():          # a single stray glyph off an axis label
+        return True
+    if len(s) <= 14:
+        letters = sum(c.isalpha() for c in s)
+        digits = sum(c.isdigit() for c in s)
+        if digits and letters <= 3:               # '115.00', 'a105.00', '/ s 85.00'
+            return True
+    return False
 
 
 def join_prose(lines: list[str]) -> str:
@@ -228,6 +429,9 @@ def join_prose(lines: list[str]) -> str:
     compounds ('higher-\\nquality' -> 'higher-quality'), they do not syllable-hyphenate, so
     dropping it would corrupt the source word.
     """
+    if not lines:
+        return ""
+    lines = [l for l in lines if not _is_chart_furniture(l)]
     if not lines:
         return ""
     widths = [len(l) for l in lines if len(l) > 20] or [80]
@@ -366,9 +570,12 @@ def detect_alignment(text: str, channels: list[dict]) -> tuple[str, list[dict]]:
         for y, v in list(zip(ch["years"], ch["values"]))[-4:]:   # years the narrative is about
             if v is None or abs(v) < 10:        # tiny values collide with everything
                 continue
-            forms = {f"{v:g}", f"{v:,.0f}"}
+            exact_forms = {f"{v:g}", f"{v:,.0f}"}
+            scaled_forms = set()
             if "1000" in ch.get("psd_unit", "") and abs(v) >= 100:
-                forms.add(f"{v/1000:g}")        # exact only: 8400 -> '8.4', never 2865 -> '2.9'
+                # exact conversion only: 8400 -> '8.4', never 2865 -> '2.9'
+                scaled_forms.add(f"{v/1000:g}")
+            forms = exact_forms | scaled_forms
             hit = None
             for f in sorted(forms, key=len, reverse=True):
                 if len(re.sub(r"\D", "", f)) < 2:
@@ -381,10 +588,16 @@ def detect_alignment(text: str, channels: list[dict]) -> tuple[str, list[dict]]:
                 if hit:
                     break
             if hit:
-                evidence.append({"channel": ch["unit"], "market_year": y,
-                                 "value": v, "quoted_as": hit})
+                evidence.append({"channel": ch["unit"], "market_year": y, "value": v,
+                                 "quoted_as": hit, "exact": hit in exact_forms})
                 break
-    return ("recites" if evidence else "describes"), evidence[:6]
+    # `recites` requires an EXACT surface match. A unit-scale reconciliation ("8.4 million
+    # hectares" for a value of 8400 in 1000 HA) is strong alignment evidence but is NOT reciting
+    # under SCHEMA §7 ("the text literally states the numbers that are the series") -- and the
+    # shared gate in schema/validate.py, which mirrors the team's verify_cpt.py, rejects it. GAIN
+    # was one of the five packages caught overclaiming this way on 2026-08-18; keeping the scaled
+    # hit as evidence while tagging `describes` is what reconciles the two.
+    return ("recites" if any(e["exact"] for e in evidence) else "describes"), evidence[:6]
 
 
 _SUPERLATIVE_HIGH = re.compile(r"\b(highest|largest|record[- ]high|all-time high)\b", re.I)
