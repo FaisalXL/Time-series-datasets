@@ -91,7 +91,7 @@ class _Pacer:
     never allowed to count as a missing narrative.
     """
 
-    def __init__(self, gap: float = 2.0, max_gap: float = 45.0):
+    def __init__(self, gap: float = 2.0, max_gap: float = 18.0):
         self.gap = gap
         self.min_gap = gap
         self.max_gap = max_gap
@@ -112,11 +112,14 @@ class _Pacer:
             self.gap = min(self.max_gap, self.gap * 2)
 
     def reward(self) -> None:
+        # MULTIPLICATIVE recovery. Subtracting a constant was far too timid: a handful of 503s
+        # pushed the gap to its ceiling and it then needed ~170 consecutive successes to come back,
+        # so the run spent hours sleeping after a brief rate-limit episode.
         with self.lock:
-            self.gap = max(self.min_gap, self.gap - 0.25)
+            self.gap = max(self.min_gap, self.gap * 0.7)
 
 
-PACER = _Pacer()
+PACER = _Pacer(gap=3.0)
 
 
 def wayback_url(url: str, ts: str) -> str:
@@ -361,8 +364,27 @@ def find_pack_url(html: bytes, page_url: str) -> str | None:
     return urllib.parse.urljoin(page_url, u)                      # type: ignore[name-defined]
 
 
+_ERA_NATIVE = re.compile(r"/mps\d{4}-\d{2}$|/mps-[a-z]+-\d{4}$", re.I)
+
+
 def candidates_of(st: dict) -> list[dict]:
-    return st.get("candidates") or [{"wayback_ts": st["wayback_ts"], "page_url": st["page_url"]}]
+    """Candidate captures, ERA-NATIVE URL first.
+
+    Ordering matters because archive.org is rate-limited: every candidate tried and failed costs a
+    request against a budget that answers 503 once exceeded. The captures that fail are predictable
+    -- the Jan-2026 crawl of the modern /hub/publications/... path, which CDX lists as 200 but which
+    404s for older statements because RBNZ never served those bodies there. The URL scheme that
+    encodes the statement's own date (mps2001-05, mps-may-2001) is the one that resolves for pre-2022
+    statements, so it is tried first and is usually the only request needed."""
+    cands = st.get("candidates") or [{"wayback_ts": st["wayback_ts"],
+                                      "page_url": st["page_url"]}]
+
+    def native(c):
+        return bool(_ERA_NATIVE.search(c["page_url"].split("?")[0].rstrip("/")))
+
+    if st.get("year", 0) >= 2022:                 # modern statements: newest capture first
+        return sorted(cands, key=lambda c: (1 if native(c) else 0, -int(c["wayback_ts"])))
+    return sorted(cands, key=lambda c: (0 if native(c) else 1, -int(c["wayback_ts"])))
 
 
 def fetch_page(st: dict, cache: Path, tcfg: dict,
@@ -380,7 +402,7 @@ def fetch_page(st: dict, cache: Path, tcfg: dict,
         html = cached.read_bytes()
         text, how = extract_narrative(html, tcfg)
         if len(text) >= tcfg["min_chars"]:
-            return html, st["page_url"], st["wayback_ts"], text
+            return html, st["page_url"], st["wayback_ts"], text, False
     last = b""
     throttled = False
     for cand in candidates_of(st):
@@ -396,6 +418,7 @@ def fetch_page(st: dict, cache: Path, tcfg: dict,
             except urllib.error.HTTPError as e:
                 if e.code in (404, 403):     # this capture really is not retrievable
                     break
+                # 503/429 = archive.org's rate limit, not a statement about the content
                 throttled = True
                 PACER.penalise()
                 time.sleep(min(5 * 2 ** attempt, 60))
