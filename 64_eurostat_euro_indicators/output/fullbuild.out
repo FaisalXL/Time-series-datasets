@@ -15,3 +15,39 @@
 [series] producer_prices        sts_inppd_m    EA=EA21      EU=EU27_2020  2 channels
 [series] retail_trade           sts_trtu_m     EA=EA21      EU=EU27_2020  2 channels
 [series] services_production    sts_sepr_m     EA=EA21      EU=EU27_2020  2 channels
+{
+  "codes_seen": 4444,
+  "no_body": 4102,
+  "no_family": 155,
+  "no_period": 0,
+  "short_series": 0,
+  "no_evidence": 26,
+  "too_short": 0,
+  "emitted": 161
+}
+{
+  "unemployment": {
+    "EA": "EA21",
+    "EU": "EU27_2020"
+  },
+  "inflation": {
+    "EA": "EA20",
+    "EU": "EU27_2020"
+  },
+  "industrial_production": {
+    "EA": "EA21",
+    "EU": "EU27_2020"
+  },
+  "producer_prices": {
+    "EA": "EA21",
+    "EU": "EU27_2020"
+  },
+  "retail_trade": {
+    "EA": "EA21",
+    "EU": "EU27_2020"
+  },
+  "services_production": {
+    "EA": "EA21",
+    "EU": "EU27_2020"
+  }
+}

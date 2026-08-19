@@ -1,13 +1,13 @@
 {
   "stats": {
-    "codes_seen": 11,
-    "no_body": 2,
-    "no_family": 4,
+    "codes_seen": 4444,
+    "no_body": 4102,
+    "no_family": 155,
     "no_period": 0,
     "short_series": 0,
-    "no_evidence": 1,
+    "no_evidence": 26,
     "too_short": 0,
-    "emitted": 4
+    "emitted": 161
   },
   "families": [
     "unemployment",
@@ -48,6 +48,9 @@
       "listing_url": "https://ec.europa.eu/eurostat/web/main/news/euro-indicators",
       "release_url": "https://ec.europa.eu/eurostat/product?code={code}",
       "listing_only_page_one": false,
+      "listing_atom_url": "https://ec.europa.eu/eurostat/news/euro-indicators?p_p_id=estatsearchportlet_WAR_estatsearchportlet_INSTANCE_OaTpFrwlabNK&p_p_lifecycle=2&p_p_state=normal&p_p_mode=view&p_p_resource_id=atom&p_p_cacheability=cacheLevelPage&_estatsearchportlet_WAR_estatsearchportlet_INSTANCE_OaTpFrwlabNK_pageNumber={page}&_estatsearchportlet_WAR_estatsearchportlet_INSTANCE_OaTpFrwlabNK_pageSize={size}&_estatsearchportlet_WAR_estatsearchportlet_INSTANCE_OaTpFrwlabNK_sort=lastUpdateDate&_estatsearchportlet_WAR_estatsearchportlet_INSTANCE_OaTpFrwlabNK_collection=CAT_PREREL",
+      "listing_page_size": 500,
+      "listing_max_pages": 60,
       "extra_codes": [],
       "api_url": "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/{dataset}",
       "cache_dir": ".cache",
