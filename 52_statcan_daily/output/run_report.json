@@ -1,12 +1,12 @@
 {
   "dataset": "statcan_daily",
   "stats": {
-    "hops": 51,
-    "candidates": 50,
-    "emitted": 50,
-    "recites": 50,
-    "describes": 0,
-    "no_title_match": 0,
+    "hops": 134,
+    "candidates": 133,
+    "emitted": 133,
+    "recites": 132,
+    "describes": 1,
+    "no_title_match": 1,
     "no_narrative": 0,
     "short_text": 0,
     "short_window": 0,
@@ -78,7 +78,7 @@
       "output_path": "output/statcan_daily_cpt.jsonl",
       "report_path": "output/run_report.json",
       "samples_path": "samples/example_output.jsonl",
-      "max_records": 50,
+      "max_records": null,
       "indent": null
     }
   },

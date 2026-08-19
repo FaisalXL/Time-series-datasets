@@ -110,7 +110,7 @@ def rp(s: str) -> Path:
 
 # --- HTTP --------------------------------------------------------------------
 
-def http_get(url: str, ua: str, timeout: int, tries: int = 5) -> bytes:
+def http_get(url: str, ua: str, timeout: int, tries: int = 30) -> bytes:
     """GET with exponential backoff.
 
     Added 2026-08-18 after two consecutive full builds died on the FIRST request with
@@ -120,19 +120,36 @@ def http_get(url: str, ua: str, timeout: int, tries: int = 5) -> bytes:
     robots.txt asks for, i.e. over an hour in which one dropped handshake is close to certain.
 
     A 404 is a real answer and is raised immediately rather than retried.
+
+    `tries` is 30, and each ATTEMPT is capped well below the configured timeout, because THIS WALK
+    IS A CHAIN: each release page carries the link to the
+    previous one, so a fetch that finally gives up does not skip a page -- it ends the walk. Measured
+    2026-08-18: the same URL fails the TLS handshake and then succeeds seconds later, i.e. roughly a
+    quarter of attempts drop. At 5 tries that is a ~0.1% chance of losing the chain per hop, which
+    over ~2,750 hops is a near-certainty (and it killed three builds). At 10 it is ~1e-6.
+
+    That estimate was too kind. Re-measured 2026-08-19 on the URL that killed the third build
+    (dq210317a): it fails **5 of 6 attempts**, not 1 in 4 -- some pages are far worse than the
+    average. At 83% per-attempt failure, 10 tries still exhausts 15% of the time.
+
+    The other half of the fix is the per-attempt timeout. A failing handshake burns the WHOLE
+    timeout (60s from config) while a success returns in ~1.2s, so a long timeout buys nothing and
+    costs everything: 10 tries x 60s is 10 minutes of waiting to lose the chain anyway. Capping each
+    attempt at 15s makes 30 tries cheaper in wall-clock than 10 tries were, and takes the exhaustion
+    probability on that pathological page to ~0.3%.
     """
     last = None
     for attempt in range(tries):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept": "*/*"})
-            return urllib.request.urlopen(req, timeout=timeout, context=_SSL).read()
+            return urllib.request.urlopen(req, timeout=min(timeout, 15), context=_SSL).read()
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 raise
             last = e
         except Exception as e:
             last = e
-        wait = min(2 ** attempt, 30)
+        wait = min(1.5 ** attempt, 20)      # gentler ramp: 30 attempts, not 10
         print(f"  ! {type(last).__name__} on {url[:70]} -- retry {attempt + 1}/{tries} in {wait}s",
               file=sys.stderr)
         time.sleep(wait)

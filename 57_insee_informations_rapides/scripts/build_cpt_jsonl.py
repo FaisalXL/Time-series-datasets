@@ -64,6 +64,34 @@ _FR_MARKERS = ("sur un mois", "sur un an", "les prix", "à la consommation", "en
                "des prix", "par rapport", "hausse de", "en moyenne", "corrigé des variations")
 
 
+
+_VALUE_NUM = re.compile(r"-?\d[\d,]*\.?\d*")
+
+
+def _states_a_series_value(text: str, timeseries: list) -> bool:
+    """Does a raw series value literally appear in the prose?
+
+    Deliberately the same test as schema/validate.py and the team's verify_cpt.py, so the three
+    gates cannot disagree about what `recites` means.
+    """
+    nums = []
+    for m in _VALUE_NUM.finditer(text or ""):
+        try:
+            nums.append(float(m.group(0).replace(",", "")))
+        except ValueError:
+            pass
+    if not nums:
+        return False
+    for ch in timeseries or []:
+        for v in ch.get("values") or []:
+            if v is None or not isinstance(v, (int, float)):
+                continue
+            for cand in {v, round(v, 1), round(v, 2), round(v)}:
+                for t in nums:
+                    if cand and abs(t - cand) <= max(0.01 * abs(cand), 0.01):
+                        return True
+    return False
+
 def _is_english(text: str) -> bool:
     t = text.lower()
     en = sum(t.count(m) for m in _EN_MARKERS)
@@ -247,8 +275,15 @@ def build(cfg: dict) -> list[dict]:
             timeseries.append({"values": vals, "unit": unit, "freq": "1M"})
         if not timeseries:
             continue
+        # SCHEMA §7: `recites` means the text literally states the numbers that are the series.
+        # This was hardcoded to "recites" with no test, and 114 of 116 records did not qualify --
+        # the INSEE narrative quotes month-on-month and year-on-year PERCENTAGE CHANGES while the
+        # series stores the CPI index level. Same overclaim as ONS #61 (71 of its 72 families) and
+        # as 59/58/63. Decided per record now, by the same test schema/validate.py applies.
+        _text = item["narrative"] + "\n\n<ts></ts>"
+        _alignment = "recites" if _states_a_series_value(_text, timeseries) else "describes"
         records.append({
-            "text": item["narrative"] + "\n\n<ts></ts>",
+            "text": _text,
             "timeseries": timeseries,
             "task_type": "world_knowledge",
             "text_quality": "real",
@@ -257,7 +292,7 @@ def build(cfg: dict) -> list[dict]:
             "source": INSEE_EN.format(id=item["rid"]),
             "license": "cc-by-4.0",              # closest schema fit for Etalab Open Licence 2.0
             "text_source": "first_party_official",
-            "alignment": "recites",
+            "alignment": _alignment,
             "domain": "economy",
             "region": "FR",
             "period_start": win[0],
