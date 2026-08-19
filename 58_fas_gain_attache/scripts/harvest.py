@@ -152,7 +152,7 @@ def build_one(rep: dict, group: str, psd_vals, psd_units, countries, latest, cfg
                     series_id=f"fas_gain_{rep['reportNumber'].lower()}_{spec['slug']}",
                     dataset="fas_gain_attache",
                     domain="agriculture",
-                    region=rep.get("countryName", "")[:2].upper(),
+                    region=B.region_for(country),
                     period_start=f"{years[0]}-01-01",
                     period_end=f"{years[-1]}-01-01",
                     meta={

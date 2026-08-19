@@ -1,16 +1,34 @@
 {
   "dataset": "rbnz_mps",
   "stats": {
-    "statements": 1,
-    "emitted": 1,
-    "recites": 1,
+    "statements": 6,
+    "emitted": 0,
+    "recites": 0,
     "describes": 0,
-    "no_narrative": 0,
-    "short_series": 0,
+    "no_narrative": 4,
+    "no_pack": 1,
+    "pack_fetch_failed": 0,
+    "pack_unreadable": 0,
+    "too_few_channels": 0,
+    "page_fetch_failed": 1,
     "superlative_flags": 0,
-    "superlative_dropped": 0
+    "superlative_dropped": 0,
+    "anchor_used": {
+      "anchor:0": 1,
+      "none": 4
+    },
+    "unmatched_sheet_titles": {},
+    "by_year": {},
+    "mean_channels": 0
   },
   "config_snapshot": {
+    "census": {
+      "index_path": "output/statement_index.json",
+      "cdx_prefixes": [
+        "rbnz.govt.nz/monetary-policy/monetary-policy-statement",
+        "rbnz.govt.nz/hub/publications/monetary-policy-statement"
+      ]
+    },
     "data": {
       "mps_page_url": "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement/monetary-policy-statement-filtered-listing-page/{year}/{slug}",
       "wayback_available": "http://archive.org/wayback/available?url={url}",
@@ -22,6 +40,7 @@
       "daily_freq": "1d",
       "daily_window": 90,
       "min_points": 8,
+      "min_channels": 2,
       "sheets": {
         "i.1": {
           "unit": "ocr_pct",
@@ -50,10 +69,56 @@
         }
       }
     },
+    "variables": [
+      {
+        "name": "ocr_pct",
+        "title_pattern": "official cash rate|\\bOCR\\b",
+        "exclude_pattern": "expectation|survey|forecast error"
+      },
+      {
+        "name": "inflation_headline",
+        "title_pattern": "CPI inflation|consumer price inflation|headline inflation|\\bCPI\\b",
+        "exclude_pattern": "tradable|expectation|component"
+      },
+      {
+        "name": "inflation_non_tradables",
+        "title_pattern": "non-?tradables? inflation|non-?tradables"
+      },
+      {
+        "name": "inflation_tradables",
+        "title_pattern": "(?<!non-)(?<!non )tradables? inflation"
+      },
+      {
+        "name": "unemployment_rate_pct",
+        "title_pattern": "unemployment"
+      },
+      {
+        "name": "gdp_growth_pct",
+        "title_pattern": "\\bGDP\\b|gross domestic product|economic growth",
+        "exclude_pattern": "trading partner|world|global|per capita"
+      },
+      {
+        "name": "twi_index",
+        "title_pattern": "\\bTWI\\b|trade[- ]weighted"
+      },
+      {
+        "name": "ninety_day_rate_pct",
+        "title_pattern": "90[- ]day|ninety[- ]day|bank bill"
+      }
+    ],
     "text": {
       "min_chars": 300,
       "max_chars": 2500,
-      "drop_on_superlative_contradiction": true
+      "drop_on_superlative_contradiction": true,
+      "narrative_anchors": [
+        "^Policy assessment",
+        "^Latest OCR decision",
+        "Monetary Policy Statement.{0,4} in pictures",
+        "^Summary Record of Meeting",
+        "^Official Cash Rate",
+        "^Media release",
+        "^Overview"
+      ]
     },
     "license": {
       "tag": "cc-by-4.0",

@@ -1,0 +1,470 @@
+{
+ "generated_utc": "2026-08-19T18:25:19Z",
+ "n_packs": 116,
+ "packs": {
+  "aug99-data.xls": {
+   "wayback_ts": "20260130183611",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/1999/aug99-data.xls"
+  },
+  "mar99-data.xls": {
+   "wayback_ts": "20260130182516",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/1999/mar99-data.xls"
+  },
+  "may99-data.xls": {
+   "wayback_ts": "20260130031150",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/1999/may99-data.xls"
+  },
+  "nov99-data.xls": {
+   "wayback_ts": "20260130005320",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/1999/nov99-data.xls"
+  },
+  "aug00-data.xls": {
+   "wayback_ts": "20260130005501",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2000/aug00-data.xls"
+  },
+  "dec00-data.xls": {
+   "wayback_ts": "20260130193011",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2000/dec00-data.xls"
+  },
+  "mar00-data.xls": {
+   "wayback_ts": "20260130182556",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2000/mar00-data.xls"
+  },
+  "may00-data.xls": {
+   "wayback_ts": "20260130192655",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2000/may00-data.xls"
+  },
+  "aug01-data.xls": {
+   "wayback_ts": "20260130031140",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2001/aug01-data.xls"
+  },
+  "mar01-data.xls": {
+   "wayback_ts": "20260130183059",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2001/mar01-data.xls"
+  },
+  "may01-data.xls": {
+   "wayback_ts": "20260130182305",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2001/may01-data.xls"
+  },
+  "nov01-data.xls": {
+   "wayback_ts": "20260130182824",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2001/nov01-data.xls"
+  },
+  "aug02-data.xls": {
+   "wayback_ts": "20260130020445",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2002/aug02-data.xls"
+  },
+  "mar02-data.xls": {
+   "wayback_ts": "20260130182510",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2002/mar02-data.xls"
+  },
+  "may02-data.xls": {
+   "wayback_ts": "20260130182413",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2002/may02-data.xls"
+  },
+  "nov02-data.xls": {
+   "wayback_ts": "20260130173136",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2002/nov02-data.xls"
+  },
+  "dec03-data.xls": {
+   "wayback_ts": "20260130183454",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2003/dec03-data.xls"
+  },
+  "jun03-data.xls": {
+   "wayback_ts": "20260130192541",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2003/jun03-data.xls"
+  },
+  "mar03-data.xls": {
+   "wayback_ts": "20260130004913",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2003/mar03-data.xls"
+  },
+  "sep03-data.xls": {
+   "wayback_ts": "20260130193221",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2003/sep03-data.xls"
+  },
+  "dec04-data.xls": {
+   "wayback_ts": "20260130052420",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2004/dec04-data.xls"
+  },
+  "jun04-data.xls": {
+   "wayback_ts": "20260130053705",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2004/jun04-data.xls"
+  },
+  "mar04-data.xls": {
+   "wayback_ts": "20260130183506",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2004/mar04-data.xls"
+  },
+  "sep04-data.xls": {
+   "wayback_ts": "20260130052423",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2004/sep04-data.xls"
+  },
+  "dec05-data.xls": {
+   "wayback_ts": "20260130052305",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2005/dec05-data.xls"
+  },
+  "jun05-data.xls": {
+   "wayback_ts": "20260130202356",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2005/jun05-data.xls"
+  },
+  "mar05-data.xls": {
+   "wayback_ts": "20260130084003",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2005/mar05-data.xls"
+  },
+  "sep05-data.xls": {
+   "wayback_ts": "20260130192833",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2005/sep05-data.xls"
+  },
+  "dec06-data.xls": {
+   "wayback_ts": "20260130182414",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2006/dec06-data.xls"
+  },
+  "jun06-data.xls": {
+   "wayback_ts": "20260130202539",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2006/jun06-data.xls"
+  },
+  "mar06-data.xls": {
+   "wayback_ts": "20260130192839",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2006/mar06-data.xls"
+  },
+  "sep06-data.xls": {
+   "wayback_ts": "20260130183504",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2006/sep06-data.xls"
+  },
+  "dec07-data.xls": {
+   "wayback_ts": "20260130193003",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2007/dec07-data.xls"
+  },
+  "jun07-data.xls": {
+   "wayback_ts": "20260130084227",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2007/jun07-data.xls"
+  },
+  "mar07-data.xls": {
+   "wayback_ts": "20260130173138",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2007/mar07-data.xls"
+  },
+  "sep07-data.xls": {
+   "wayback_ts": "20260130031130",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2007/sep07-data.xls"
+  },
+  "dec08-data.xls": {
+   "wayback_ts": "20260130192514",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2008/dec08-data.xls"
+  },
+  "jun08-data.xls": {
+   "wayback_ts": "20260130202458",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2008/jun08-data.xls"
+  },
+  "mar08-data.xls": {
+   "wayback_ts": "20260130182550",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2008/mar08-data.xls"
+  },
+  "sep08-data.xls": {
+   "wayback_ts": "20260130173124",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2008/sep08-data.xls"
+  },
+  "dec09-data.xls": {
+   "wayback_ts": "20260130202622",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2009/dec09-data.xls"
+  },
+  "jun09-data.xls": {
+   "wayback_ts": "20260130004905",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2009/jun09-data.xls"
+  },
+  "mar09-data.xls": {
+   "wayback_ts": "20260130182236",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2009/mar09-data.xls"
+  },
+  "sep09-data.xls": {
+   "wayback_ts": "20260130192403",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2009/sep09-data.xls"
+  },
+  "dec2010-data.xls": {
+   "wayback_ts": "20260130192225",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2010/dec2010-data.xls"
+  },
+  "jun10-data.xls": {
+   "wayback_ts": "20260130133354",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2010/jun10-data.xls"
+  },
+  "mar2010-data.xls": {
+   "wayback_ts": "20260130031155",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2010/mar2010-data.xls"
+  },
+  "sep10-data.xls": {
+   "wayback_ts": "20260130052421",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2010/sep10-data.xls"
+  },
+  "dec11-data.xls": {
+   "wayback_ts": "20260130192646",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2011/dec11-data.xls"
+  },
+  "jun11data.xls": {
+   "wayback_ts": "20260130004911",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2011/jun11data.xls"
+  },
+  "mar11-data.xls": {
+   "wayback_ts": "20260130192658",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2011/mar11-data.xls"
+  },
+  "sep11-data.xls": {
+   "wayback_ts": "20260130173120",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2011/sep11-data.xls"
+  },
+  "mpsdec12data.xls": {
+   "wayback_ts": "20260130182231",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2012/mpsdec12data.xls"
+  },
+  "mpsjun12data.xls": {
+   "wayback_ts": "20260130052426",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2012/mpsjun12data.xls"
+  },
+  "mpsmar12data.xls": {
+   "wayback_ts": "20260130083953",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2012/mpsmar12data.xls"
+  },
+  "sep12-data.xls": {
+   "wayback_ts": "20260130173123",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2012/sep12-data.xls"
+  },
+  "dec13data.xls": {
+   "wayback_ts": "20260130182833",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2013/dec13data.xls"
+  },
+  "jun13-data.xls": {
+   "wayback_ts": "20260130193212",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2013/jun13-data.xls"
+  },
+  "mpsmar13data.xls": {
+   "wayback_ts": "20260130182737",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2013/mpsmar13data.xls"
+  },
+  "sep13data.xls": {
+   "wayback_ts": "20260130193305",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2013/sep13data.xls"
+  },
+  "mpsdec14-data.xls": {
+   "wayback_ts": "20260130192625",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2014/mpsdec14-data.xls"
+  },
+  "mpsjun14data.xls": {
+   "wayback_ts": "20260130172110",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2014/mpsjun14data.xls"
+  },
+  "mpsmarch14data.xls": {
+   "wayback_ts": "20260130052429",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2014/mpsmarch14data.xls"
+  },
+  "mpssep14-data.xls": {
+   "wayback_ts": "20260130052415",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2014/mpssep14-data.xls"
+  },
+  "mpsdec15-data.xlsx": {
+   "wayback_ts": "20260130192341",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2015/mpsdec15-data.xlsx"
+  },
+  "mpsjun15-data.xlsx": {
+   "wayback_ts": "20260130182513",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2015/mpsjun15-data.xlsx"
+  },
+  "mpsmar15-data.xls": {
+   "wayback_ts": "20260130083954",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2015/mpsmar15-data.xls"
+  },
+  "mpssep15-data.xlsx": {
+   "wayback_ts": "20260130182548",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2015/mpssep15-data.xlsx"
+  },
+  "mpsaug16-data.xlsx": {
+   "wayback_ts": "20260130005032",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2016/mpsaug16-data.xlsx"
+  },
+  "mpsjun16-data.xlsx": {
+   "wayback_ts": "20260130052418",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2016/mpsjun16-data.xlsx"
+  },
+  "mpsmar16-data.xlsx": {
+   "wayback_ts": "20260130202431",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2016/mpsmar16-data.xlsx"
+  },
+  "mpsnov16-data.xlsx": {
+   "wayback_ts": "20260130193454",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2016/mpsnov16-data.xlsx"
+  },
+  "mpsaug17-data.xlsx": {
+   "wayback_ts": "20260130193515",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2017/mpsaug17-data.xlsx"
+  },
+  "mpsfeb17-data.xlsx": {
+   "wayback_ts": "20260130084228",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2017/mpsfeb17-data.xlsx"
+  },
+  "mpsmay17-data.xlsx": {
+   "wayback_ts": "20260130020442",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2017/mpsmay17-data.xlsx"
+  },
+  "mpsnov17-data.xlsx": {
+   "wayback_ts": "20260130202710",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2017/mpsnov17-data.xlsx"
+  },
+  "mpsaug18-data.xlsx": {
+   "wayback_ts": "20260130193109",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2018/mpsaug18-data.xlsx"
+  },
+  "mpsfeb18-data.xlsx": {
+   "wayback_ts": "20260130183102",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2018/mpsfeb18-data.xlsx"
+  },
+  "mpsmay18-data.xlsx": {
+   "wayback_ts": "20260130192653",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2018/mpsmay18-data.xlsx"
+  },
+  "mpsnov18-data.xlsx": {
+   "wayback_ts": "20260130005035",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2018/mpsnov18-data.xlsx"
+  },
+  "mpsaugust19-data.xlsx": {
+   "wayback_ts": "20260130202843",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2019/mpsaugust19-data.xlsx"
+  },
+  "mpsfeb19-data.xlsx": {
+   "wayback_ts": "20260130052300",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2019/mpsfeb19-data.xlsx"
+  },
+  "mpsmay19-data.xlsx": {
+   "wayback_ts": "20260130173326",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2019/mpsmay19-data.xlsx"
+  },
+  "mpsnov19-data.xlsx": {
+   "wayback_ts": "20260130192649",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2019/mpsnov19-data.xlsx"
+  },
+  "mpsaug20-data.xlsx": {
+   "wayback_ts": "20260130193620",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2020/mpsaug20-data.xlsx"
+  },
+  "mpsfeb20-data.xlsx": {
+   "wayback_ts": "20260130193007",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2020/mpsfeb20-data.xlsx"
+  },
+  "mpsmay20-data.xlsx": {
+   "wayback_ts": "20260130183255",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2020/mpsmay20-data.xlsx"
+  },
+  "mpsnov20-data.xlsx": {
+   "wayback_ts": "20260130192228",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2020/mpsnov20-data.xlsx"
+  },
+  "mpsaug21-data.xlsx": {
+   "wayback_ts": "20260130182344",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2021/mpsaug21-data.xlsx"
+  },
+  "mpsfeb21-data.xlsx": {
+   "wayback_ts": "20260130183313",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2021/mpsfeb21-data.xlsx"
+  },
+  "mpsmay21-data.xlsx": {
+   "wayback_ts": "20260130183128",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2021/mpsmay21-data.xlsx"
+  },
+  "mpsnov21-data.xlsx": {
+   "wayback_ts": "20260130192510",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2021/mpsnov21-data.xlsx"
+  },
+  "august-2022-monetary-policy-statement-data.xlsx": {
+   "wayback_ts": "20260130202712",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2022/mps-aug22/august-2022-monetary-policy-statement-data.xlsx"
+  },
+  "mpsnov22-data.xlsx": {
+   "wayback_ts": "20260130202433",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2022/mps-nov-22/mpsnov22-data.xlsx"
+  },
+  "mpsfeb22-data.xlsx": {
+   "wayback_ts": "20260130004943",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2022/mpsfeb22-data.xlsx"
+  },
+  "mpsmay22-data.xlsx": {
+   "wayback_ts": "20260130182733",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2022/mpsmay22-data.xlsx"
+  },
+  "mpsaug23-data.xlsx": {
+   "wayback_ts": "20260130004815",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2023/august/mpsaug23-data.xlsx"
+  },
+  "mpsfeb23-data.xlsx": {
+   "wayback_ts": "20260130031142",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2023/feb/mpsfeb23-data.xlsx"
+  },
+  "mpsmay23-data.xlsx": {
+   "wayback_ts": "20260130173130",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2023/may/mpsmay23-data.xlsx"
+  },
+  "mpsnov23-data.xlsx": {
+   "wayback_ts": "20260130182233",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2023/november/mpsnov23-data.xlsx"
+  },
+  "mpsaug24-data.xlsx": {
+   "wayback_ts": "20260129175740",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2024/aug-140824jvb/mpsaug24-data.xlsx"
+  },
+  "mpsfeb24-data.xlsx": {
+   "wayback_ts": "20260130192512",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2024/feb/mpsfeb24-data.xlsx"
+  },
+  "mpsmay24-data.xlsx": {
+   "wayback_ts": "20260128131648",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2024/may-220524/mpsmay24-data.xlsx"
+  },
+  "mpsnov24-data.xlsx": {
+   "wayback_ts": "20260128162109",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2024/nov-271124gsp/mpsnov24-data.xlsx"
+  },
+  "mpsaug25-data.xlsx": {
+   "wayback_ts": "20260131194502",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2025/aug-20825/mpsaug25-data.xlsx"
+  },
+  "mpsfeb25-data.xlsx": {
+   "wayback_ts": "20260129235341",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2025/feb-19224/mpsfeb25-data.xlsx"
+  },
+  "mpsmay25-data.xlsx": {
+   "wayback_ts": "20260129235902",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2025/may-0525/mpsmay25-data.xlsx"
+  },
+  "mpsnov25-data.xlsx": {
+   "wayback_ts": "20260202101832",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2025/nov-261125/mpsnov25-data.xlsx"
+  },
+  "mpsfeb26-data.xlsx": {
+   "wayback_ts": "20260717074816",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2026/feb-180226/mpsfeb26-data.xlsx"
+  },
+  "projections-chart-feb-26.xlsx": {
+   "wayback_ts": "20260310095040",
+   "url": "https://www.rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/2026/feb-180226/projections-chart-feb-26.xlsx"
+  },
+  "dec97-data.xls": {
+   "wayback_ts": "20210228222708",
+   "url": "https://www.rbnz.govt.nz/-/media/ReserveBank/Files/Publications/Monetary%20policy%20statements/1997/dec97-data.xls"
+  },
+  "sep97-data.xls": {
+   "wayback_ts": "20210227235326",
+   "url": "https://www.rbnz.govt.nz/-/media/ReserveBank/Files/Publications/Monetary%20policy%20statements/1997/sep97-data.xls"
+  },
+  "aug98-data.xls": {
+   "wayback_ts": "20210228192631",
+   "url": "https://www.rbnz.govt.nz/-/media/ReserveBank/Files/Publications/Monetary%20policy%20statements/1998/aug98-data.xls"
+  },
+  "mar98-data.xls": {
+   "wayback_ts": "20210301024936",
+   "url": "https://www.rbnz.govt.nz/-/media/ReserveBank/Files/Publications/Monetary%20policy%20statements/1998/mar98-data.xls"
+  },
+  "may98-data.xls": {
+   "wayback_ts": "20210228235756",
+   "url": "https://www.rbnz.govt.nz/-/media/ReserveBank/Files/Publications/Monetary%20policy%20statements/1998/may98-data.xls"
+  },
+  "nov98-data.xls": {
+   "wayback_ts": "20210228062230",
+   "url": "https://www.rbnz.govt.nz/-/media/ReserveBank/Files/Publications/Monetary%20policy%20statements/1998/nov98-data.xls"
+  }
+ }
+}

@@ -142,7 +142,7 @@ country_aliases:
 
 harvest:
   shard_dir: "output/shards"
-  workers: 10
+  workers: 24
 
 output:
   path: "output/fas_gain_cpt.jsonl"

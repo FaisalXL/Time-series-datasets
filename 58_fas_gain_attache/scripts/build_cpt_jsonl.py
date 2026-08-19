@@ -295,6 +295,39 @@ def resolve_country(gain_name: str, countries: set, latest: dict, aliases: dict)
     return max(cands, key=lambda c: (latest.get(c, 0), c))
 
 
+# ISO-2 for the PSD country names pycountry cannot resolve. HAND-VERIFIED 2026-08-19 -- the point
+# of this table is that a GUESSED code is worse than no code: taking the first two letters of the
+# country name (the first cut of the harvest) emitted 'CH' for China, 'ME' for Mexico, 'NE' for New
+# Zealand and 'JA' for Japan, every one of which is a real but WRONG ISO code. Anything still
+# unresolved falls back to the country name verbatim rather than being coerced into two letters.
+_REGION_ALIASES = {
+    "China, Peoples Republic of": "CN", "Korea, South": "KR", "Korea, North": "KP",
+    "Korea, Republic of": "KR", "Korea, Democratic Peoples Rep": "KP",
+    "Burma": "MM", "Burma, Union of": "MM", "Bahamas, The": "BS", "Gambia, The": "GM",
+    "Congo (Kinshasa)": "CD", "Congo, Democratic Rep of the": "CD", "Congo (Brazzaville)": "CG",
+    "Cote d'Ivoire": "CI", "Cape Verde": "CV", "Brunei": "BN", "Burkina": "BF",
+    "Armenia, Republic of": "AM", "Azerbaijan, Republic of": "AZ", "Macedonia, Republic of": "MK",
+    "North Macedonia": "MK", "Russian Federation": "RU", "Vietnam": "VN", "Laos": "LA",
+    "Syria": "SY", "Tanzania": "TZ", "Bolivia": "BO", "Moldova": "MD", "Kyrgyzstan": "KG",
+    "Yemen": "YE", "Iran": "IR", "Venezuela": "VE",
+    # deliberately NOT countries -- PSD aggregates. Kept as-is so they cannot masquerade as one.
+    "European Union": "EU", "EU-15": "EU", "EU-25": "EU", "EU-27": "EU", "EU-28": "EU",
+    "Belgium-Luxembourg": "BE",
+}
+
+
+def region_for(psd_country: str) -> str:
+    """ISO-2 where it can be established, else the country name verbatim."""
+    hit = _REGION_ALIASES.get(psd_country)
+    if hit:
+        return hit
+    try:
+        import pycountry
+        return pycountry.countries.lookup(psd_country).alpha_2
+    except Exception:                                            # noqa: BLE001
+        return psd_country
+
+
 def derive_specs(tables: list[dict], country: str, psd_vals: dict, tcfg: dict) -> tuple[str, list]:
     """(record_shape, specs) derived from the PDF itself -- no per-report hand-listing.
 

@@ -24,6 +24,23 @@
 # forecast-not-measured caveat already established for WASDE #41 / GAIN #58 (terminal point = the
 # Bank's own contemporaneous forecast, text is contemporaneous -> no future-value leakage).
 
+# --- census (added 2026-08-19) --------------------------------------------------------------
+# Enumeration is via Wayback CDX, not URL construction: statement slugs are NOT predictable in the
+# 2022+ generations (`/2025/aug-08hgf/...`, `/2024/monetary-policy-statement-291124`), and the
+# older generations use two further schemes. See scripts/census.py for all four.
+census:
+  index_path: "output/statement_index.json"
+  cdx_prefixes:
+    - "rbnz.govt.nz/monetary-policy/monetary-policy-statement"
+    - "rbnz.govt.nz/hub/publications/monetary-policy-statement"
+  # Data packs are resolved by FILENAME through this index, not by trusting the path a page links
+  # (that path varies with the capture's CMS era and is often unarchived) -- see walk_packs().
+  pack_index_path: "output/pack_index.json"
+  pack_cdx_prefixes:
+    - "rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/"
+    - "rbnz.govt.nz/-/media/ReserveBank/Files/Publications/Monetary policy statements/"
+    - "rbnz.govt.nz/-/media/ReserveBank/Files/Publications/Monetary%20policy%20statements/"
+
 data:
   mps_page_url: "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement/monetary-policy-statement-filtered-listing-page/{year}/{slug}"
   wayback_available: "http://archive.org/wayback/available?url={url}"
@@ -35,6 +52,74 @@ series:
   daily_freq: "1d"
   daily_window: 90          # trailing days of TWI context
   min_points: 8
+  min_channels: 2      # below this the record is a stub, not a multi-channel pairing
+  # VARIABLES ARE MATCHED ON EACH SHEET'S OWN TITLE TEXT, not its sheet name. Measured
+  # 2026-08-19: `Fig 2.1` is "CPI inflation" in the Jun-2005 pack and "Employment and investment
+  # intentions" in the Dec-2010 pack, so the old sheet-code map ("2.1" -> Production GDP) would
+  # silently mislabel series once applied outside the single edition it was written against.
+  # `exclude_pattern` exists because titles overlap: an "unemployment rate" sheet must not be
+  # claimed by the GDP pattern via the word "rate", and non-tradables must not claim tradables.
+
+variables:
+  - name: "ocr_pct"
+    title_pattern: "official cash rate|\\bOCR\\b"
+    exclude_pattern: "expectation|survey|forecast error"
+  - name: "inflation_headline"
+    title_pattern: "CPI inflation|consumer price inflation|headline inflation|\\bCPI\\b"
+    exclude_pattern: "tradable|expectation|component"
+  - name: "inflation_non_tradables"
+    title_pattern: "non-?tradables? inflation|non-?tradables"
+  - name: "inflation_tradables"
+    title_pattern: "(?<!non-)(?<!non )tradables? inflation"
+  - name: "unemployment_rate_pct"
+    title_pattern: "unemployment"
+  - name: "gdp_growth_pct"
+    title_pattern: "\\bGDP\\b|gross domestic product|economic growth"
+    exclude_pattern: "trading partner|world|global|per capita"
+  - name: "twi_index"
+    title_pattern: "\\bTWI\\b|trade[- ]weighted"
+  - name: "ninety_day_rate_pct"
+    title_pattern: "90[- ]day|ninety[- ]day|bank bill"
+
+text: OCR's row for Q1 2026 (the statement's own quarter) = 2.25%, EXACTLY the
+# announced decision ("agreed to hold the OCR to 2.25%") -- that row is a real current DECISION,
+# not a forecast. But unemployment/inflation's Q1 2026 row is a genuine forward projection; the
+# text's own quoted values (unemployment 5.4%, inflation 3.1%) match the PRIOR quarter (Q4 2025)
+# instead -- the last quarter with real outturn data. All quarterly channels are windowed to the
+# SAME end-quarter (the statement's own quarter) to satisfy the schema's equal-length-per-freq
+# rule; for series where that final point is itself a projection, treat it under the same
+# forecast-not-measured caveat already established for WASDE #41 / GAIN #58 (terminal point = the
+# Bank's own contemporaneous forecast, text is contemporaneous -> no future-value leakage).
+
+# --- census (added 2026-08-19) --------------------------------------------------------------
+# Enumeration is via Wayback CDX, not URL construction: statement slugs are NOT predictable in the
+# 2022+ generations (`/2025/aug-08hgf/...`, `/2024/monetary-policy-statement-291124`), and the
+# older generations use two further schemes. See scripts/census.py for all four.
+census:
+  index_path: "output/statement_index.json"
+  cdx_prefixes:
+    - "rbnz.govt.nz/monetary-policy/monetary-policy-statement"
+    - "rbnz.govt.nz/hub/publications/monetary-policy-statement"
+  # Data packs are resolved by FILENAME through this index, not by trusting the path a page links
+  # (that path varies with the capture's CMS era and is often unarchived) -- see walk_packs().
+  pack_index_path: "output/pack_index.json"
+  pack_cdx_prefixes:
+    - "rbnz.govt.nz/-/media/project/sites/rbnz/files/publications/monetary-policy-statements/"
+    - "rbnz.govt.nz/-/media/ReserveBank/Files/Publications/Monetary policy statements/"
+    - "rbnz.govt.nz/-/media/ReserveBank/Files/Publications/Monetary%20policy%20statements/"
+
+data:
+  mps_page_url: "https://www.rbnz.govt.nz/monetary-policy/monetary-policy-statement/monetary-policy-statement-filtered-listing-page/{year}/{slug}"
+  wayback_available: "http://archive.org/wayback/available?url={url}"
+  cache_dir: ".cache"
+
+series:
+  quarterly_freq: "1q"
+  quarterly_window: 24     # trailing quarters (WASDE precedent), ending at the statement's own quarter
+  daily_freq: "1d"
+  daily_window: 90          # trailing days of TWI context
+  min_points: 8
+  min_channels: 2      # below this the record is a stub, not a multi-channel pairing
   # sheet -> (label, [column names to ship as separate channels], is_gdp_like)
   sheets:
     "i.1":  {unit: "ocr_pct", cols: null}
@@ -49,6 +134,19 @@ text:
   min_chars: 300
   max_chars: 2500
   drop_on_superlative_contradiction: true
+  # Tried IN ORDER against the page's own <h2>/<h3> headings, then a content fallback (first
+  # paragraph naming the OCR). Era-dependent by necessity -- surveyed across the 119-statement
+  # census 2026-08-19: "Policy assessment" carries 1996-2015, the "in pictures" block 2016-2021,
+  # "Latest OCR decision" the current template. Keying on only the newest one is what held FHFA
+  # #59 to 28 of 46 records.
+  narrative_anchors:
+    - "^Policy assessment"
+    - "^Latest OCR decision"
+    - "Monetary Policy Statement.{0,4} in pictures"
+    - "^Summary Record of Meeting"
+    - "^Official Cash Rate"
+    - "^Media release"
+    - "^Overview"
 
 license:
   # RBNZ site terms: "This material may be reproduced and used without the specific permission of
