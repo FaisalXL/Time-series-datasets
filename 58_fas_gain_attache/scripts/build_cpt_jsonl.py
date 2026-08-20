@@ -361,6 +361,25 @@ def region_for(psd_country: str) -> str:
         return psd_country
 
 
+def commodity_slug(names, cap: int) -> str:
+    """Slug for a set of PSD commodity names, with repeated tokens collapsed.
+
+    PSD names share a leading word ("Oilseed, Soybean" / "Oilseed, Rapeseed"; three "Dairy, *"
+    tables), so a plain join repeated it: `oilseed_soybean_oilseed_rapeseed_oilseed_sunflower`.
+    That cost 10.5% of series_ids a duplicated token and pushed the longest ones past `cap`,
+    where the old truncation cut mid-token (`..._oilseed_oilse`). Collapse first, then cut on a
+    token boundary, so an id never ends in a word fragment.
+    """
+    toks = [t for t in re.split(r"[^a-z0-9]+", "_".join(names).lower()) if t]
+    out: list[str] = []
+    for t in dict.fromkeys(toks):
+        cand = "_".join([*out, t])
+        if len(cand) > cap:
+            break
+        out.append(t)
+    return "_".join(out)
+
+
 def derive_specs(tables: list[dict], country: str, psd_vals: dict, tcfg: dict) -> tuple[str, list]:
     """(record_shape, specs) derived from the PDF itself -- no per-report hand-listing.
 
@@ -399,10 +418,9 @@ def derive_specs(tables: list[dict], country: str, psd_vals: dict, tcfg: dict) -
     borderless = sum(1 for t in resolved.values() if t.get("found_by") == "text")
     if borderless > len(resolved) / 2:
         commodities = sorted(resolved)
-        slug = re.sub(r"[^a-z0-9]+", "_",
-                      "_".join(c.split(",")[0] for c in commodities).lower())
+        slug = commodity_slug([c.split(",")[0] for c in commodities], 60)
         return "multi_commodity", [{
-            "slug": (slug[:60].strip("_") or "report"),
+            "slug": (slug or "report"),
             "psd_commodities": commodities,
             "prose_headings": tcfg["section_headings"],
         }]
@@ -413,8 +431,8 @@ def derive_specs(tables: list[dict], country: str, psd_vals: dict, tcfg: dict) -
     specs = []
     for page, cms in sorted(by_page.items()):
         cms = sorted(cms)
-        slug = re.sub(r"[^a-z0-9]+", "_", "_".join(cms).lower()).strip("_")
-        specs.append({"slug": slug[:80] or f"page{page}", "psd_commodities": cms, "page": page})
+        slug = commodity_slug(cms, 80)
+        specs.append({"slug": slug or f"page{page}", "psd_commodities": cms, "page": page})
     return "per_commodity", specs
 
 

@@ -33,6 +33,7 @@ structurally net-new.
 | Alignment | `describes` **1,378** · `recites` **145** |
 | Text | mean 3,012 chars, verbatim + one bare `<ts></ts>` |
 | Duplicates | **0** duplicate texts; 1 duplicate `series_id` dropped at aggregate |
+| Identifiers | 1,523 distinct `series_id`; commodity slugs collapse repeated tokens (2026-08-20) |
 | Regions | 66 distinct, all valid ISO-2 |
 
 ## Quickstart
@@ -242,6 +243,13 @@ them.
   Prefiltering pages by marker text before `extract_tables()` measured **1.0×**, because
   `extract_text()` is itself the cost. Moving the parse to a process pool took it to **0.18
   s/report** (~14×), which is why the full 18,494-report archive is built rather than a recent slice.
+* **Commodity slugs collapsed repeated tokens** (fixed 2026-08-20). PSD names share a leading
+  word — `Oilseed, Soybean` / `Oilseed, Rapeseed`, three separate `Dairy, *` tables — so joining
+  a union record's commodities repeated it: `oilseed_soybean_oilseed_rapeseed_oilseed_sunflower`.
+  **160 of 1,523 `series_id`s (10.5%)** carried a duplicated token, and the longest were then cut
+  mid-word by the length cap (`..._oilseed_oilse`), so an identifier ended in a fragment.
+  `commodity_slug()` now de-duplicates tokens first and truncates on a token boundary. All 1,523
+  ids stay distinct (checked, 0 collisions) and every id still contains its own report number.
 * **`aggregate.py` streams shards** rather than accumulating records in memory, and drops duplicate
   `series_id`s (1 in the final run).
 * **Chart furniture is stripped.** pdfplumber reads a rotated axis label one glyph at a time, so a
