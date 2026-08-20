@@ -204,13 +204,8 @@ def passes_anomaly_filter(row: Mapping[str, Any], filters: Sequence[str]) -> boo
     return atype in filters
 
 
-def build_normal_text(description: str, channels: Sequence[str]) -> str:
-    desc = " ".join(description.split())
-    return (
-        f"{desc} Six-hourly KPI observations — {channel_list_text(channels)}: <ts></ts>."
-    )
-
-
+# NOTE: a second `build_normal_text` ("Six-hourly KPI observations") used to be defined here
+# and was immediately shadowed by the one below, so it never ran. Removed 2026-08-20.
 def build_normal_text(description: str, channels: Sequence[str]) -> str:
     desc = " ".join(description.split())
     return (
@@ -242,13 +237,27 @@ def row_to_record(
 
     if record_type == "normal":
         text = build_normal_text(description, channels)
-        text_source = "dataset_description"
-        text_quality = "real"
+        # RETRACTED 2026-08-20: this was `text_source="dataset_description"` /
+        # `text_quality="real"`. The dataset's `description` field is not source prose -- it is a
+        # machine-written statistical summary of the very series it is paired with:
+        #
+        #   "RSRP steadily improved early in the capture, rising over indices 1-53 (~5.2 s) at
+        #    about +1.155 dB/s; RSRP values ranged between -116.7 dB and -106.0 dB. The average
+        #    RSRP across the trace was -111.6 dB."
+        #
+        # Minimum, maximum, mean, index ranges and a computed slope. Every description reads that
+        # way. That is the series restated in English, which is exactly what SCHEMA §7 excludes
+        # and what `65_espn_college` rejects LLM summarisation for: a paraphrase of data we
+        # already hold is not world knowledge from a source. So BOTH halves of this package are
+        # generated, not just the GPT-4 anomaly half, and calling this one "real" invited a
+        # downstream reader to treat it as source text.
+        text_source = "generated"
+        text_quality = "generated"
         anomaly_type = None
     else:
         ticket = anomalies.get("troubleshooting_tickets", "")
         text = build_anomaly_text(description, ticket, channels)
-        text_source = "generated_gpt4"
+        text_source = "generated"   # was "generated_gpt4", outside the §6 vocab
         text_quality = "generated"
         anomaly_type = anomalies.get("type")
 
