@@ -319,10 +319,9 @@ it is safe for a different reason than the sibling package records. Record
 
 #### A worked example, for review
 
-[`samples/truncation_example_400467339.json`](samples/truncation_example_400467339.json) — 2013 NBA
-Finals Game 7 — with
-[`samples/truncation_example_400467339_first500tok.txt`](samples/truncation_example_400467339_first500tok.txt)
-holding exactly what a 500-token encoder would see. Chosen because the cap bites hard here:
+[`samples/truncation_example_400467339.md`](samples/truncation_example_400467339.md) — 2013 NBA
+Finals Game 7, self-contained: the measurements, the exact first-500-token view, both channels'
+values in full, and the whole record. Chosen because the cap bites hard here:
 
 | | |
 |---|--:|
