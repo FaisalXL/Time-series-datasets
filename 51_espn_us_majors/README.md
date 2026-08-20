@@ -317,6 +317,30 @@ only 0.13–0.36. The score still arrives well inside 500 tokens, so plain trunc
 it is safe for a different reason than the sibling package records. Record
 `meta.text_truncated_at` if you apply one.
 
+#### A worked example, for review
+
+[`samples/truncation_example_400467339.json`](samples/truncation_example_400467339.json) — 2013 NBA
+Finals Game 7 — with
+[`samples/truncation_example_400467339_first500tok.txt`](samples/truncation_example_400467339_first500tok.txt)
+holding exactly what a 500-token encoder would see. Chosen because the cap bites hard here:
+
+| | |
+|---|--:|
+| total tokens (`cl100k_base`) | **2,304** |
+| discarded by a 500-token cap | **78%** |
+| final-score anchor first appears at token | **84** |
+| anchor survives the cap | **yes** |
+
+`"...a 95-88 victory on Thursday night..."` — third paragraph, and `95-88` is the terminal state of
+both channels (`home_score_cumulative` ends 95, `away_score_cumulative` 88, matching
+`meta.final_home_score` / `final_away_score`).
+
+**What truncation does cost, stated honestly:** the full text carries **five** aligned score pairs
+(`95-88`, `92-88`, `72-71`, `18-16`, `46-44`); the first 500 tokens keep **one**. So a cap loses the
+intermediate game states and never loses the final one. A test that asked "does the truncated text
+still mention scores at all" would look degraded; the anchor-loss rate is what matters, and it is
+0.23–0.77% here.
+
 This is the opposite of `61_ons_statistical_bulletins`, where a token cap orphaned recited values
 in 92% of records and forced a split-don't-cut rule.
 
