@@ -311,7 +311,7 @@ def build_records(date: str, text_raw: str, series: Dict[str, Dict[str, float]],
         try:
             rec = emit_record(
                 text=text,
-                timeseries=[{"values": values, "unit": c["unit"], "freq": "1W"}],
+                timeseries=[{"values": values, "unit": c["unit"], "freq": "1w"}],
                 alignment="describes",
                 license="public-domain-us-gov",
                 text_source="first_party_official",

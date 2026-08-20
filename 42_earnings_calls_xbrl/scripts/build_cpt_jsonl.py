@@ -226,12 +226,19 @@ def build_record(row: dict, entry: dict, cfg: dict) -> Tuple[Optional[dict], Opt
         "source": d["source_url"],
         "dataset": "earnings_calls_xbrl",
         "series_id": f"ecxbrl_{row['symbol']}_{yr}Q{q}",
+        # The span the `timeseries` actually covers -- the first and last quarter-end in
+        # the window, NOT the call date. Every other package in the corpus carries these
+        # two fields; this builder omitted them, so all 23,202 records shipped with no
+        # temporal extent at all and no cross-package date filter could see them.
+        "period_start": ends[0],
+        "period_end": ends[-1],
         "meta": {
             "ticker": row["symbol"],
             "cik": entry["cik"],
             "company_name": row.get("company_name") or entry.get("entity"),
             "fiscal_quarter_label": f"Q{q} {yr}",
             "call_date": call,
+            "series_start": ends[0],
             "series_end": ends[-1],
             "series_end_lag_days": lag,
             "reported_quarter_in_series": lag <= 60,
