@@ -1,20 +1,27 @@
 {
-  "start_utc": "n/a",
+  "dataset": "earnings_calls_xbrl",
   "min_transcript_date": "2012-01-01",
   "window_quarters": 12,
-  "channels": [
-    "revenue_usd",
-    "net_income_usd",
-    "eps_diluted_usd_per_share"
-  ],
   "stats": {
-    "scanned": 64,
-    "emitted": 50,
-    "no_cik": 2,
-    "no_facts": 0,
-    "short_window": 12,
-    "short_text": 0,
-    "invalid": 0
+    "scanned": 26361,
+    "emitted": 23202,
+    "short_window": 946,
+    "dup_text": 72,
+    "too_many_nulls": 528,
+    "no_cik": 814,
+    "fewer_than_2_channels": 712,
+    "no_xbrl_facts": 84,
+    "short_text": 3
+  },
+  "alignment": {
+    "describes": 20032,
+    "recites": 3170
+  },
+  "series_end_lag": {
+    "121-210d": 1815,
+    "<=60d": 20545,
+    "61-120d": 831,
+    ">210d": 11
   },
   "config_snapshot": {
     "data": {
@@ -42,6 +49,13 @@
       ],
       "window_quarters": 12,
       "min_transcript_date": "2012-01-01",
+      "max_null_fraction": 0.25,
+      "series_index_path": ".cache/series_index.json",
+      "license": "proprietary-review",
+      "text_source": "third_party",
+      "domain": "finance",
+      "region": "US",
+      "source_url": "https://huggingface.co/datasets/Bose345/sp500_earnings_transcripts",
       "cache_dir": ".cache",
       "request_delay_s": 0.15,
       "timeout_s": 45
@@ -54,7 +68,8 @@
       "output_path": "output/earnings_calls_xbrl_cpt.jsonl",
       "report_path": "output/run_report.json",
       "samples_path": "samples/example_output.jsonl",
-      "max_records": 50,
+      "max_records": null,
+      "n_samples": 3,
       "indent": null
     }
   },

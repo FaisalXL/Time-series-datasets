@@ -29,14 +29,41 @@ data:
   window_quarters: 12          # trailing quarters per record; dropped if fewer available
   min_transcript_date: "2012-01-01"   # XBRL needs ~12 quarters of history (starts ~2009)
 
+  # Ends are the UNION of each channel's quarter-ends, not the intersection: measured on the full
+  # 26,361-row scan, the intersection yields 9,372 records and the union 22,593, because filers do
+  # not start every concept in the same quarter. A missing quarter inside a kept channel becomes
+  # `null`; a channel with no point anywhere in the window is dropped instead of shipped as 12
+  # nulls. 2,663 records therefore carry 2 channels and 19,930 carry 3.
+  max_null_fraction: 0.25      # measured: p90 null rate is 11.1%, only 2.2% of records exceed 0.25
+
+  # Built by scripts/index_series.py from the cached companyfacts (2.1 GB -> 2.1 MB). The build
+  # reads this, never the raw payloads, so memory does not scale with the number of filers.
+  series_index_path: ".cache/series_index.json"
+
+  # --- provenance (these were entirely ABSENT before; Part 1 counted 50 `missing_provenance`) ---
+  # LICENCE IS UNRESOLVED. The HuggingFace dataset card says MIT, but an earnings-call transcript
+  # is produced by a transcription provider and the uploader's licence cannot grant what it does
+  # not hold. The frozen v1 enum has no MIT slot, so `proprietary-review` is the honest tag --
+  # SCHEMA §6 defines it as "excluded from any release until cleared". Flip this one line if the
+  # rights question is answered.
+  license: "proprietary-review"
+  text_source: "third_party"   # the exec's own words, but a third party's transcription
+  domain: "finance"
+  region: "US"                 # SEC domestic filers
+  source_url: "https://huggingface.co/datasets/Bose345/sp500_earnings_transcripts"
+
   cache_dir: ".cache"
   request_delay_s: 0.15        # SEC allows ~10 req/s; companyfacts cached per CIK
   timeout_s: 45
 
 text:
   min_text_chars: 200
-  # Transcripts are long (~40k chars); keep the leading portion (operator + prepared
+  # Transcripts are long (mean 53,501 chars); keep the leading portion (operator + prepared
   # remarks, where the figures are recited). null = keep full text.
+  #
+  # The budget is now spent in WHOLE SPEAKER TURNS from `structured_content`, not as a raw
+  # character slice. A blind cut lands mid-word -- the previous sample record ended
+  # "...was down year-over-year at $379 million, r" -- and costs nothing to avoid.
   max_text_chars: 12000
   # No templated ts_intro: <ts></ts> is appended directly to the real transcript excerpt,
   # nothing is generated.
@@ -45,5 +72,9 @@ output:
   output_path: output/earnings_calls_xbrl_cpt.jsonl
   report_path: output/run_report.json
   samples_path: samples/example_output.jsonl
-  max_records: 50              # demo cap. null = full build (~25k+ after 2012 + window filter)
+  # MEASURED CEILING, not an estimate. 33,362 transcripts; 26,361 after the 2012 filter;
+  # 22,593 join to XBRL with >=2 channels and a full 12-quarter window. The README's "~25k+"
+  # counted the transcript side and assumed the join was free.
+  max_records: null            # null = full build
+  n_samples: 3
   indent: null

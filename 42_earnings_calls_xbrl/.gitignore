@@ -1,0 +1,13 @@
+.cache/
+__pycache__/
+*.pyc
+scratch_*
+
+# NOTE ON WHAT IS COMMITTED HERE.
+# output/ holds full earnings-call transcript prose. The HuggingFace dataset card says MIT, but an
+# earnings-call transcript is produced by a transcription provider and an uploader cannot license
+# what it does not hold -- so the rights question is OPEN, every record is tagged
+# `proprietary-review`, and the full build lives in cpt_corpus/held/, never in the manifest.
+# The root .gitignore already excludes **/output/*.jsonl; this makes the intent local and explicit.
+# A 3-record sample is committed for review -- internal inspection, NOT distribution.
+output/earnings_calls_xbrl_cpt.jsonl

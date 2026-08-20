@@ -1,49 +1,48 @@
 #!/usr/bin/env python3
 """Build CPT world-knowledge JSONL from earnings-call transcripts + SEC XBRL fundamentals.
 
-One record = one (company, fiscal quarter): the earnings-call transcript (the exec
-recites revenue / net income / EPS) paired with that company's trailing 12-quarter
-fundamentals from SEC EDGAR XBRL. The narration describes the numbers → "describes".
+One record = one (company, fiscal quarter): the call's own verbatim prepared remarks paired with
+that company's trailing 12-quarter fundamentals (revenue, net income, diluted EPS) from SEC EDGAR
+XBRL.
 
-Text: HuggingFace `Bose345/sp500_earnings_transcripts` (MIT), read with duckdb.
-Series: SEC EDGAR XBRL companyfacts (public domain), joined by ticker->CIK.
+Text:   HuggingFace `Bose345/sp500_earnings_transcripts` (MIT), read with duckdb.
+Series: SEC EDGAR XBRL companyfacts (public domain), joined ticker -> CIK.
 
-Examples:
+Run `scripts/index_series.py` first: it turns the 2.1 GB of cached companyfacts into a 2 MB
+per-filer series index. This builder reads that index, so the join never holds parsed
+companyfacts in memory (the previous version did, which was invisible on a 50-record demo and
+an OOM on the full 26,361-row scan).
+
+  python scripts/index_series.py
   python scripts/build_cpt_jsonl.py --dry-run --set output.max_records=5
-  python scripts/build_cpt_jsonl.py
-  python scripts/build_cpt_jsonl.py --set output.max_records=null
+  python scripts/build_cpt_jsonl.py --set output.max_records=null      # full build
 """
-
 from __future__ import annotations
 
 import argparse
+import collections
 import datetime as dt
 import json
 import re
 import sys
-import time
-import urllib.request
-import ssl
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 try:
     import duckdb
-except ImportError as exc:  # pragma: no cover
+except ImportError as exc:                                       # pragma: no cover
     raise SystemExit("duckdb required. pip install -r requirements.txt") from exc
 try:
     import yaml
-except ImportError as exc:  # pragma: no cover
+except ImportError as exc:                                       # pragma: no cover
     raise SystemExit("PyYAML required. pip install -r requirements.txt") from exc
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config.example.yaml"
-_SSL = ssl.create_default_context()
-_SSL.check_hostname = False
-_SSL.verify_mode = ssl.CERT_NONE
+CHANNEL_ORDER = ("revenue_usd", "net_income_usd", "eps_diluted_usd_per_share")
 
 
-# --- config helpers (same conventions as the other packages) ---------------
+# --- config helpers (same conventions as the other packages) ----------------
 
 def deep_merge(base: Dict[str, Any], over: Dict[str, Any]) -> Dict[str, Any]:
     m = dict(base)
@@ -66,8 +65,7 @@ def parse_sets(sets: Sequence[str]) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     for it in sets:
         k, v = it.split("=", 1)
-        cur = out
-        parts = k.split(".")
+        cur, parts = out, k.split(".")
         for p in parts[:-1]:
             cur = cur.setdefault(p, {})
         cur[parts[-1]] = coerce(v)
@@ -84,224 +82,329 @@ def rp(s: str) -> Path:
     return p if p.is_absolute() else ROOT / p
 
 
-# --- HTTP ------------------------------------------------------------------
+# --- text ------------------------------------------------------------------
 
-def http_get(url: str, ua: str, timeout: int) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": ua})
-    return urllib.request.urlopen(req, timeout=timeout, context=_SSL).read()
+def prepared_remarks(structured: Any, raw: str, tcfg: dict) -> Tuple[str, str]:
+    """(text, how) -- whole speaker turns up to a character budget.
 
-
-def download_cached(url: str, dest: Path, ua: str, timeout: int) -> Path:
-    if dest.exists():
-        return dest
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(http_get(url, ua, timeout))
-    return dest
-
-
-# --- SEC XBRL --------------------------------------------------------------
-
-def load_ticker_map(cfg, cache: Path) -> Dict[str, str]:
-    d = cfg["data"]
-    f = download_cached(d["ticker_map_url"], cache / "company_tickers.json",
-                        d["sec_user_agent"], int(d["timeout_s"]))
-    m = json.loads(f.read_text())
-    return {v["ticker"].upper(): str(v["cik_str"]).zfill(10) for v in m.values()}
-
-
-def get_companyfacts(cik: str, cfg, cache: Path) -> Optional[dict]:
-    d = cfg["data"]
-    fp = cache / f"cf_{cik}.json"
-    if fp.exists():
-        try: return json.loads(fp.read_text())
-        except Exception: return None
-    url = d["companyfacts_url"].format(cik=cik)
-    try:
-        raw = http_get(url, d["sec_user_agent"], int(d["timeout_s"]))
-    except Exception:
-        return None
-    fp.write_bytes(raw)
-    time.sleep(float(d.get("request_delay_s", 0.15)))
-    try: return json.loads(raw)
-    except Exception: return None
-
-
-def quarterly_series(cf: dict, concept: str, unit: str, fallback: Optional[str]) -> Dict[str, float]:
-    """{period-end 'YYYY-MM-DD': value} for quarterly-duration (80-100 day) facts."""
-    facts = cf.get("facts", {}).get("us-gaap", {})
-    for c in (concept, fallback):
-        if not c or c not in facts:
-            continue
-        units = facts[c].get("units", {}).get(unit)
-        if not units:
-            continue
-        out: Dict[str, float] = {}
-        for f in units:
-            s, e = f.get("start"), f.get("end")
-            if not (s and e):
+    The old builder took `content[:max_text_chars]`. On a 53,501-char mean transcript that is a
+    blind cut that lands mid-word -- the README's own example record ended
+    `"...was down year-over-year at $379 million, r"`. `structured_content` is a list of
+    {speaker, text} turns, so the budget can be spent in whole turns instead, at no cost. The
+    raw-string path remains as a fallback for rows where the structured column is absent.
+    """
+    budget = int(tcfg["max_text_chars"]) if tcfg.get("max_text_chars") else None
+    if isinstance(structured, (list, tuple)) and structured:
+        parts: List[str] = []
+        used = 0
+        for turn in structured:
+            if not isinstance(turn, dict):
                 continue
-            try:
-                days = (dt.date.fromisoformat(e) - dt.date.fromisoformat(s)).days
-            except ValueError:
+            spk = (turn.get("speaker") or "").strip()
+            txt = (turn.get("text") or "").strip()
+            if not txt:
                 continue
-            if 80 <= days <= 100:
-                out[e] = f["val"]   # later filings overwrite the same period-end (fine)
-        if out:
-            return out
-    return {}
+            block = f"{spk}: {txt}" if spk else txt
+            if budget and parts and used + len(block) > budget:
+                break
+            parts.append(block)
+            used += len(block) + 2
+            if budget and used >= budget:
+                break
+        if parts:
+            return "\n\n".join(parts), "speaker_turns"
+    body = (raw or "").strip()
+    if budget:
+        body = body[:budget].rstrip()
+    return body, "raw_prefix"
 
 
-# --- record construction ---------------------------------------------------
+# --- series ----------------------------------------------------------------
 
-def build_record(row: dict, cf: dict, cfg) -> Tuple[Optional[dict], Optional[str]]:
-    d, t = cfg["data"], cfg["text"]
+def window_for(channels: dict, call_date: str, win: int) -> Tuple[List[str], Dict[str, dict]]:
+    """(quarter-ends, {channel: points}) for the trailing `win` quarters ending <= the call.
+
+    Ends are the UNION across channels, not the intersection. Measured on the full scan: the
+    intersection yields 9,372 records and the union 22,593, because filers do not start every
+    concept in the same quarter. A channel with no point at a given end gets `null` there, which
+    is this corpus's existing convention -- but a channel with NO point anywhere in the window is
+    dropped rather than shipped as twelve nulls.
+    """
+    avail = {}
+    for name in CHANNEL_ORDER:
+        pts = channels.get(name, {}).get("points", {})
+        got = {e: v for e, v in pts.items() if e <= call_date}
+        if got:
+            avail[name] = got
+    if len(avail) < 2:
+        return [], {}
+    ends = sorted(set().union(*[set(v) for v in avail.values()]))[-win:]
+    live = {n: v for n, v in avail.items() if any(e in v for e in ends)}
+    return ends, live
+
+
+# --- record ----------------------------------------------------------------
+
+# `recites` is tagged on an EXACT, SIGNED, TERMINAL-QUARTER match -- deliberately stricter than
+# the gate that judges it. Passing `schema/validate.py --strict` is necessary but NOT sufficient
+# here, and this is the measurement that says so.
+#
+# The gate's test (`_recites_a_value`) accepts any text number within 1% of any value in any
+# channel. On a 12,000-char earnings-call excerpt -- which is dense with numbers -- that test
+# fires on 62.5% of records, against a permutation control of 59.7%: a lift of **1.05x**. It is
+# almost pure coincidence, and 23,202/23,202 still passed `--strict`, because the gate can only
+# ask "is any number close to any value", not "is this the same number".
+#
+# Narrowing to the value the call is actually about -- the TERMINAL quarter, matched as an exact
+# signed 2-decimal string -- gives 13.8% real against a **0.3%** control: a **42.4x lift**.
+# Allowing any of the 12 window quarters instead drops the lift to 4.3x, because each extra
+# quarter adds coincidence without adding meaning: the exec is discussing this quarter.
+#
+# In practice only diluted EPS can qualify. Revenue as raw digits appears in 6 of 19,454 records
+# (0.0%) because execs say "$12.8 billion", and unit-scale reconciliation is explicitly NOT
+# reciting under SCHEMA §7 -- the same ruling already applied to `58_fas_gain_attache`.
+# An exact match is inside the gate's 1% tolerance by construction, so every record tagged here
+# also passes the shared gate.
+def recite_evidence(text: str, ends: List[str], live: Dict[str, dict]) -> List[dict]:
+    ev = []
+    if not ends:
+        return ev
+    last = ends[-1]
+    for name in CHANNEL_ORDER:
+        pts = live.get(name)
+        if not pts or last not in pts:
+            continue
+        v = pts[last]
+        if re.search(r"(?<![\d.])%s(?![\d])" % re.escape(f"{v:.2f}"), text):
+            ev.append({"unit": name, "period_end": last, "value": v,
+                       "literal": f"{v:.2f}"})
+    return ev
+
+
+def build_record(row: dict, entry: dict, cfg: dict) -> Tuple[Optional[dict], Optional[str]]:
+    d, t, o = cfg["data"], cfg["text"], cfg["output"]
     win = int(d["window_quarters"])
-    tdate = str(row["date"])[:10]
+    call = str(row["date"])[:10]
 
-    # per-channel {end: val}, aligned on common quarter-ends <= transcript date
-    series: List[Tuple[str, Dict[str, float]]] = []
-    for ch in d["channels"]:
-        s = quarterly_series(cf, ch["concept"], ch["unit"], ch.get("fallback"))
-        s = {e: v for e, v in s.items() if e <= tdate}
-        series.append((ch["name"], s))
-    common = sorted(set.intersection(*[set(s.keys()) for _, s in series])) if all(s for _, s in series) else []
-    ends = common[-win:]
+    ends, live = window_for(entry["channels"], call, win)
+    if not ends:
+        return None, "fewer_than_2_channels"
     if len(ends) < win:
-        return None, f"short window ({len(ends)}/{win})"
+        return None, "short_window"
 
-    channels = [{"values": [round(float(s[e]), 4) for e in ends], "unit": name, "freq": "1q"}
-                for name, s in series]
+    max_null = float(d.get("max_null_fraction", 0.25))
+    slots = len(live) * len(ends)
+    nulls = sum(1 for p in live.values() for e in ends if e not in p)
+    if slots and nulls / slots > max_null:
+        return None, "too_many_nulls"
 
-    q = int(row["quarter"]); yr = int(row["year"])
-    fq = f"Q{q} {yr}"
-    body = (row.get("content") or "").strip()
-    maxc = t.get("max_text_chars")
-    if maxc:
-        body = body[:int(maxc)].rstrip()
-    if len(body) < int(t.get("min_text_chars", 200)):
-        return None, "short text"
-    # No generated/templated framing text: the <ts></ts> placeholder is appended
-    # directly to the real transcript excerpt, nothing else is added.
-    text = f"{body}\n\n<ts></ts>"
+    text, how = prepared_remarks(row.get("structured_content"), row.get("content"), t)
+    if len(text) < int(t["min_text_chars"]):
+        return None, "short_text"
+
+    channels = [{"values": [live[n].get(e) for e in ends], "unit": n, "freq": "1q"}
+                for n in CHANNEL_ORDER if n in live]
+    ev = recite_evidence(text, ends, live)
+
+    # The call discusses a quarter the series may not contain: for a Q4 call the 10-K reports the
+    # year, so no standalone Q4 quarterly fact exists and the window ends at Q3. That is recorded
+    # rather than hidden, because `fiscal_quarter` and `reported_quarter_end` disagreeing silently
+    # is how the demo record ended up labelled "Q4 2025" over a series ending 2024-12-31.
+    lag = (dt.date.fromisoformat(call) - dt.date.fromisoformat(ends[-1])).days
+    q, yr = int(row["quarter"]), int(row["year"])
 
     rec = {
-        "text": text,
+        "text": f"{text}\n\n<ts></ts>",
         "timeseries": channels,
         "task_type": "world_knowledge",
         "text_quality": "real",
-        "ticker": row["symbol"],
-        "cik": cf.get("cik") and str(cf["cik"]).zfill(10),
-        "company_name": row.get("company_name"),
-        "fiscal_quarter": fq,
-        "reported_quarter_end": ends[-1],
-        "call_date": tdate,
-        "window_quarters": win,
+        "alignment": "recites" if ev else "describes",
+        "license": d["license"],
+        "text_source": d["text_source"],
+        "domain": d["domain"],
+        "region": d["region"],
+        "source": d["source_url"],
         "dataset": "earnings_calls_xbrl",
-        "source": "huggingface.co/Bose345 + data.sec.gov",
         "series_id": f"ecxbrl_{row['symbol']}_{yr}Q{q}",
+        "meta": {
+            "ticker": row["symbol"],
+            "cik": entry["cik"],
+            "company_name": row.get("company_name") or entry.get("entity"),
+            "fiscal_quarter_label": f"Q{q} {yr}",
+            "call_date": call,
+            "series_end": ends[-1],
+            "series_end_lag_days": lag,
+            "reported_quarter_in_series": lag <= 60,
+            "window_quarters": win,
+            "n_channels": len(channels),
+            "null_slots": nulls,
+            "xbrl_concepts": {n: entry["channels"][n].get("concepts") for n in live},
+            "xbrl_concepts_rejected": {n: r for n in live
+                                       if (r := entry["channels"][n].get("rejected"))},
+            "text_extraction": how,
+            "text_chars": len(text),
+            "recite_evidence": ev,
+            "series_source": d["companyfacts_url"].format(cik=entry["cik"]),
+        },
     }
     return rec, None
 
 
-def validate(rec: dict, win: int) -> List[str]:
-    e = []
+def check(rec: dict, win: int) -> List[str]:
+    errs = []
     if rec["text"].count("<ts></ts>") != 1:
-        e.append("ts token count")
-    ts = rec.get("timeseries", [])
-    lens = {len(c["values"]) for c in ts}
+        errs.append("ts token count")
+    lens = {len(c["values"]) for c in rec["timeseries"]}
     if len(lens) != 1:
-        e.append(f"channel length mismatch {sorted(lens)}")
-    if lens and next(iter(lens)) != win:
-        e.append(f"window {sorted(lens)} != {win}")
-    return e
+        errs.append(f"channel length mismatch {sorted(lens)}")
+    elif next(iter(lens)) != win:
+        errs.append(f"window {sorted(lens)} != {win}")
+    if not rec["timeseries"]:
+        errs.append("no channels")
+    return errs
 
 
 # --- pipeline --------------------------------------------------------------
 
+def load_index(cfg: dict) -> Dict[str, dict]:
+    p = rp(cfg["data"]["series_index_path"])
+    if not p.exists():
+        raise SystemExit(f"missing {p} -- run scripts/index_series.py first")
+    idx = json.loads(p.read_text())
+    for cik, e in idx.items():
+        e["cik"] = cik
+    return idx
+
+
+def load_tickers(cfg: dict) -> Tuple[Dict[str, str], int]:
+    """ticker -> CIK. `company_tickers.json` lists only CURRENTLY-listed filers, so it misses
+    every acquired, renamed or de-listed company: measured, 74 of 651 symbols (2,218 transcripts,
+    8.4%) -- `BK` now trades as `BNY` and `MMC` as `MRSH` (same CIK, still filing), while EA,
+    Juniper, Kellanova and Walgreens left the file in 2025. Their XBRL is still on file under the
+    old CIK, so the overrides map recovers them (built by --resolve-tickers)."""
+    cache = rp(cfg["data"]["cache_dir"])
+    m = json.loads((cache / "company_tickers.json").read_text())
+    t2c = {v["ticker"].upper(): str(v["cik_str"]).zfill(10) for v in m.values()}
+    ov_path = cache / "ticker_overrides.json"
+    ov = json.loads(ov_path.read_text()) if ov_path.exists() else {}
+    for k, v in ov.items():
+        t2c.setdefault(k.upper(), str(v).zfill(10))
+    return t2c, len(ov)
+
+
 def run(cfg: Dict[str, Any], dry: bool) -> Dict[str, Any]:
     d, out_cfg = cfg["data"], cfg["output"]
-    cache = rp(d["cache_dir"])
     win = int(d["window_quarters"])
     maxrec = out_cfg.get("max_records")
+    cache = rp(d["cache_dir"])
 
-    print("Downloading transcript parquet (cached)...", file=sys.stderr)
-    pq = download_cached(d["transcript_parquet_url"], cache / "transcripts.parquet",
-                         "Mozilla/5.0", int(d["timeout_s"]))
-    t2c = load_ticker_map(cfg, cache)
+    idx = load_index(cfg)
+    t2c, n_ov = load_tickers(cfg)
+    print(f"series index: {len(idx)} filers | ticker map: {len(t2c):,} "
+          f"({n_ov} recovered de-listed)", file=sys.stderr)
 
     con = duckdb.connect()
-    q = f"""SELECT symbol, quarter, year, CAST(date AS VARCHAR) date, content, company_name
-            FROM read_parquet('{pq.as_posix()}')
-            WHERE CAST(date AS VARCHAR) >= '{d['min_transcript_date']}'
-            ORDER BY CAST(date AS VARCHAR) DESC"""
-    cur = con.execute(q)
+    pq = (cache / "transcripts.parquet").as_posix()
+    cur = con.execute(f"""SELECT symbol, quarter, year, CAST(date AS VARCHAR) date, content,
+                                 structured_content, company_name
+                          FROM read_parquet('{pq}')
+                          WHERE CAST(date AS VARCHAR) >= '{d['min_transcript_date']}'
+                          ORDER BY CAST(date AS VARCHAR) DESC""")
 
-    stats = {"scanned": 0, "emitted": 0, "no_cik": 0, "no_facts": 0,
-             "short_window": 0, "short_text": 0, "invalid": 0}
-    records: List[dict] = []
-    cf_cache: Dict[str, Optional[dict]] = {}
+    stats = collections.Counter()
+    align = collections.Counter()
+    lagb = collections.Counter()
+    seen_text: set = set()
+    seen_sid: set = set()
 
-    while True:
-        batch = cur.fetchmany(200)
-        if not batch:
-            break
-        cols = [c[0] for c in cur.description]
-        for tup in batch:
-            row = dict(zip(cols, tup))
-            stats["scanned"] += 1
-            tk = (row["symbol"] or "").upper()
-            cik = t2c.get(tk)
-            if not cik:
-                stats["no_cik"] += 1; continue
-            if cik not in cf_cache:
-                cf_cache[cik] = get_companyfacts(cik, cfg, cache)
-            cf = cf_cache[cik]
-            if not cf:
-                stats["no_facts"] += 1; continue
-            rec, err = build_record(row, cf, cfg)
-            if rec is None:
-                stats["short_window" if "window" in err else "short_text"] += 1; continue
-            verr = validate(rec, win)
-            if verr:
-                stats["invalid"] += 1; continue
-            records.append(rec); stats["emitted"] += 1
-            if maxrec is not None and len(records) >= int(maxrec):
-                batch = []; break
-        if maxrec is not None and len(records) >= int(maxrec):
-            break
+    op = rp(out_cfg["output_path"])
+    op.parent.mkdir(parents=True, exist_ok=True)
+    fh = None if dry else op.open("w", encoding="utf-8")
+    samples: List[dict] = []
+    first: Optional[dict] = None
+    try:
+        while True:
+            batch = cur.fetchmany(500)
+            if not batch:
+                break
+            cols = [c[0] for c in cur.description]
+            for tup in batch:
+                row = dict(zip(cols, tup))
+                stats["scanned"] += 1
+                cik = t2c.get((row["symbol"] or "").upper())
+                if not cik:
+                    stats["no_cik"] += 1; continue
+                entry = idx.get(cik)
+                if not entry:
+                    stats["no_xbrl_facts"] += 1; continue
+                rec, why = build_record(row, entry, cfg)
+                if rec is None:
+                    stats[why] += 1; continue
+                errs = check(rec, win)
+                if errs:
+                    stats["invalid"] += 1; continue
+                if rec["series_id"] in seen_sid:
+                    stats["dup_series_id"] += 1; continue
+                h = hash(rec["text"])
+                if h in seen_text:
+                    stats["dup_text"] += 1; continue
+                seen_sid.add(rec["series_id"]); seen_text.add(h)
+                stats["emitted"] += 1
+                align[rec["alignment"]] += 1
+                lg = rec["meta"]["series_end_lag_days"]
+                lagb["<=60d" if lg <= 60 else "61-120d" if lg <= 120
+                     else "121-210d" if lg <= 210 else ">210d"] += 1
+                if first is None:
+                    first = rec
+                if fh:
+                    fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                if len(samples) < int(out_cfg.get("n_samples", 3)):
+                    samples.append(rec)
+                if stats["emitted"] % 2000 == 0:
+                    print(f"  {stats['emitted']:,} emitted "
+                          f"({stats['scanned']:,} scanned)", file=sys.stderr, flush=True)
+                if maxrec is not None and stats["emitted"] >= int(maxrec):
+                    break
+            if maxrec is not None and stats["emitted"] >= int(maxrec):
+                break
+    finally:
+        if fh:
+            fh.close()
 
     report = {
-        "start_utc": "n/a",
+        "dataset": "earnings_calls_xbrl",
         "min_transcript_date": d["min_transcript_date"],
         "window_quarters": win,
-        "channels": [c["name"] for c in d["channels"]],
-        "stats": stats,
+        "stats": dict(stats),
+        "alignment": dict(align),
+        "series_end_lag": dict(lagb),
         "config_snapshot": cfg,
         "dry_run": dry,
     }
     if dry:
-        if records:
+        if first:
+            r0 = dict(first); r0["text"] = r0["text"][:400] + "…"
             print("\n--- sample record ---")
-            r0 = dict(records[0]); r0["text"] = r0["text"][:400] + "…"
-            print(json.dumps(r0, ensure_ascii=False, indent=2)[:2200])
-        print("\n" + json.dumps(stats, indent=2))
+            print(json.dumps(r0, ensure_ascii=False, indent=2)[:2600])
+        print("\n" + json.dumps({"stats": dict(stats), "alignment": dict(align),
+                                 "series_end_lag": dict(lagb)}, indent=2))
         return report
 
-    op = rp(out_cfg["output_path"]); op.parent.mkdir(parents=True, exist_ok=True)
-    with op.open("w", encoding="utf-8") as fh:
-        for r in records:
-            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
-    if records and out_cfg.get("samples_path"):
+    # samples as REAL JSONL. The committed sample was a pretty-printed JSON array under a
+    # .jsonl name -- json.loads dies on line 2, so any per-line consumer globbing *.jsonl
+    # breaks on it. That defect has now shipped four times in this corpus.
+    if samples and out_cfg.get("samples_path"):
         sp = rp(out_cfg["samples_path"]); sp.parent.mkdir(parents=True, exist_ok=True)
-        with sp.open("w", encoding="utf-8") as fh:
-            json.dump(records[:3], fh, ensure_ascii=False, indent=2); fh.write("\n")
+        with sp.open("w", encoding="utf-8") as sfh:
+            for r in samples:
+                sfh.write(json.dumps(r, ensure_ascii=False) + "\n")
     rpath = rp(out_cfg["report_path"]); rpath.parent.mkdir(parents=True, exist_ok=True)
     rpath.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     return report
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Build earnings-calls + XBRL → CPT JSONL")
+    ap = argparse.ArgumentParser(description="Build earnings-calls + XBRL -> CPT JSONL")
     ap.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     ap.add_argument("--set", dest="set", action="append", default=[])
     ap.add_argument("--dry-run", action="store_true")
@@ -309,9 +412,11 @@ def main() -> None:
     cfg = load_config(args.config, args.set)
     rep = run(cfg, dry=args.dry_run)
     s = rep["stats"]
-    print(f"\nDone: {s['emitted']} records (scanned {s['scanned']}, no_cik={s['no_cik']}, "
-          f"no_facts={s['no_facts']}, short_window={s['short_window']}, invalid={s['invalid']}).",
+    drops = {k: v for k, v in s.items() if k not in ("scanned", "emitted")}
+    print(f"\nDone: {s.get('emitted', 0):,} records from {s.get('scanned', 0):,} transcripts.",
           file=sys.stderr)
+    print(f"  alignment: {rep['alignment']}", file=sys.stderr)
+    print(f"  skipped:   {drops}", file=sys.stderr)
 
 
 if __name__ == "__main__":
