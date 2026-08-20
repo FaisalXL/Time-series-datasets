@@ -415,6 +415,15 @@ def fetch_page(st: dict, cache: Path, tcfg: dict,
                 with urllib.request.urlopen(req, timeout=180) as r:
                     html = _decompress(r.read(), r.headers.get("Content-Encoding", "") or "")
                 PACER.reward()
+                # A successful fetch RETIRES the throttle flag. It used to be sticky across
+                # retries, so one transient reset before a clean retry made the caller report
+                # THROTTLED for a page that had downloaded fine -- and a `throttled` return is
+                # `continue`d without a drop reason, so the statement vanished from both the
+                # emitted set and the accounting. Measured on 2023-11: its archived page is a
+                # stub (0-char narrative, a real `no_narrative`) that two runs in a row filed as
+                # a throttle. The rule is still "never bank a throttle as a content verdict";
+                # this is the same rule in the other direction.
+                throttled = False
             except urllib.error.HTTPError as e:
                 if e.code in (404, 403):     # this capture really is not retrievable
                     break

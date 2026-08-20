@@ -1,7 +1,7 @@
 # 60 — RBNZ Monetary Policy Statements → CPT world-knowledge records
 
-**Status: FULL ARCHIVE BUILT + VERIFIED (2026-08-19). 108 records from 119 enumerated statements,
-108/108 pass `validate.py --strict` with 0 warnings.** Licence is a first-party
+**Status: FULL ARCHIVE BUILT + VERIFIED (2026-08-20). 109 records from 119 enumerated statements,
+109/109 pass `validate.py --strict` with 0 warnings.** Licence is a first-party
 reproduction-with-attribution grant, so this is shippable rather than held (see "Licence").
 
 One record = an MPS's own **verbatim** policy narrative paired with the **multi-channel macro
@@ -20,14 +20,57 @@ GDP, TWI, 90-day rate).
 | Text | RBNZ Monetary Policy Statement pages (HTML), via Wayback — see "Access" |
 | Series | the statement's own co-published data pack (`.xls` 1997–2021, `.xlsx` 2022+) |
 | Licence | `cc-by-4.0` (closest enum fit; true grant recorded in `meta.true_license`) |
-| Records | **108** from 119 statements (91%) |
-| Span | statements **1997-02 … 2025-11**; series data back to **1984-03** |
+| Records | **109** from 119 statements (92%) |
+| Span | statements **1997-09 … 2026-02**; series data back to **1984-03** |
 | Channels | mean **5.7** per record, 8 distinct variables |
-| Depth | mean **33.5** points per channel (min 9, max 90) |
-| Freqs | `1q` 483 channels · `1d` 82 · `1M` 44 · `1w` 10 |
-| Alignment | `recites` **44** · `describes` **64** |
-| Text | mean 2,199 chars, all verbatim + one bare `<ts></ts>` |
-| Duplicates | 0 duplicate texts, 108/108 distinct `series_id` |
+| Depth | mean **33.0** points per channel (min 9, max 90) |
+| Freqs | `1q` 488 channels · `1d` 83 · `1M` 44 · `1w` 10 |
+| Alignment | `recites` **44** · `describes` **65** |
+| Text | mean 2,186 chars, all verbatim + one bare `<ts></ts>` |
+| Duplicates | 0 duplicate texts, 109/109 distinct `series_id` |
+
+## Where the other 10 statements went, and why one run is not enough
+
+Every drop now has a reason, and `throttled` is **0** — which took three passes to achieve, because
+two of those passes were lying about what happened.
+
+| outcome | n | what it is |
+|---|--:|---|
+| emitted | **109** | |
+| `no_pack` | 3 | 1996-12, 1997-03, 1997-06 — before RBNZ co-published a data pack at all |
+| `superlative_dropped` | 3 | 2018-11, 2020-08, 2020-11 — text makes a superlative claim the series contradicts |
+| `too_few_channels` | 2 | 1998-03, 2001-11 — pack parses, fewer than `min_channels: 2` survive |
+| `pack_not_archived` | 1 | **2026-05** — the statement page is archived, `mpsmay26-data.xlsx` is not: **0 captures among 1,666 archived packs** |
+| `no_narrative` | 1 | **2023-11** — the archived page is a stub: 3,919 chars of visible text, a one-line decision and download links. The narrative is only in the 6 MB PDF. |
+
+**A single pass over Wayback is not reproducible, and the failures do not repeat.** The same code
+and cache emitted 108 on 2026-08-19 and 109 on 2026-08-20; each run lost a *different* statement
+to a transient archive.org condition, not to anything about the data.
+[`scripts/union_runs.py`](scripts/union_runs.py) unions runs by `series_id` and prints what each
+one contributed, so a build is never trusted as a single sample of the archive.
+
+### The throttle flag was sticky, and it hid a real content verdict
+
+`fetch_page` set `throttled = True` on a connection reset and never cleared it — so if attempt 0
+was reset and attempt 1 downloaded the page perfectly, the statement was still reported as
+`THROTTLED`. Because a throttled return is `continue`d *without* a drop reason (deliberately: a
+throttle must never be banked as a content verdict), the statement then vanished from the emitted
+set **and** from the accounting.
+
+2023-11 is the case that exposed it. Two consecutive runs called it a throttle; fetching its single
+capture by hand returned **200 and 86,122 bytes**, byte-identical to what was already sitting in
+the cache. It was never a throttle — its page genuinely has no narrative. A successful fetch now
+retires the flag, which is the same rule as before applied in the other direction: **a fetch
+condition must not be recorded as a content verdict, and a content verdict must not be recorded as
+a fetch condition.**
+
+### The frontier is the archive's lag, not the source's
+
+RBNZ published its Feb and May 2026 statements; the Aug-2026 one is days old. Measured against CDX
+on 2026-08-20: both 2026 statement *pages* are captured, May's *data pack* is not, and **no
+Aug-2026 statement is captured at any of the four URL generations**. So 2026-02 is the last
+buildable statement today, and the remaining gap closes itself as Wayback catches up — no code
+change will close it.
 
 ## Quickstart
 
