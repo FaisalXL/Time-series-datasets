@@ -1,61 +1,13 @@
-# 500-token truncation — worked example
+# 500-token truncation: no summarisation needed
 
-**Record `espn_nba_400467339` · San Antonio Spurs at Miami Heat · 2013-06-21**
-AP headline: *"LeBron James, Heat beat Spurs for second straight NBA title"* · 434 plays over 4 periods.
+`espn_nba_400467339` · San Antonio Spurs at Miami Heat · 2013-06-21 · 434 plays
 
-The question this answers: do the recaps need LLM summarisation to fit a 500-token budget, or does
-plain truncation keep the alignment evidence? This record was picked because the cap bites hard.
+**2,304 tokens** (`cl100k_base`) → a 500-token cap discards **78%**.
+Final-score anchor appears at **token 84**, and `95-88` is the terminal value of both channels.
+**The cap costs nothing that matters.** (It does drop intermediate states: 5 aligned score pairs in
+full text, 1 in the first 500.)
 
-| | |
-|---|--:|
-| total tokens (`cl100k_base`) | **2,304** |
-| discarded by a 500-token cap | **78%** |
-| final-score anchor first appears at token | **84** |
-| anchor survives the cap | **yes** |
-| series terminal values | away **88**, home **95** |
-| `meta.final_away_score` / `final_home_score` | 88 / 95 |
-
-The anchor is in the **third paragraph**, not the lede:
-
-> James led the Heat to their second straight title, scoring 37 points and grabbing 12 rebounds in
-> a **95-88** victory on Thursday night...
-
-`95-88` is the terminal state of both channels, so the record's alignment evidence is intact
-after 78% of the article is thrown away.
-
-> **Note on the mechanism.** `65_espn_college` explains this as "AP puts the score in the lede",
-> measured there at a 0.7422 first-paragraph rate. That is **not** why it works for this package:
-> NBA/NFL/NHL recaps open with a narrative hook and the first-paragraph rate is only **0.13–0.36**.
-> The score simply arrives well inside 500 tokens. Same conclusion, different reason.
-
-## What truncation costs, stated both ways
-
-Every `N-M` pair in the prose, and whether it is a real state of this game's play-by-play:
-
-| stated | as (away, home) | play index | in first 500 tokens |
-|---|---|--:|---|
-| `95-88` | (88, 95) | 429 | yes |
-| `009-10` | — **not a state of this game** | — | yes |
-| `92-88` | (88, 92) | 418 | no |
-| `103-100` | — **not a state of this game** | — | no |
-| `11-11` | — **not a state of this game** | — | no |
-| `102-89` | — **not a state of this game** | — | no |
-| `66-16` | — **not a state of this game** | — | no |
-| `2-5` | — **not a state of this game** | — | no |
-| `72-71` | (71, 72) | 313 | no |
-| `8-0` | — **not a state of this game** | — | no |
-| `18-16` | (16, 18) | 96 | no |
-| `46-44` | (44, 46) | 218 | no |
-| `15-3` | — **not a state of this game** | — | no |
-| `5-3` | — **not a state of this game** | — | no |
-| `2-3` | — **not a state of this game** | — | no |
-
-So the full text carries **5** aligned score pairs and the first 500 tokens keep **1**:
-a cap loses the intermediate game states and never loses the final one. This is why the number to
-quote is the **anchor-loss rate** (0.23–0.77% across NBA/NFL/NHL, 0.00% on `65`'s 3,096-record
-sample) rather than "does the truncated text still mention scores", which would look degraded.
-
-## What a 500-token encoder actually sees
+## First 500 tokens — what a capped encoder sees
 
 ```
 MIAMI -- Victory in Game 7 brought more than another crown for LeBron James and the Miami Heat . It validated the team and its leader, forever cementing their place among the NBA's greats.
@@ -83,12 +35,9 @@ A whisker away from a fifth title two nights earlier, the Spurs couldn't find a 
 "In my case, I still have Game 6 in my head," Ginobili said. "Today, we played an OK game. They just made more shots than us. LeBron got hot. Shane (Battier
 ```
 
-## The series it is paired with
+## Paired series — 2 channels, `1play`, 434 points each
 
-Two channels, `freq: "1play"`, 434 points each — cumulative score after every play.
-Period ends at play [99, 221, 314, 433].
-
-`away_score_cumulative` (San Antonio Spurs), terminal **88**:
+`away_score_cumulative` (San Antonio Spurs) → **88**
 
 ```
 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 9, 9, 9, 11, 11,
@@ -111,7 +60,7 @@ Period ends at play [99, 221, 314, 433].
 88, 88, 88, 88, 88, 88, 88, 88, 88, 88, 88, 88, 88, 88, 88, 88, 88, 88, 88
 ```
 
-`home_score_cumulative` (Miami Heat), terminal **95**:
+`home_score_cumulative` (Miami Heat) → **95**
 
 ```
 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -133,27 +82,6 @@ Period ends at play [99, 221, 314, 433].
 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 92, 92, 92, 92, 92,
 93, 93, 94, 94, 94, 94, 95, 95, 95, 95, 95
 ```
-
-## Record metadata
-
-| field | value |
-|---|---|
-| `alignment` | `describes` — see note below |
-| `text_quality` | `real` |
-| `license` | `proprietary-review` (Associated Press wire copy — not cleared for distribution) |
-| `text_source` | `third_party` |
-| `source` | https://www.espn.com/nba/game/_/gameId/400467339 |
-| `report_published` | 2013-06-21T19:36:00Z |
-| `report_chars` | 10,173 |
-
-> **The `alignment` tag on this record under-claims.** It says `describes`, but the text literally
-> states `95-88`, which is the terminal value of both channels — and SCHEMA §7 defines `recites`
-> as "the text literally states the numbers that are the series". Measured across a 6,000-record
-> sample of this package, **99.7%** of records state the final score literally as a pair, against a
-> **0.4%** permutation control — a **230x** lift (`65_espn_college`: 98.9% vs 0.6%, 170x). All are
-> tagged `describes`. `validate.py` errors when `recites` lacks support but has no check for
-> `describes` that *does* have support, so under-claiming is invisible to the gate. Not re-tagged:
-> it is ~112,872 held records and it moves the corpus-wide recites share from ~10% to ~27%.
 
 ## Full record
 
