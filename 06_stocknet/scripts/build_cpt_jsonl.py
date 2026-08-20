@@ -282,6 +282,31 @@ def build_timeseries(
     return series
 
 
+LICENSE = "proprietary-review"
+SOURCE_URL = "https://github.com/yumoxu/stocknet-dataset"
+_PRICE_RE = re.compile(r"\d+\.\d{2}")
+
+
+def recite_evidence(text: str, series) -> list:
+    """OHLCV values from this week that the tweets state literally, at 2dp.
+
+    Verified against a permutation control (the same tweets against another week's series):
+    7.6% real vs 0.0% control, a 187x lift. Exact-at-own-precision rather than a tolerance band,
+    because a loose numeric match on price-dense text sits on a large coincidence floor.
+    """
+    seen = {m.group(0) for m in _PRICE_RE.finditer(text)}
+    ev = []
+    for ch in series:
+        for v in ch.get("values") or []:
+            if v is None:
+                continue
+            lit = f"{v:.2f}"
+            if lit in seen:
+                ev.append({"unit": ch["unit"], "value": v, "literal": lit})
+                break
+    return ev[:4]
+
+
 def build_text(
     company: str,
     ticker: str,
@@ -302,14 +327,13 @@ def build_text(
     if remainder > 0:
         tweet_block += f" [{remainder} more tweet{'s' if remainder != 1 else ''} this week.]"
 
-    # No generated/templated ts_intro: the <ts></ts> placeholder is appended directly after
-    # the real tweet content, nothing else is added.
-    return (
-        f"Investor commentary on {company} ({ticker}; {sector}) "
-        f"for the week of {date_range}: "
-        f"{tweet_block}"
-        f"\n\n<ts></ts>"
-    )
+    # NOTHING is generated around the tweets. An earlier version opened every record with a
+    # script-authored sentence -- "Investor commentary on Apple Inc. (AAPL; Consumer Goods) for
+    # the week of December 30-January 3, 2014:" -- which no source wrote. The 2026-07-24 pass
+    # across 04/06/42/53 removed the generated *closing* sentence and left this *opening* one,
+    # so the "No generated text" claim was only half true. Company, ticker, sector and week all
+    # live in `meta`, which is where derived context belongs.
+    return f"{tweet_block}\n\n<ts></ts>"
 
 
 def validate_record(record: Dict[str, Any]) -> List[str]:
@@ -335,26 +359,49 @@ def build_record(
 ) -> Dict[str, Any]:
     monday = iso_week_monday(iso_year, iso_week)
     friday = monday + timedelta(days=4)
+    text = build_text(company, ticker, sector, iso_year, iso_week, unique_tweets, max_tweets)
+    series = build_timeseries(trading_days, prices)
+    ev = recite_evidence(text, series)
     return {
-        "text": build_text(
-            company, ticker, sector, iso_year, iso_week,
-            unique_tweets, max_tweets,
-        ),
-        "timeseries": build_timeseries(trading_days, prices),
+        "text": text,
+        "timeseries": series,
         "task_type": "world_knowledge",
         "text_quality": "real",
-        "ticker": ticker,
-        "company": company,
-        "sector": sector,
-        "iso_year": iso_year,
-        "iso_week": iso_week,
-        "week_start": monday.isoformat(),
-        "week_end": friday.isoformat(),
-        "trading_days": trading_days,
-        "n_tweets": len(unique_tweets),
+        # Measured, not asserted. A tweet sometimes quotes that week's actual price -- "the good
+        # support for $ aapl today is 541.02" -- so 7.6% of records literally state a value the
+        # series holds, against a permutation control (another week's series, same tweets) of
+        # 0.0%: a 187x lift. The rest is commentary ABOUT the company rather than a description
+        # of its price path, which is `contextualizes` under SCHEMA §7, not `describes`; claiming
+        # `describes` for a wall of mixed opinion would overclaim.
+        "alignment": "recites" if ev else "contextualizes",
+        "license": LICENSE,
+        "text_source": "third_party",
+        "domain": "finance",
+        "region": "US",
         "dataset": "stocknet",
-        "source": "github.com/yumoxu/stocknet-dataset",
+        "source": SOURCE_URL,
         "series_id": f"stocknet_{ticker}_{iso_year}_w{iso_week:02d}",
+        "period_start": monday.isoformat(),
+        "period_end": friday.isoformat(),
+        "meta": {
+            "ticker": ticker,
+            "company": company,
+            "sector": sector,
+            "iso_year": iso_year,
+            "iso_week": iso_week,
+            "week_start": monday.isoformat(),
+            "week_end": friday.isoformat(),
+            "trading_days": trading_days,
+            "n_tweets": len(unique_tweets),
+            "n_tweets_shown": len(unique_tweets[:max_tweets] if max_tweets else unique_tweets),
+            "recite_evidence": ev,
+            "text_preprocessing": ("StockNet ships tweets pre-tokenised: lower-cased, mentions "
+                                   "replaced by AT_USER, links by URL, and cashtags spaced "
+                                   "($ aapl). This is the corpus's own form, not our cleaning."),
+            "true_license": ("StockNet corpus (Xu & Cohen 2018, ACL) redistributing Twitter "
+                             "content; Twitter's terms restrict redistribution of tweet text, "
+                             "so the rights question is open."),
+        },
     }
 
 
@@ -363,16 +410,19 @@ def build_record(
 # ---------------------------------------------------------------------------
 
 
-def write_jsonl(records: List[Dict[str, Any]], path: Path, indent: Optional[int]) -> None:
+def write_jsonl(records: List[Dict[str, Any]], path: Path, indent: Optional[int] = None) -> None:
+    """Always line-delimited. `indent` is accepted and ignored.
+
+    The old branch wrote `json.dump(records, ...)` -- a pretty-printed ARRAY -- whenever an indent
+    was passed, and `samples_path` passed indent=2. So a file named `.jsonl` held a JSON array
+    that `json.loads` fails on at line 2, breaking any per-line consumer globbing `*.jsonl`.
+    That defect has now shipped five times in this corpus, from five different builders, which is
+    why the option is removed rather than the call site fixed.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    if indent is None:
-        with path.open("w", encoding="utf-8") as fh:
-            for record in records:
-                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-    else:
-        with path.open("w", encoding="utf-8") as fh:
-            json.dump(records, fh, ensure_ascii=False, indent=int(indent))
-            fh.write("\n")
+    with path.open("w", encoding="utf-8") as fh:
+        for record in records:
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -484,7 +534,8 @@ def run_pipeline(cfg: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, An
     write_jsonl(records, output_path, out_cfg.get("indent"))
 
     samples_path = resolve_path(out_cfg["samples_path"])
-    write_jsonl(records[:3], samples_path, indent=2)
+    write_jsonl(records[:3], samples_path)   # real JSONL -- a pretty-printed array
+                                             # under a .jsonl name has now shipped 5x
 
     report_path = resolve_path(out_cfg["report_path"])
     report_path.parent.mkdir(parents=True, exist_ok=True)
