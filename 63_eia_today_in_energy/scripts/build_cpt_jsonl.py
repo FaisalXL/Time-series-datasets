@@ -265,6 +265,17 @@ def score_bundle(text: str, bundle: Dict[str, Any]) -> int:
 
 
 # --------------------------------------------------------------------------- build
+
+def iso_period(code) -> str:
+    """EIA period code -> ISO-8601 at its native granularity. `2025` and `2025-06` are both
+    valid ISO-8601; padding either to `2025-01-01` would assert a day the source never gave."""
+    c = str(code)
+    if re.fullmatch(r"\d{6}", c):
+        return f"{c[:4]}-{c[4:]}"
+    if re.fullmatch(r"\d{8}", c):
+        return f"{c[:4]}-{c[4:6]}-{c[6:]}"
+    return c
+
 def build(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
     d, scfg, tcfg, ecfg, ocfg = cfg["data"], cfg["series"], cfg["text"], cfg["evidence"], cfg["output"]
     if tcfg.get("abstractive_summary"):
@@ -364,8 +375,14 @@ def build(cfg: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
             series_id=f"{bundle['name']}_{periods[0]}_{periods[-1]}",
             domain="energy",
             region="US",
-            period_start=periods[0],
-            period_end=periods[-1],
+            # EIA period codes are unpunctuated (`2025`, `202601`, `20260717`). `series_id`
+            # keeps them verbatim so existing ids stay stable, but `period_start`/`period_end`
+            # are schema date fields and shipped non-ISO for all 132 records -- and with three
+            # different shapes inside one package. Punctuate to the granularity the code
+            # already has; do NOT pad to a full date, which would invent precision the source
+            # does not have (an annual series does not start on 1 January).
+            period_start=iso_period(periods[0]),
+            period_end=iso_period(periods[-1]),
             meta={
                 "article_id": aid,
                 "article_title": art["title"],
