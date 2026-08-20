@@ -1,6 +1,38 @@
 # Destatis (Germany) English Press Releases → CPT
 
-> ## ⛔ STATUS: SCOUTED VIABLE — **BUILD BLOCKED on a free GENESIS API key. Nothing here is shippable.**
+> ## ⛔ STATUS (2026-08-20): **API key obtained and verified. Now blocked on Destatis's own data service.**
+>
+> A free GENESIS-Online account was registered and its personal API token verified against
+> `helloworld/logincheck` ("You have been logged in and out successfully"). **All five table codes
+> the releases name resolve `200` via `metadata/table`**, and `61111-*` is the **national CPI** —
+> exactly the series the Eurostat negative result below was missing. So the original blocker is
+> solved and the text↔series pairing is sound.
+>
+> **What now blocks it is upstream.** Every `data/*` call hangs ~300 s and returns an HTML
+> *"Fatal Error"* page instead of GENESIS JSON. Measured 2026-08-20 — five calls, three different
+> tables, two endpoints (`data/table` and `data/tablefile`), minimal parameters, from a verified
+> clear-slot state, including **the API documentation's own example table `11111-0001`**:
+>
+> | service | result |
+> |---|---|
+> | `helloworld/whoami`, `helloworld/logincheck` | 200, seconds |
+> | `catalogue/tables` (11 CPI tables listed) | 200, seconds |
+> | `metadata/table` × all 5 release-named codes | 200, seconds |
+> | **`data/table` / `data/tablefile` × 3 tables** | **503 HTML "Fatal Error" at ~301 s, every time** |
+>
+> An HTML crash page is a backend fault, not an authorisation refusal — those return clean GENESIS
+> JSON (`Code 15`, seen when credentials were put in the body instead of the header). So this is
+> not the account, not the token, and not the request shape.
+>
+> **Two candidate causes, and only one is testable without a password.** Either the data backend is
+> transiently unwell, or these tables need `job=true` — which the docs state cannot be used with a
+> personal token: *"requests with job=true cannot be carried out with personal token, here a login
+> with user name/email and password is required."* Re-running
+> [`scripts/genesis_fetch.py`](scripts/genesis_fetch.py) later distinguishes them for free; the
+> job-mode route needs a username+password rather than a token.
+>
+> Nothing here is shippable **yet**, and the reason has moved from "no credential" to "waiting on
+> the provider". `scripts/genesis_fetch.py --probe` is a one-command health check.
 >
 > The **text side, license and enumeration all verified GOOD.** The **series side does not work
 > keyless.** Measured `evidence_per_record = 0.25`, and hand-auditing shows **both of those matches
@@ -55,6 +87,39 @@ the WASDE #41 / GAIN #58 forecast-not-measured convention applies to roughly hal
 
 No NC clause, no permission gate. Tagged `cc-by-4.0` closest schema fit; real terms in
 `meta.true_license`. Required attribution is carried in `meta.attribution`.
+
+## GENESIS web-service contract — verified 2026-08-20, not inferred from the docs
+
+A free GENESIS-Online account was registered and its **personal API token** used (a 32-char string
+shown in the database's "Webservice (API)" modal after login). The token replaces the *username*;
+no password is needed, and it can be regenerated without affecting the login. It is read from
+`.cache/genesis_token` (mode 600, and `.cache/` is gitignored) — never from config or any committed
+file.
+
+Base: `https://genesis.destatis.de/genesisWS/rest/2020/`
+
+| behaviour | verified result |
+|---|---|
+| request encoding | **`application/x-www-form-urlencoded`**. A JSON body returns **415 Unsupported Media Type** — "RESTful/JSON" describes the *response*. |
+| `helloworld/whoami` | **GET only**; POST returns 405. It takes no credentials. |
+| `helloworld/logincheck` | POST; credentials accepted in body **or** header. |
+| `data/*`, `metadata/*`, `catalogue/*` | POST; credentials **must be in HTTP headers** — in the body they return `401 Code 15` ("the header of your request does not contain all the necessary information"). The spec says so too: *"Account data: Fields in HTTP header."* |
+| parallel limit | **3**. Exceeding it returns **HTTP 404 with `Code 6`** — a *capacity* message wearing a not-found status. |
+| dead-request reaping | a failed request keeps holding its slot; `logincheck` reaps only requests older than **15 minutes**. So each failed probe costs ~15 min of waiting. |
+| `job=true` | unavailable with token auth (needs username+password), so every request must fit inside the synchronous window. |
+
+**Read the error body, never the status code.** All four table IDs the releases name — `61111-0004`,
+`61111-0006`, `61121-0002`, `61121-0006` — returned `404` on first contact, which reads as "those
+codes are wrong". They are not wrong; all four resolve `200` from `metadata/table` once slots are
+free. The 404 was `Code 6`. This is the third time in this corpus that a capacity condition has
+presented as a content verdict (Wayback throttling as "empty archive", RBNZ's sticky throttle flag
+as "no narrative").
+
+**`61111-*` is the national CPI, which is what makes this package possible.** The Eurostat negative
+result below stands — the releases' prose is about the national CPI and Eurostat only publishes the
+harmonised HICP — but GENESIS carries the national index directly, so the blocker was the *source*,
+not the pairing. The catalogue holds 11 CPI tables; `61111-0002` (Germany, months) is the headline
+series and `-0004`/`-0006` add the COICOP 2-5-digit breakdown.
 
 ## The blocker, in detail — three series routes, two proven dead
 
