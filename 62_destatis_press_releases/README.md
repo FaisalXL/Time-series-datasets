@@ -1,6 +1,6 @@
 # Destatis (Germany) English Press Releases → CPT
 
-> ## ⛔ STATUS (2026-08-21): **Service migrated host. Pairing sound; blocked on a token for the NEW host.**
+> ## ⛔ STATUS (2026-08-21): **Pairing sound. Blocked on credentials — the token does not authenticate, and never demonstrably did.**
 >
 > A free GENESIS-Online account was registered and its personal API token verified against
 > `helloworld/logincheck` ("You have been logged in and out successfully"). **All five table codes
@@ -8,39 +8,39 @@
 > exactly the series the Eurostat negative result below was missing. So the original blocker is
 > solved and the text↔series pairing is sound.
 >
-> **2026-08-21 — the 503s are explained, and the blocker has moved again.** The service has
-> **migrated host**: `www-genesis.destatis.de` now answers `307 Temporary Redirect` to
-> `genesis.destatis.de` for every endpoint, `data/table` included. The HTML *"Fatal Error"* pages
-> measured on 2026-08-20 were the old host failing through that migration — not a sick data
-> backend, and not `job=true`. Both hypotheses in the previous version of this section were wrong,
-> and neither would have been resolved by waiting.
+> **2026-08-21 — RETRACTED: the token was never verified, and `logincheck` cannot verify one.**
 >
-> On the new host the service is healthy and fast: `helloworld/logincheck` answers in under a
-> second. **But the personal API token is no longer recognised.** `logincheck` returns
-> `"Username":"GAST"` — the anonymous guest account — even when the token is supplied, and
-> `data/table` returns `401 Code 15` ("your access data cannot be recognised"). Four auth schemes
-> were tried against the new host, all identical:
+> `helloworld/logincheck` returns *"You have been logged in and out successfully"* **and
+> `"Username":"GAST"` — the anonymous guest account — whether a token is supplied or not.** That
+> response was the sole evidence behind "API token verified" above. It is not evidence of
+> anything: every caller gets it. Same class of error as a throttle recorded as an empty archive —
+> a generic success impersonating an identity check.
 >
-> | auth attempt | result |
-> |---|---|
-> | `token:` header (what worked on the old host) | 401 `Code 15` |
-> | `Authorization: Bearer <token>` | 401 `Code 15` |
-> | `apiKey:` header | 401 `Code 15` |
-> | `username`/`password` form fields | 401 `Code 15` |
+> Measured today against `genesis.destatis.de`:
 >
-> `logincheck` succeeding *as GAST* is the tell: the token is not being rejected, it is being
-> ignored, and the guest account is simply not entitled to `data/*`. So this is a credential
-> problem again, not a provider outage — but a different one from the original.
+> | call | with token | without token |
+> |---|---|---|
+> | `helloworld/logincheck` | 200, `Username: GAST` | 200, `Username: GAST` |
+> | `metadata/table` (61111-0002) | **401** | **401** |
+> | `data/table` (61111-0002) | **401 `Code 15`** | 401 `Code 15` |
 >
-> **What unblocks it:** re-issue an API token from an account on `genesis.destatis.de` (the
-> migrated portal), or supply username/password for that account. Nothing on our side can be
-> fixed by code. All five table codes and the text↔series pairing remain sound; only the fetch
-> credential is missing.
-> [`scripts/genesis_fetch.py`](scripts/genesis_fetch.py) later distinguishes them for free; the
-> job-mode route needs a username+password rather than a token.
+> `metadata/table` returned **200** on 08-20 and returns **401 today** for the same token and the
+> same request. So access has been *lost*, not merely never gained — the token has expired, been
+> revoked, or was only ever serving cached metadata.
 >
-> Nothing here is shippable **yet**, and the reason has moved from "no credential" to "waiting on
-> the provider". `scripts/genesis_fetch.py --probe` is a one-command health check.
+> Also retracted, my own first reading of this: that the service had **migrated host** and the
+> 503s were the old host dying. `www-genesis.destatis.de` does now `307` to `genesis.destatis.de`,
+> but [`scripts/genesis_fetch.py`](scripts/genesis_fetch.py) has pointed at `genesis.destatis.de`
+> since it was written, so the 08-20 probes were already on the correct host. The migration is
+> real and irrelevant. Those ~300 s HTML *"Fatal Error"* pages were a genuine backend fault on the
+> right host; it has since cleared, and what it was masking is a plain 401.
+>
+> Of the two hypotheses in the previous version, the transient-backend one was right, and
+> `job=true` was never tested because it was never reachable.
+>
+> Nothing here is shippable **yet**, and the reason is back to "no working credential": a token
+> issued from a current GENESIS-Online account, or username/password for one. No code change on
+> our side reaches this. `scripts/genesis_fetch.py --probe` is a one-command health check.
 >
 > The **text side, license and enumeration all verified GOOD.** The **series side does not work
 > keyless.** Measured `evidence_per_record = 0.25`, and hand-auditing shows **both of those matches
