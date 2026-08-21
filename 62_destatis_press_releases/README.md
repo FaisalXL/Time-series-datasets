@@ -1,6 +1,6 @@
 # Destatis (Germany) English Press Releases → CPT
 
-> ## ⛔ STATUS (2026-08-20): **API key obtained and verified. Now blocked on Destatis's own data service.**
+> ## ⛔ STATUS (2026-08-21): **Service migrated host. Pairing sound; blocked on a token for the NEW host.**
 >
 > A free GENESIS-Online account was registered and its personal API token verified against
 > `helloworld/logincheck` ("You have been logged in and out successfully"). **All five table codes
@@ -8,26 +8,34 @@
 > exactly the series the Eurostat negative result below was missing. So the original blocker is
 > solved and the text↔series pairing is sound.
 >
-> **What now blocks it is upstream.** Every `data/*` call hangs ~300 s and returns an HTML
-> *"Fatal Error"* page instead of GENESIS JSON. Measured 2026-08-20 — five calls, three different
-> tables, two endpoints (`data/table` and `data/tablefile`), minimal parameters, from a verified
-> clear-slot state, including **the API documentation's own example table `11111-0001`**:
+> **2026-08-21 — the 503s are explained, and the blocker has moved again.** The service has
+> **migrated host**: `www-genesis.destatis.de` now answers `307 Temporary Redirect` to
+> `genesis.destatis.de` for every endpoint, `data/table` included. The HTML *"Fatal Error"* pages
+> measured on 2026-08-20 were the old host failing through that migration — not a sick data
+> backend, and not `job=true`. Both hypotheses in the previous version of this section were wrong,
+> and neither would have been resolved by waiting.
 >
-> | service | result |
+> On the new host the service is healthy and fast: `helloworld/logincheck` answers in under a
+> second. **But the personal API token is no longer recognised.** `logincheck` returns
+> `"Username":"GAST"` — the anonymous guest account — even when the token is supplied, and
+> `data/table` returns `401 Code 15` ("your access data cannot be recognised"). Four auth schemes
+> were tried against the new host, all identical:
+>
+> | auth attempt | result |
 > |---|---|
-> | `helloworld/whoami`, `helloworld/logincheck` | 200, seconds |
-> | `catalogue/tables` (11 CPI tables listed) | 200, seconds |
-> | `metadata/table` × all 5 release-named codes | 200, seconds |
-> | **`data/table` / `data/tablefile` × 3 tables** | **503 HTML "Fatal Error" at ~301 s, every time** |
+> | `token:` header (what worked on the old host) | 401 `Code 15` |
+> | `Authorization: Bearer <token>` | 401 `Code 15` |
+> | `apiKey:` header | 401 `Code 15` |
+> | `username`/`password` form fields | 401 `Code 15` |
 >
-> An HTML crash page is a backend fault, not an authorisation refusal — those return clean GENESIS
-> JSON (`Code 15`, seen when credentials were put in the body instead of the header). So this is
-> not the account, not the token, and not the request shape.
+> `logincheck` succeeding *as GAST* is the tell: the token is not being rejected, it is being
+> ignored, and the guest account is simply not entitled to `data/*`. So this is a credential
+> problem again, not a provider outage — but a different one from the original.
 >
-> **Two candidate causes, and only one is testable without a password.** Either the data backend is
-> transiently unwell, or these tables need `job=true` — which the docs state cannot be used with a
-> personal token: *"requests with job=true cannot be carried out with personal token, here a login
-> with user name/email and password is required."* Re-running
+> **What unblocks it:** re-issue an API token from an account on `genesis.destatis.de` (the
+> migrated portal), or supply username/password for that account. Nothing on our side can be
+> fixed by code. All five table codes and the text↔series pairing remain sound; only the fetch
+> credential is missing.
 > [`scripts/genesis_fetch.py`](scripts/genesis_fetch.py) later distinguishes them for free; the
 > job-mode route needs a username+password rather than a token.
 >
